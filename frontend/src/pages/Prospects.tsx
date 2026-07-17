@@ -62,36 +62,76 @@ interface ParsedProspect {
   nom_societe: string;
   nom_dirigeant: string;
   telephone: string;
+  email: string;
   commercial_assigne: string;
   zone_geographique: string;
   categorie_metier: string;
+  effectif: string;
+  forme: string;
+  statut_monday: string;
 }
 
+// Import Monday robuste : mappe les colonnes des sous-éléments PAR LEUR NOM
+// (Name, Dirigeant, TEL, Mail, COMMERCIAL, NB salariés, Format juridique, Statut),
+// donc insensible à l'ordre / aux colonnes ajoutées sur le tableau.
 function parseMondayExcel(XLSX: typeof XLSXType, workbook: XLSXType.WorkBook): ParsedProspect[] {
   const sheet = workbook.Sheets[workbook.SheetNames[0]];
   if (!sheet) return [];
   const zoneCell = sheet['A2'];
   const zone = zoneCell ? String(zoneCell.v ?? '').trim() : '';
   const rows: (string | number | null)[][] = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: null });
+
+  const findCol = (headers: string[], ...pats: string[]) =>
+    headers.findIndex((h) => pats.some((p) => h.includes(p)));
+
   const prospects: ParsedProspect[] = [];
   let currentCategory = '';
+  let colMap: Record<string, number> | null = null;
+
   for (let i = 2; i < rows.length; i++) {
     const row = rows[i];
     if (!row || row.length === 0) continue;
-    const colA = String(row[0] ?? '').trim();
-    const colB = String(row[1] ?? '').trim();
-    const colC = String(row[2] ?? '').trim();
-    const colD = String(row[3] ?? '').trim();
-    const colE = String(row[4] ?? '').trim();
-    if (colA.toLowerCase() === 'name' && (colB.toLowerCase().includes('sous') || colB.toLowerCase().includes('subitem'))) continue;
-    if (colA.toLowerCase() === 'subitems' || colA.toLowerCase() === 'sous-éléments') continue;
-    if (colA && !SKIP_VALUES.has(colA.toLowerCase())) {
-      const nextRow = i + 1 < rows.length ? rows[i + 1] : null;
-      const nextA = nextRow ? String(nextRow[0] ?? '').trim().toLowerCase() : '';
-      if (nextA === 'subitems' || nextA === 'sous-éléments' || !colB) { currentCategory = colA; continue; }
+    const c0 = String(row[0] ?? '').trim();
+    const c0l = c0.toLowerCase();
+
+    // En-tête des sous-éléments -> construit le mapping colonne -> champ.
+    if (c0l === 'subitems' || c0l === 'sous-éléments' || c0l === 'sous-elements') {
+      const headers = row.map((c) => String(c ?? '').toLowerCase().trim());
+      colMap = {
+        name: findCol(headers, 'name', 'nom', 'société', 'societe'),
+        dirigeant: findCol(headers, 'dirigeant', 'gérant', 'gerant', 'responsable'),
+        tel: findCol(headers, 'tel', 'téléphone', 'telephone', 'phone', 'portable', 'mobile'),
+        mail: findCol(headers, 'mail', 'email', 'courriel'),
+        commercial: findCol(headers, 'commercial'),
+        effectif: findCol(headers, 'salari', 'effectif'),
+        forme: findCol(headers, 'juridique', 'forme'),
+        statut: findCol(headers, 'statut'),
+      };
+      if (colMap.name === -1) colMap.name = 1;
+      continue;
     }
-    if (!colA && colB) {
-      prospects.push({ nom_societe: colB, commercial_assigne: colC, nom_dirigeant: colD, telephone: colE, zone_geographique: zone, categorie_metier: currentCategory });
+    // En-tête principale -> ignorer.
+    if (c0l === 'name') continue;
+    // Ligne catégorie (colonne A remplie) -> mémorise la catégorie métier.
+    if (c0) { currentCategory = c0; continue; }
+    // Ligne de données (colonne A vide) -> mappée par nom de colonne.
+    if (colMap) {
+      const cm = colMap;
+      const g = (k: string) => (cm[k] >= 0 ? String(row[cm[k]] ?? '').trim() : '');
+      const nom = g('name');
+      if (!nom) continue;
+      prospects.push({
+        nom_societe: nom,
+        nom_dirigeant: g('dirigeant'),
+        telephone: g('tel'),
+        email: g('mail'),
+        commercial_assigne: g('commercial'),
+        zone_geographique: zone,
+        categorie_metier: currentCategory,
+        effectif: g('effectif'),
+        forme: g('forme'),
+        statut_monday: g('statut'),
+      });
     }
   }
   return prospects;
@@ -228,9 +268,15 @@ export default function Prospects() {
         const p = parsed[i];
         try {
           if (!p.nom_societe.trim()) continue;
-          const note = updates.get(p.nom_societe.trim().toLowerCase()) || '';
+          const upd = updates.get(p.nom_societe.trim().toLowerCase()) || '';
+          const ctx = [
+            p.effectif ? `Effectif: ${p.effectif}` : '',
+            p.forme ? `Forme: ${p.forme}` : '',
+            p.statut_monday ? `Statut Monday: ${p.statut_monday}` : '',
+          ].filter(Boolean).join(' · ');
+          const note = [ctx, upd].filter(Boolean).join('\n\n');
           await client.entities.prospects.create({
-            data: { nom_societe: p.nom_societe, nom_dirigeant: p.nom_dirigeant, telephone: p.telephone, email: '', zone_geographique: p.zone_geographique, categorie_metier: p.categorie_metier, commercial_assigne: p.commercial_assigne, source_lead: 'Import Excel', montant_potentiel: 0, notes: note, statut_avancement: 'Appel telephonique', priorite: 'moyenne', statut_gagne_perdu: 'actif', nombre_appels: 0, nombre_appels_repondus: 0, nombre_relances: 0 },
+            data: { nom_societe: p.nom_societe, nom_dirigeant: p.nom_dirigeant, telephone: p.telephone, email: p.email || '', zone_geographique: p.zone_geographique, categorie_metier: p.categorie_metier, commercial_assigne: p.commercial_assigne, source_lead: 'Import Excel', montant_potentiel: 0, notes: note, statut_avancement: 'Appel telephonique', priorite: 'moyenne', statut_gagne_perdu: 'actif', nombre_appels: 0, nombre_appels_repondus: 0, nombre_relances: 0 },
           });
           imported++;
           if (imported % 10 === 0) toast.loading(`Import en cours... ${imported}/${parsed.length}`, { id: toastId });

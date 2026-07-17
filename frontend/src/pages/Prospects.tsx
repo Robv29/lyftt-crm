@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom';
 import {
   useProspects,
   useRegisteredUsers,
+  useCityAttributions,
   useInvalidateProspects,
   type Prospect,
 } from '../hooks/use-prospects';
@@ -142,6 +143,7 @@ function parseUpdates(XLSX: typeof XLSXType, workbook: XLSXType.WorkBook): Map<s
 export default function Prospects() {
   const { data: prospects = [], isLoading: loading, error, refetch, isFetching } = useProspects();
   const { data: registeredUsers = [] } = useRegisteredUsers();
+  const { data: cityAttributions = [] } = useCityAttributions();
   const invalidateProspects = useInvalidateProspects();
 
   const [search, setSearch] = useState('');
@@ -177,13 +179,38 @@ export default function Prospects() {
     return ['Tous', ...names];
   }, [registeredUsers]);
 
+  // Villes attribuées au commercial sélectionné (le filtre commercial = ses zones).
+  const normName = (s?: string) => (s || '').toLowerCase().replace(/\s+/g, ' ').trim();
+  const selectedCommercialCities = useMemo<string[] | null>(() => {
+    if (commercialFilter === 'Tous') return null;
+    const u = registeredUsers.find((r) => normName(`${r.first_name || ''} ${r.last_name || ''}`) === normName(commercialFilter));
+    if (!u) return [];
+    return cityAttributions.filter((a) => a.user_role_id === u.id).map((a) => a.city);
+  }, [commercialFilter, registeredUsers, cityAttributions]);
+
+  // Le menu "ville" ne propose que les villes du commercial sélectionné (affinage),
+  // sinon toutes les villes.
+  const cityOptions = useMemo(() => {
+    if (selectedCommercialCities && selectedCommercialCities.length > 0) {
+      return ['Toutes', ...Array.from(new Set(selectedCommercialCities)).sort()];
+    }
+    return cities;
+  }, [selectedCommercialCities, cities]);
+
   const filtered = useMemo(() => {
     const sl = search.toLowerCase();
+    const commSet = selectedCommercialCities ? new Set(selectedCommercialCities) : null;
     return prospects.filter((p) => {
       const ms = !search || p.nom_societe?.toLowerCase().includes(sl) || p.nom_dirigeant?.toLowerCase().includes(sl) || p.email?.toLowerCase().includes(sl) || p.telephone?.includes(search) || p.categorie_metier?.toLowerCase().includes(sl);
-      return ms && (statusFilter === 'Tous' || p.statut_avancement === statusFilter) && (sectorFilter === 'Tous' || p.categorie_metier === sectorFilter) && (cityFilter === 'Toutes' || p.zone_geographique === cityFilter) && (commercialFilter === 'Tous' || p.commercial_assigne === commercialFilter);
+      // Filtre commercial = restreint à ses villes attribuées (pas au champ commercial_assigne, peu fiable).
+      const okCommercial = commercialFilter === 'Tous' || (commSet ? commSet.has(p.zone_geographique) : false);
+      return ms
+        && (statusFilter === 'Tous' || p.statut_avancement === statusFilter)
+        && (sectorFilter === 'Tous' || p.categorie_metier === sectorFilter)
+        && (cityFilter === 'Toutes' || p.zone_geographique === cityFilter)
+        && okCommercial;
     });
-  }, [prospects, search, statusFilter, sectorFilter, cityFilter, commercialFilter]);
+  }, [prospects, search, statusFilter, sectorFilter, cityFilter, commercialFilter, selectedCommercialCities]);
 
   const handleImport = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -339,16 +366,16 @@ export default function Prospects() {
                 <SelectTrigger className="w-48 rounded-xl border-slate-200"><Building2 className="w-4 h-4 mr-2 text-slate-400" /><SelectValue /></SelectTrigger>
                 <SelectContent>{sectors.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
               </Select>
-              <Select value={cityFilter} onValueChange={setCityFilter}>
-                <SelectTrigger className="w-44 rounded-xl border-slate-200"><MapPin className="w-4 h-4 mr-2 text-slate-400" /><SelectValue /></SelectTrigger>
-                <SelectContent>{cities.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
-              </Select>
               {commercials.length > 1 && (
-                <Select value={commercialFilter} onValueChange={setCommercialFilter}>
+                <Select value={commercialFilter} onValueChange={(v) => { setCommercialFilter(v); setCityFilter('Toutes'); }}>
                   <SelectTrigger className="w-48 rounded-xl border-slate-200"><UserCircle className="w-4 h-4 mr-2 text-slate-400" /><SelectValue /></SelectTrigger>
                   <SelectContent>{commercials.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
                 </Select>
               )}
+              <Select value={cityFilter} onValueChange={setCityFilter}>
+                <SelectTrigger className="w-44 rounded-xl border-slate-200"><MapPin className="w-4 h-4 mr-2 text-slate-400" /><SelectValue placeholder="Ville" /></SelectTrigger>
+                <SelectContent>{cityOptions.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
+              </Select>
             </div>
           </div>
         </CardContent>

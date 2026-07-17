@@ -163,17 +163,24 @@ export default function Dashboard() {
       .sort();
   }, [registeredUsers]);
 
+  // Normalise pour comparer les noms sans souci de casse / espaces
+  // (ex: "Yoan RUANS" importé == "Yoan Ruans" du compte).
+  const normName = (s?: string) => (s || '').toLowerCase().replace(/\s+/g, ' ').trim();
+
   const commercialCities = useMemo(() => {
     if (selectedCommercial === 'global') return null;
-    const matched = registeredUsers.find((u) => `${u.first_name || ''} ${u.last_name || ''}`.trim() === selectedCommercial);
+    const matched = registeredUsers.find(
+      (u) => normName(`${u.first_name || ''} ${u.last_name || ''}`) === normName(selectedCommercial)
+    );
     if (!matched) return [];
     return cityAttributions.filter((a) => a.user_role_id === matched.id).map((a) => a.city);
   }, [selectedCommercial, cityAttributions, registeredUsers]);
 
   const prospects = useMemo(() => {
     if (selectedCommercial === 'global') return allProspects;
+    const target = normName(selectedCommercial);
     return allProspects.filter((p) => {
-      if (p.commercial_assigne === selectedCommercial) return true;
+      if (normName(p.commercial_assigne) === target) return true;
       if (commercialCities && commercialCities.length > 0) return commercialCities.includes(p.zone_geographique);
       return false;
     });

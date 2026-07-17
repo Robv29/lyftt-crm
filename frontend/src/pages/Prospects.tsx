@@ -96,6 +96,49 @@ function parseMondayExcel(XLSX: typeof XLSXType, workbook: XLSXType.WorkBook): P
   return prospects;
 }
 
+// Lit la 2e feuille de l'export Monday (les "updates") et associe le contenu de
+// la colonne "update content" à chaque société (par nom), pour l'injecter en note.
+// Détection automatique des colonnes ; tolère plusieurs updates par société.
+function parseUpdates(XLSX: typeof XLSXType, workbook: XLSXType.WorkBook): Map<string, string> {
+  const map = new Map<string, string>();
+  if (workbook.SheetNames.length < 2) return map;
+  const sheet = workbook.Sheets[workbook.SheetNames[1]];
+  if (!sheet) return map;
+  const rows: (string | number | null)[][] = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: null });
+
+  let headerIdx = -1, contentIdx = -1, nameIdx = -1;
+  for (let i = 0; i < rows.length; i++) {
+    const r = rows[i];
+    if (!r) continue;
+    const lowered = r.map((c) => String(c ?? '').toLowerCase().trim());
+    const ci = lowered.findIndex((c) => c.includes('update content') || c === 'content' || c.includes('contenu'));
+    if (ci !== -1) {
+      headerIdx = i;
+      contentIdx = ci;
+      nameIdx = lowered.findIndex(
+        (c) => c === 'name' || c.includes('item') || c.includes('élément') || c.includes('element') || c === 'nom' || c.includes('société') || c.includes('societe')
+      );
+      break;
+    }
+  }
+  if (headerIdx === -1 || contentIdx === -1) return map;
+  if (nameIdx === -1) nameIdx = 0;
+
+  let lastKey = '';
+  for (let i = headerIdx + 1; i < rows.length; i++) {
+    const r = rows[i];
+    if (!r) continue;
+    const rawName = String(r[nameIdx] ?? '').trim();
+    const content = String(r[contentIdx] ?? '').trim();
+    const key = rawName ? rawName.toLowerCase() : lastKey;
+    if (rawName) lastKey = rawName.toLowerCase();
+    if (!key || !content) continue;
+    const prev = map.get(key);
+    map.set(key, prev ? `${prev}\n${content}` : content);
+  }
+  return map;
+}
+
 export default function Prospects() {
   const { data: prospects = [], isLoading: loading, error, refetch, isFetching } = useProspects();
   const { data: registeredUsers = [] } = useRegisteredUsers();
@@ -150,6 +193,7 @@ export default function Prospects() {
       const data = await file.arrayBuffer();
       const workbook = XLSX.read(data);
       const parsed = parseMondayExcel(XLSX, workbook);
+      const updates = parseUpdates(XLSX, workbook); // 2e feuille : "update content" -> notes
       if (parsed.length === 0) { toast.error('Aucun prospect trouvé dans le fichier.'); return; }
       let imported = 0;
       const toastId = toast.loading(`Import en cours... 0/${parsed.length}`);
@@ -157,8 +201,9 @@ export default function Prospects() {
         const p = parsed[i];
         try {
           if (!p.nom_societe.trim()) continue;
+          const note = updates.get(p.nom_societe.trim().toLowerCase()) || '';
           await client.entities.prospects.create({
-            data: { nom_societe: p.nom_societe, nom_dirigeant: p.nom_dirigeant, telephone: p.telephone, email: '', zone_geographique: p.zone_geographique, categorie_metier: p.categorie_metier, commercial_assigne: p.commercial_assigne, source_lead: 'Import Excel', montant_potentiel: 0, notes: '', statut_avancement: 'Appel telephonique', priorite: 'moyenne', statut_gagne_perdu: 'actif', nombre_appels: 0, nombre_appels_repondus: 0, nombre_relances: 0 },
+            data: { nom_societe: p.nom_societe, nom_dirigeant: p.nom_dirigeant, telephone: p.telephone, email: '', zone_geographique: p.zone_geographique, categorie_metier: p.categorie_metier, commercial_assigne: p.commercial_assigne, source_lead: 'Import Excel', montant_potentiel: 0, notes: note, statut_avancement: 'Appel telephonique', priorite: 'moyenne', statut_gagne_perdu: 'actif', nombre_appels: 0, nombre_appels_repondus: 0, nombre_relances: 0 },
           });
           imported++;
           if (imported % 10 === 0) toast.loading(`Import en cours... ${imported}/${parsed.length}`, { id: toastId });

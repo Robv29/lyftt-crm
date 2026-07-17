@@ -20,12 +20,14 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Link } from 'react-router-dom';
+import SpeedRun from '../components/SpeedRun';
 import {
   Phone,
   PhoneCall,
   PhoneOff,
   Video,
   FileSignature,
+  Zap,
   Clock,
   TrendingUp,
   TrendingDown,
@@ -127,6 +129,7 @@ export default function Dashboard() {
 
   const [selectedPeriod, setSelectedPeriod] = useState<PeriodKey>('today');
   const [selectedCommercial, setSelectedCommercial] = useState<string>('global');
+  const [showSpeedRun, setShowSpeedRun] = useState(false);
 
   const loading = loadingP || loadingA;
 
@@ -271,6 +274,7 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-6">
+      {showSpeedRun && <SpeedRun onClose={() => setShowSpeedRun(false)} />}
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
@@ -282,6 +286,14 @@ export default function Dashboard() {
           </p>
         </div>
         <div className="flex items-center gap-3">
+          <button
+            onClick={() => setShowSpeedRun(true)}
+            className="group relative inline-flex items-center gap-2 rounded-xl px-4 py-2 font-bold text-white bg-gradient-to-r from-amber-400 via-orange-500 to-pink-500 shadow-[0_0_25px_rgba(251,146,60,0.45)] hover:shadow-[0_0_35px_rgba(251,146,60,0.7)] hover:scale-[1.03] active:scale-95 transition-all"
+          >
+            <span className="absolute inset-0 rounded-xl bg-white/20 opacity-0 group-hover:opacity-100 animate-pulse" />
+            <Zap className="w-4 h-4 relative" fill="white" />
+            <span className="relative tracking-wide">Speed Run</span>
+          </button>
           <Button
             onClick={handleExportExcel}
             disabled={allProspects.length === 0}

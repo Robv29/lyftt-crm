@@ -1,0 +1,42 @@
+{
+    "title": "objectives",
+    "type": "object",
+    "properties": {
+        "id": {
+            "type": "integer",
+            "description": "Primary key, auto-increment"
+        },
+        "user_id": {
+            "type": "string",
+            "description": "User ID of the commercial"
+        },
+        "objectif_appels_jour": {
+            "type": "integer",
+            "description": "Daily call objective",
+            "default": 30
+        },
+        "objectif_visios_semaine": {
+            "type": "integer",
+            "description": "Weekly video call objective",
+            "default": 5
+        },
+        "objectif_signatures_mois": {
+            "type": "integer",
+            "description": "Monthly signature objective",
+            "default": 3
+        },
+        "mois": {
+            "type": "string",
+            "description": "Month YYYY-MM"
+        },
+        "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Creation date"
+        }
+    },
+    "required": [
+        "id",
+        "user_id"
+    ]
+}

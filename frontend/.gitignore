@@ -1,0 +1,17 @@
+# Dépendances
+node_modules/
+.pnpm-store/
+
+# Build
+dist/
+dist-ssr/
+
+# Variables d'environnement (NE JAMAIS COMMIT — contient tes clés)
+.env
+.env.local
+.env.*.local
+
+# Logs & divers
+*.log
+.DS_Store
+.vercel

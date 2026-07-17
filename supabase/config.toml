@@ -1,0 +1,7 @@
+# Configuration Supabase CLI / intégration GitHub
+# project_id = référence de ton projet (Supabase > Settings > General > Reference ID)
+project_id = "cobzfojmxtobrbgzconr"
+
+[db]
+# Version majeure de Postgres du projet
+major_version = 15

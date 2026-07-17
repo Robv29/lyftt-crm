@@ -1,0 +1,177 @@
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { client } from '../lib/api';
+import { useAuth } from '../contexts/AuthContext';
+
+export interface Prospect {
+  id: number;
+  nom_societe: string;
+  nom_dirigeant: string;
+  telephone: string;
+  email: string;
+  zone_geographique: string;
+  categorie_metier: string;
+  commercial_assigne: string;
+  statut_avancement: string;
+  date_dernier_appel: string;
+  date_prochaine_relance: string;
+  nombre_appels: number;
+  nombre_appels_repondus: number;
+  nombre_relances: number;
+  date_visio: string;
+  date_demande_documents: string;
+  date_signature: string;
+  date_rdv: string;
+  notes: string;
+  priorite: string;
+  source_lead: string;
+  montant_potentiel: number;
+  statut_gagne_perdu: string;
+  opco_docs: string;
+  budget_hors_opco: string;
+  derniere_maj: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CommercialAction {
+  id: number;
+  user_id: string;
+  prospect_id: number;
+  action_type: string;
+  appel_repondu: boolean;
+  from_status: string;
+  to_status: string;
+  notes: string;
+  action_date: string;
+  created_at: string;
+}
+
+export interface RegisteredUser {
+  id: number;
+  first_name: string | null;
+  last_name: string | null;
+  role: string;
+  is_active: boolean;
+}
+
+export interface CityAttribution {
+  id: number;
+  user_role_id: number;
+  city: string;
+  created_at: string | null;
+}
+
+// Keys for React Query cache
+export const queryKeys = {
+  prospects: ['prospects'] as const,
+  actions: ['commercial_actions'] as const,
+  prospectActions: (id: number) => ['commercial_actions', id] as const,
+  users: ['registered_users'] as const,
+  cityAttributions: ['city_attributions'] as const,
+};
+
+export function useProspects() {
+  return useQuery({
+    queryKey: queryKeys.prospects,
+    queryFn: async () => {
+      const res = await client.entities.prospects.queryAll({
+        query: {},
+        sort: '-updated_at',
+        limit: 2000,
+      });
+      return (res.data?.items || []) as Prospect[];
+    },
+    staleTime: 2 * 60 * 1000, // 2 minutes
+    gcTime: 10 * 60 * 1000, // 10 minutes in cache
+  });
+}
+
+export function useActions() {
+  return useQuery({
+    queryKey: queryKeys.actions,
+    queryFn: async () => {
+      const res = await client.entities.commercial_actions.queryAll({
+        query: {},
+        sort: '-action_date',
+        limit: 2000,
+      });
+      return (res.data?.items || []) as CommercialAction[];
+    },
+    staleTime: 2 * 60 * 1000,
+    gcTime: 10 * 60 * 1000,
+  });
+}
+
+export function useProspectActions(prospectId: number | undefined) {
+  return useQuery({
+    queryKey: queryKeys.prospectActions(prospectId || 0),
+    queryFn: async () => {
+      if (!prospectId) return [];
+      const res = await client.entities.commercial_actions.queryAll({
+        query: { prospect_id: prospectId },
+        sort: '-action_date',
+        limit: 100,
+      });
+      return (res.data?.items || []) as CommercialAction[];
+    },
+    enabled: !!prospectId,
+    staleTime: 60 * 1000,
+  });
+}
+
+export function useRegisteredUsers() {
+  const { isAdmin } = useAuth();
+  return useQuery({
+    queryKey: queryKeys.users,
+    queryFn: async () => {
+      const url = isAdmin
+        ? '/api/v1/user-management/users'
+        : '/api/v1/user-management/users/public';
+      const res = await client.apiCall.invoke({
+        url,
+        method: 'GET',
+        data: {},
+      });
+      return (res.data as RegisteredUser[]) || [];
+    },
+    staleTime: 5 * 60 * 1000,
+    gcTime: 15 * 60 * 1000,
+  });
+}
+
+export function useCityAttributions() {
+  return useQuery({
+    queryKey: queryKeys.cityAttributions,
+    queryFn: async () => {
+      const res = await client.apiCall.invoke({
+        url: '/api/v1/entities/city_attributions?limit=2000',
+        method: 'GET',
+        data: {},
+      });
+      // Response could be { items: [...], total, skip, limit } or direct array
+      const responseData = res.data as any;
+      if (responseData?.items) return responseData.items as CityAttribution[];
+      if (Array.isArray(responseData)) return responseData as CityAttribution[];
+      return [] as CityAttribution[];
+    },
+    staleTime: 5 * 60 * 1000,
+    gcTime: 15 * 60 * 1000,
+  });
+}
+
+export function useInvalidateProspects() {
+  const queryClient = useQueryClient();
+  return () => {
+    queryClient.invalidateQueries({ queryKey: queryKeys.prospects });
+  };
+}
+
+export function useInvalidateActions() {
+  const queryClient = useQueryClient();
+  return (prospectId?: number) => {
+    queryClient.invalidateQueries({ queryKey: queryKeys.actions });
+    if (prospectId) {
+      queryClient.invalidateQueries({ queryKey: queryKeys.prospectActions(prospectId) });
+    }
+  };
+}

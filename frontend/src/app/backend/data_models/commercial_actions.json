@@ -1,0 +1,50 @@
+{
+    "title": "commercial_actions",
+    "type": "object",
+    "properties": {
+        "id": {
+            "type": "integer",
+            "description": "Primary key, auto-increment"
+        },
+        "user_id": {
+            "type": "string",
+            "description": "User ID of the commercial"
+        },
+        "prospect_id": {
+            "type": "integer",
+            "description": "Related prospect ID"
+        },
+        "action_type": {
+            "type": "string",
+            "description": "Action type: appel, relance, visio, demande_documents, signature, refus"
+        },
+        "from_status": {
+            "type": "string",
+            "description": "Status before action"
+        },
+        "to_status": {
+            "type": "string",
+            "description": "Status after action"
+        },
+        "notes": {
+            "type": "string",
+            "description": "Action notes"
+        },
+        "action_date": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Action date"
+        },
+        "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Creation date"
+        }
+    },
+    "required": [
+        "id",
+        "user_id",
+        "prospect_id",
+        "action_type"
+    ]
+}

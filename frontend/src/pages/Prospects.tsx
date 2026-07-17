@@ -1,6 +1,6 @@
 import { useState, useRef, useMemo, useCallback } from 'react';
 import { client } from '../lib/api';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import {
   useProspects,
   useRegisteredUsers,
@@ -510,9 +510,14 @@ export default function Prospects() {
 import { memo } from 'react';
 
 const ProspectRow = memo(function ProspectRow({ prospect: p, selected, onToggle }: { prospect: Prospect; selected: boolean; onToggle: (id: number) => void }) {
+  const navigate = useNavigate();
+  const stop = (e: React.MouseEvent) => e.stopPropagation();
   return (
-    <tr className={`hover:bg-teal-50/30 transition-colors ${selected ? 'bg-teal-50/50' : ''}`}>
-      <td className="px-3 py-3"><Checkbox checked={selected} onCheckedChange={() => onToggle(p.id)} aria-label={`Sélectionner ${p.nom_societe}`} /></td>
+    <tr
+      onClick={() => navigate(`/prospects/${p.id}`)}
+      className={`cursor-pointer hover:bg-teal-50/40 transition-colors ${selected ? 'bg-teal-50/50' : ''}`}
+    >
+      <td className="px-3 py-3" onClick={stop}><Checkbox checked={selected} onCheckedChange={() => onToggle(p.id)} aria-label={`Sélectionner ${p.nom_societe}`} /></td>
       <td className="px-4 py-3"><div><p className="font-semibold text-slate-900 text-sm">{p.nom_societe}</p><p className="text-xs text-slate-400 lg:hidden">{p.categorie_metier}</p></div></td>
       <td className="px-4 py-3 text-sm text-slate-600 hidden md:table-cell">{p.nom_dirigeant}</td>
       <td className="px-4 py-3 text-sm text-slate-600 hidden lg:table-cell">{p.zone_geographique}</td>
@@ -520,7 +525,7 @@ const ProspectRow = memo(function ProspectRow({ prospect: p, selected, onToggle 
       <td className="px-4 py-3"><Badge className={`text-xs rounded-lg ${statusBadgeColors[p.statut_avancement] || 'bg-slate-100 text-slate-700'}`}>{p.statut_avancement}</Badge></td>
       <td className="px-4 py-3 hidden sm:table-cell"><Badge className={`text-xs rounded-lg ${resultColors[p.statut_gagne_perdu] || 'bg-slate-100 text-slate-700'}`}>{p.statut_gagne_perdu}</Badge></td>
       <td className="px-4 py-3 hidden md:table-cell"><div className="flex items-center gap-1 text-sm text-slate-600"><Phone className="w-3 h-3" />{p.nombre_appels || 0}</div></td>
-      <td className="px-4 py-3 text-center"><Link to={`/prospects/${p.id}`}><Button variant="ghost" size="sm" className="gap-1 text-[#5A9BA3] hover:text-[#4A8B93] hover:bg-teal-50 rounded-lg"><ExternalLink className="w-4 h-4" /><span className="hidden sm:inline">Voir</span></Button></Link></td>
+      <td className="px-4 py-3 text-center" onClick={stop}><Link to={`/prospects/${p.id}`}><Button variant="ghost" size="sm" className="gap-1 text-[#5A9BA3] hover:text-[#4A8B93] hover:bg-teal-50 rounded-lg"><ExternalLink className="w-4 h-4" /><span className="hidden sm:inline">Voir</span></Button></Link></td>
     </tr>
   );
 });

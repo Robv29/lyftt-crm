@@ -14,6 +14,7 @@ export interface Prospect {
   statut_avancement: string;
   date_dernier_appel: string;
   date_prochaine_relance: string;
+  date_relance_planifiee: string;
   nombre_appels: number;
   nombre_appels_repondus: number;
   nombre_relances: number;

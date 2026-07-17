@@ -23,6 +23,7 @@ import { Link } from 'react-router-dom';
 import {
   Phone,
   PhoneCall,
+  PhoneOff,
   Video,
   FileSignature,
   Clock,
@@ -229,6 +230,21 @@ export default function Dashboard() {
       .slice(0, 10);
   }, [prospects]);
 
+  // Relances DATÉES du jour, triées par heure croissante.
+  const relancesDateToday = useMemo(() => {
+    const now = new Date();
+    const start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const end = new Date(start.getTime() + 86400000);
+    return prospects
+      .filter((p) => {
+        if (p.statut_gagne_perdu !== 'actif') return false;
+        if (!p.date_relance_planifiee) return false;
+        const d = new Date(p.date_relance_planifiee);
+        return d >= start && d < end;
+      })
+      .sort((a, b) => new Date(a.date_relance_planifiee).getTime() - new Date(b.date_relance_planifiee).getTime());
+  }, [prospects]);
+
   const activeProspects = useMemo(() => prospects.filter((p) => p.statut_gagne_perdu === 'actif').length, [prospects]);
   const wonDeals = useMemo(() => prospects.filter((p) => p.statut_gagne_perdu === 'gagne').length, [prospects]);
 
@@ -416,38 +432,58 @@ export default function Dashboard() {
         </CardContent>
       </Card>
 
-      {/* Prospects to callback */}
-      <Card className="border-0 shadow-sm rounded-2xl">
-        <CardHeader>
-          <CardTitle className="text-lg font-semibold text-slate-900 flex items-center gap-2">
-            <Clock className="w-5 h-5 text-orange-500" /> Prochaines relances
-          </CardTitle>
-          <p className="text-xs text-slate-400 mt-1">
-            {selectedCommercial === 'global' ? 'Prospects à rappeler (dernier appel il y a 5+ jours)' : `Relances de ${selectedCommercial}`}
-          </p>
-        </CardHeader>
-        <CardContent>
-          {prospectsToCallback.length === 0 ? (
-            <div className="text-center py-8">
-              <div className="w-12 h-12 bg-slate-100 rounded-2xl flex items-center justify-center mx-auto mb-3">
-                <Phone className="w-5 h-5 text-slate-400" />
+      {/* Deux colonnes de relance : NRP (appels non répondus) + Relances datées du jour */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Relance NRP */}
+        <Card className="border-0 shadow-sm rounded-2xl">
+          <CardHeader>
+            <CardTitle className="text-lg font-semibold text-slate-900 flex items-center gap-2">
+              <PhoneOff className="w-5 h-5 text-red-500" /> Relance NRP
+            </CardTitle>
+            <p className="text-xs text-slate-400 mt-1">Appels non répondus à rappeler (dernier appel il y a 5+ jours)</p>
+          </CardHeader>
+          <CardContent>
+            {prospectsToCallback.length === 0 ? (
+              <div className="text-center py-8">
+                <div className="w-12 h-12 bg-slate-100 rounded-2xl flex items-center justify-center mx-auto mb-3"><Phone className="w-5 h-5 text-slate-400" /></div>
+                <p className="text-sm text-slate-400">Aucune relance NRP en attente</p>
               </div>
-              <p className="text-sm text-slate-400">Aucune relance en attente</p>
-            </div>
-          ) : (
-            <div className="space-y-2 max-h-[400px] overflow-y-auto pr-1">
-              {prospectsToCallback.map((p) => (
-                <CallbackRow key={p.id} prospect={p} />
-              ))}
-            </div>
-          )}
-          <div className="mt-4 pt-4 border-t border-slate-100">
-            <Link to="/prospects" className="text-sm text-[#5A9BA3] hover:text-[#4A8B93] font-semibold flex items-center gap-1 group">
-              Voir tous les prospects <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
-            </Link>
-          </div>
-        </CardContent>
-      </Card>
+            ) : (
+              <div className="space-y-2 max-h-[400px] overflow-y-auto pr-1">
+                {prospectsToCallback.map((p) => <CallbackRow key={p.id} prospect={p} />)}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Relance date (aujourd'hui, par heure) */}
+        <Card className="border-0 shadow-sm rounded-2xl">
+          <CardHeader>
+            <CardTitle className="text-lg font-semibold text-slate-900 flex items-center gap-2">
+              <Clock className="w-5 h-5 text-[#5A9BA3]" /> Relance date — aujourd'hui
+            </CardTitle>
+            <p className="text-xs text-slate-400 mt-1">Relances planifiées aujourd'hui, classées par heure</p>
+          </CardHeader>
+          <CardContent>
+            {relancesDateToday.length === 0 ? (
+              <div className="text-center py-8">
+                <div className="w-12 h-12 bg-slate-100 rounded-2xl flex items-center justify-center mx-auto mb-3"><Clock className="w-5 h-5 text-slate-400" /></div>
+                <p className="text-sm text-slate-400">Aucune relance datée aujourd'hui</p>
+              </div>
+            ) : (
+              <div className="space-y-2 max-h-[400px] overflow-y-auto pr-1">
+                {relancesDateToday.map((p) => <RelanceDateRow key={p.id} prospect={p} />)}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      <div className="pt-1">
+        <Link to="/prospects" className="text-sm text-[#5A9BA3] hover:text-[#4A8B93] font-semibold flex items-center gap-1 group">
+          Voir tous les prospects <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+        </Link>
+      </div>
     </div>
   );
 }
@@ -464,6 +500,26 @@ function StatBox({ icon: Icon, value, label, gradient, iconBg, iconColor, valueC
       <p className={`text-2xl font-bold ${valueColor || 'text-slate-900'}`}>{value}</p>
       <p className="text-xs text-slate-500 mt-1 font-medium">{label}</p>
     </div>
+  );
+}
+
+function RelanceDateRow({ prospect: p }: { prospect: Prospect }) {
+  const dt = p.date_relance_planifiee ? new Date(p.date_relance_planifiee) : null;
+  const heure = dt ? dt.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) : '--:--';
+  return (
+    <Link
+      to={`/prospects/${p.id}`}
+      className="flex items-center gap-3 p-3 rounded-xl border border-slate-100 hover:border-[#6AABB4]/40 hover:bg-gradient-to-r hover:from-teal-50/50 hover:to-cyan-50/30 transition-colors group"
+    >
+      <div className="w-14 shrink-0 text-center">
+        <span className="inline-block px-2 py-1 rounded-lg bg-[#5A9BA3]/10 text-[#5A9BA3] text-sm font-bold tabular-nums">{heure}</span>
+      </div>
+      <div className="min-w-0 flex-1">
+        <p className="text-sm font-semibold text-slate-900 truncate group-hover:text-[#5A9BA3] transition-colors">{p.nom_societe}</p>
+        <p className="text-xs text-slate-500 mt-0.5 truncate">{p.nom_dirigeant || p.telephone || p.zone_geographique}</p>
+      </div>
+      <span className="text-xs text-slate-500 shrink-0">{p.statut_avancement}</span>
+    </Link>
   );
 }
 

@@ -20,7 +20,7 @@ import {
 import { toast } from 'sonner';
 import {
   ArrowLeft, Phone, Mail, MapPin, Building2, Save, ChevronRight,
-  PhoneCall, PhoneOff, User,
+  PhoneCall, PhoneOff, User, Video, CalendarClock, XCircle,
 } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { queryKeys } from '../hooks/use-prospects';
@@ -44,6 +44,7 @@ const stageGradients: Record<string, string> = {
 
 const actionTypeLabels: Record<string, string> = {
   appel: 'Appel', relance: 'Relance', visio: 'Visio',
+  relance_planifiee: 'Relance planifiée',
   demande_documents: 'Demande de documents', signature: 'Signature',
   refus: 'Refus', status_change: 'Changement de statut',
 };
@@ -64,6 +65,8 @@ export default function ProspectDetail() {
   const [editNotes, setEditNotes] = useState('');
   const [actionNote, setActionNote] = useState('');
   const [showCallDialog, setShowCallDialog] = useState(false);
+  const [callStep, setCallStep] = useState<'result' | 'followup'>('result');
+  const [relanceDateTime, setRelanceDateTime] = useState('');
   const [saving, setSaving] = useState(false);
   const [notesInitialized, setNotesInitialized] = useState(false);
 
@@ -115,59 +118,82 @@ export default function ProspectDetail() {
     } catch { invalidateProspects(); toast.error('Erreur lors du changement de statut'); }
   }, [prospect, actionNote, updateProspectOptimistic, invalidateProspects, invalidateActions]);
 
-  const handleCallResult = useCallback(async (answered: boolean) => {
+  // Appel RÉPONDU : on incrémente, on journalise, puis on passe à l'étape "suite"
+  // (Visio / Relance date / Refus). On NE programme PAS de relance NRP.
+  const handleCallAnswered = useCallback(async () => {
+    if (!prospect) return;
+    const currentAppels = prospect.nombre_appels || 0;
+    const currentRepondus = prospect.nombre_appels_repondus || 0;
+    updateProspectOptimistic({
+      nombre_appels: currentAppels + 1,
+      nombre_appels_repondus: currentRepondus + 1,
+      date_dernier_appel: new Date().toISOString(),
+    });
+    try {
+      await client.entities.prospects.update({ id: String(prospect.id), data: { nombre_appels: currentAppels + 1, nombre_appels_repondus: currentRepondus + 1, date_dernier_appel: new Date().toISOString() } });
+      await client.entities.commercial_actions.create({
+        data: { prospect_id: prospect.id, action_type: 'appel', appel_repondu: true, from_status: prospect.statut_avancement, to_status: prospect.statut_avancement, notes: actionNote || 'Appel - Répondu', action_date: new Date().toISOString() },
+      });
+      invalidateActions(prospect.id);
+    } catch { invalidateProspects(); toast.error("Erreur lors de l'enregistrement"); }
+    setCallStep('followup');
+  }, [prospect, actionNote, updateProspectOptimistic, invalidateProspects, invalidateActions]);
+
+  // Appel NON RÉPONDU (NRP) : relance automatique dans 5 jours.
+  const handleCallNoAnswer = useCallback(async () => {
     if (!prospect) return;
     setShowCallDialog(false);
     const currentAppels = prospect.nombre_appels || 0;
     const currentRelances = prospect.nombre_relances || 0;
-    const currentRepondus = prospect.nombre_appels_repondus || 0;
     const isFirstCall = currentAppels === 0;
 
     const updates: Partial<Prospect> = {
       nombre_appels: currentAppels + 1,
       date_dernier_appel: new Date().toISOString(),
-      nombre_appels_repondus: answered ? currentRepondus + 1 : currentRepondus,
     };
-
-    let actionType = 'appel';
     let newStatus = prospect.statut_avancement;
-
     if (!isFirstCall) {
       const newRelanceCount = currentRelances + 1;
       updates.nombre_relances = newRelanceCount;
-      actionType = 'relance';
       if (newRelanceCount === 1) newStatus = 'Relance 1';
       else if (newRelanceCount === 2) newStatus = 'Relance 2';
       else if (newRelanceCount === 3) newStatus = 'Relance 3';
       else if (newRelanceCount >= 4) newStatus = 'Relance 4';
       updates.statut_avancement = newStatus;
     }
-
     const nextRelance = new Date();
     nextRelance.setDate(nextRelance.getDate() + 5);
     updates.date_prochaine_relance = nextRelance.toISOString();
 
     updateProspectOptimistic(updates);
-
     try {
-      const updateData: Record<string, unknown> = {
-        nombre_appels: currentAppels + 1, date_dernier_appel: new Date().toISOString(),
-        date_prochaine_relance: nextRelance.toISOString(),
-      };
-      if (answered) updateData.nombre_appels_repondus = currentRepondus + 1;
-      if (!isFirstCall) { updateData.nombre_relances = currentRelances + 1; updateData.statut_avancement = newStatus; }
-
-      await client.entities.prospects.update({ id: String(prospect.id), data: updateData });
-
-      const relanceLabel = !isFirstCall ? ` (Relance ${currentRelances + 1})` : '';
-      const answeredLabel = answered ? ' - Répondu' : ' - Non répondu';
+      await client.entities.prospects.update({ id: String(prospect.id), data: { ...updates } });
       await client.entities.commercial_actions.create({
-        data: { prospect_id: prospect.id, action_type: actionType, appel_repondu: answered, from_status: prospect.statut_avancement, to_status: newStatus, notes: actionNote || `${isFirstCall ? 'Appel' : 'Relance'}${relanceLabel}${answeredLabel}`, action_date: new Date().toISOString() },
+        data: { prospect_id: prospect.id, action_type: isFirstCall ? 'appel' : 'relance', appel_repondu: false, from_status: prospect.statut_avancement, to_status: newStatus, notes: actionNote || `NRP (non répondu) — relance dans 5 jours`, action_date: new Date().toISOString() },
       });
       invalidateActions(prospect.id);
       setActionNote('');
-      toast.success(`${isFirstCall ? 'Appel' : `Relance ${currentRelances + 1}`} enregistré${answered ? ' (répondu)' : ' (non répondu)'}`);
+      toast.success('Appel non répondu — relance NRP programmée (5 j)');
     } catch { invalidateProspects(); toast.error("Erreur lors de l'enregistrement"); }
+  }, [prospect, actionNote, updateProspectOptimistic, invalidateProspects, invalidateActions]);
+
+  // Relance à une date/heure précise (option "Relance date" ou champ dédié de la fiche).
+  const handleSetRelanceDate = useCallback(async (localDateTime: string) => {
+    if (!prospect || !localDateTime) return;
+    const iso = new Date(localDateTime).toISOString();
+    updateProspectOptimistic({ date_relance_planifiee: iso });
+    try {
+      await client.entities.prospects.update({ id: String(prospect.id), data: { date_relance_planifiee: iso } });
+      await client.entities.commercial_actions.create({
+        data: { prospect_id: prospect.id, action_type: 'relance_planifiee', appel_repondu: false, from_status: prospect.statut_avancement, to_status: prospect.statut_avancement, notes: actionNote || `Relance planifiée le ${new Date(iso).toLocaleString('fr-FR')}`, action_date: new Date().toISOString() },
+      });
+      invalidateActions(prospect.id);
+      setActionNote('');
+      toast.success('📅 Relance planifiée');
+    } catch { invalidateProspects(); toast.error('Erreur lors de la planification'); }
+    setShowCallDialog(false);
+    setCallStep('result');
+    setRelanceDateTime('');
   }, [prospect, actionNote, updateProspectOptimistic, invalidateProspects, invalidateActions]);
 
   const handleLogVisio = useCallback(async () => {
@@ -277,7 +303,8 @@ export default function ProspectDetail() {
                 { label: 'Appels répondus', value: String(prospect.nombre_appels_repondus || 0), color: 'text-emerald-600', bold: true },
                 { label: 'Relances', value: String(prospect.nombre_relances || 0), bold: true },
                 { label: 'Dernier appel', value: formatDate(prospect.date_dernier_appel) },
-                { label: 'Prochaine relance', value: formatDate(prospect.date_prochaine_relance) },
+                { label: 'Relance NRP', value: formatDate(prospect.date_prochaine_relance) },
+                { label: 'Relance datée', value: formatDate(prospect.date_relance_planifiee), color: 'text-[#5A9BA3]', bold: true },
                 { label: 'Créé le', value: formatDate(prospect.created_at) },
               ].map((item) => (
                 <div key={item.label} className="flex justify-between text-sm">
@@ -298,10 +325,29 @@ export default function ProspectDetail() {
               <Input value={actionNote} onChange={(e) => setActionNote(e.target.value)} placeholder="Ajouter une note (optionnel)..." className="rounded-xl" />
             </div>
             <div className="flex flex-wrap gap-2">
-              <Button size="sm" onClick={() => setShowCallDialog(true)} className="gap-1.5 bg-gradient-to-r from-[#5A9BA3] to-[#6AABB4] hover:from-[#4A8B93] hover:to-[#5A9BA4] text-white rounded-xl shadow-md shadow-[#6AABB4]/20">
+              <Button size="sm" onClick={() => { setCallStep('result'); setRelanceDateTime(''); setShowCallDialog(true); }} className="gap-1.5 bg-gradient-to-r from-[#5A9BA3] to-[#6AABB4] hover:from-[#4A8B93] hover:to-[#5A9BA4] text-white rounded-xl shadow-md shadow-[#6AABB4]/20">
                 <Phone className="w-3.5 h-3.5" /> {callButtonLabel}
               </Button>
               <Button size="sm" variant="outline" onClick={handleLogVisio} className="gap-1.5 rounded-xl">Visio</Button>
+            </div>
+
+            {/* Relance planifiée (date/heure) — alimente la colonne "Relance date" du tableau de bord */}
+            <div className="pt-4 border-t border-slate-100">
+              <Label>Relance planifiée (date &amp; heure)</Label>
+              <div className="flex gap-2 mt-1">
+                <input
+                  type="datetime-local"
+                  value={relanceDateTime}
+                  onChange={(e) => setRelanceDateTime(e.target.value)}
+                  className="flex-1 rounded-xl border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#6AABB4]/40"
+                />
+                <Button onClick={() => handleSetRelanceDate(relanceDateTime)} disabled={!relanceDateTime} size="sm" className="gap-1.5 bg-gradient-to-r from-[#5A9BA3] to-[#6AABB4] hover:from-[#4A8B93] hover:to-[#5A9BA4] text-white rounded-xl">
+                  <CalendarClock className="w-4 h-4" /> Planifier
+                </Button>
+              </div>
+              {prospect.date_relance_planifiee && (
+                <p className="text-xs text-slate-500 mt-1.5">Prochaine relance datée : <span className="font-semibold text-slate-700">{formatDate(prospect.date_relance_planifiee)}</span></p>
+              )}
             </div>
 
             <div className="pt-4 border-t border-slate-100">
@@ -341,24 +387,48 @@ export default function ProspectDetail() {
       </div>
 
       {/* Call Dialog */}
-      <Dialog open={showCallDialog} onOpenChange={setShowCallDialog}>
+      <Dialog open={showCallDialog} onOpenChange={(o) => { setShowCallDialog(o); if (!o) setCallStep('result'); }}>
         <DialogContent className="max-w-sm rounded-2xl">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <div className="w-8 h-8 bg-gradient-to-br from-[#5A9BA3] to-[#6AABB4] rounded-lg flex items-center justify-center"><Phone className="w-4 h-4 text-white" /></div>
-              Résultat de l&apos;appel
+              {callStep === 'result' ? "Résultat de l'appel" : 'Appel répondu — et ensuite ?'}
             </DialogTitle>
-            <DialogDescription>{isFirstCall ? `Premier appel à ${prospect.nom_societe}` : `Relance ${(prospect.nombre_relances || 0) + 1} - ${prospect.nom_societe}`}</DialogDescription>
+            <DialogDescription>{prospect.nom_societe}</DialogDescription>
           </DialogHeader>
-          <div className="flex flex-col gap-3 py-4">
-            <Button onClick={() => handleCallResult(true)} className="gap-2 bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 text-white h-12 text-base rounded-xl shadow-md shadow-emerald-500/20">
-              <PhoneCall className="w-5 h-5" /> Appel répondu
-            </Button>
-            <Button onClick={() => handleCallResult(false)} variant="outline" className="gap-2 border-red-200 text-red-600 hover:bg-red-50 h-12 text-base rounded-xl">
-              <PhoneOff className="w-5 h-5" /> Non répondu
-            </Button>
-          </div>
-          <DialogFooter><Button variant="ghost" onClick={() => setShowCallDialog(false)} className="w-full rounded-xl">Annuler</Button></DialogFooter>
+
+          {callStep === 'result' ? (
+            <div className="flex flex-col gap-3 py-4">
+              <Button onClick={handleCallAnswered} className="gap-2 bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 text-white h-12 text-base rounded-xl shadow-md shadow-emerald-500/20">
+                <PhoneCall className="w-5 h-5" /> Appel répondu
+              </Button>
+              <Button onClick={handleCallNoAnswer} variant="outline" className="gap-2 border-red-200 text-red-600 hover:bg-red-50 h-12 text-base rounded-xl">
+                <PhoneOff className="w-5 h-5" /> Non répondu (NRP)
+              </Button>
+            </div>
+          ) : (
+            <div className="flex flex-col gap-3 py-2">
+              <Button onClick={() => { setShowCallDialog(false); setCallStep('result'); handleLogVisio(); }} className="gap-2 bg-gradient-to-r from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700 text-white h-11 rounded-xl">
+                <Video className="w-4 h-4" /> Visio
+              </Button>
+              <div className="rounded-xl border border-slate-200 p-3">
+                <Label className="text-xs text-slate-500">Relance à une date précise</Label>
+                <input
+                  type="datetime-local"
+                  value={relanceDateTime}
+                  onChange={(e) => setRelanceDateTime(e.target.value)}
+                  className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#6AABB4]/40"
+                />
+                <Button onClick={() => handleSetRelanceDate(relanceDateTime)} disabled={!relanceDateTime} size="sm" className="mt-2 w-full gap-2 bg-gradient-to-r from-[#5A9BA3] to-[#6AABB4] hover:from-[#4A8B93] hover:to-[#5A9BA4] text-white rounded-xl">
+                  <CalendarClock className="w-4 h-4" /> Planifier la relance
+                </Button>
+              </div>
+              <Button onClick={() => { setShowCallDialog(false); setCallStep('result'); handleStatusChange('Refus / Perdu'); }} variant="outline" className="gap-2 border-red-200 text-red-600 hover:bg-red-50 h-11 rounded-xl">
+                <XCircle className="w-4 h-4" /> Refus
+              </Button>
+            </div>
+          )}
+          <DialogFooter><Button variant="ghost" onClick={() => { setShowCallDialog(false); setCallStep('result'); }} className="w-full rounded-xl">Fermer</Button></DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

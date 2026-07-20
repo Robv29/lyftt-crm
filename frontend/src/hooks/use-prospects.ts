@@ -78,7 +78,7 @@ export function useProspects() {
       const res = await client.entities.prospects.queryAll({
         query: {},
         sort: '-updated_at',
-        limit: 2000,
+        limit: 1000000,
       });
       return (res.data?.items || []) as Prospect[];
     },
@@ -94,7 +94,7 @@ export function useActions() {
       const res = await client.entities.commercial_actions.queryAll({
         query: {},
         sort: '-action_date',
-        limit: 2000,
+        limit: 1000000,
       });
       return (res.data?.items || []) as CommercialAction[];
     },

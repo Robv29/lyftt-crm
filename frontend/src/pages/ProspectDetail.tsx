@@ -165,9 +165,10 @@ export default function ProspectDetail() {
     nextRelance.setDate(nextRelance.getDate() + 5);
     updates.date_prochaine_relance = nextRelance.toISOString();
 
-    updateProspectOptimistic(updates);
+    updateProspectOptimistic({ ...updates, date_relance_planifiee: '' });
     try {
-      await client.entities.prospects.update({ id: String(prospect.id), data: { ...updates } });
+      // Un NRP consomme la relance datée : le prospect bascule dans la colonne NRP.
+      await client.entities.prospects.update({ id: String(prospect.id), data: { ...updates, date_relance_planifiee: null } });
       await client.entities.commercial_actions.create({
         data: { prospect_id: prospect.id, action_type: isFirstCall ? 'appel' : 'relance', appel_repondu: false, from_status: prospect.statut_avancement, to_status: newStatus, notes: actionNote || `NRP (non répondu) — relance dans 5 jours`, action_date: new Date().toISOString() },
       });
@@ -386,49 +387,51 @@ export default function ProspectDetail() {
         </Card>
       </div>
 
-      {/* Call Dialog */}
+      {/* Call Dialog — dimensions fixes : le contenu change, la fenêtre ne bouge pas */}
       <Dialog open={showCallDialog} onOpenChange={(o) => { setShowCallDialog(o); if (!o) setCallStep('result'); }}>
-        <DialogContent className="max-w-sm rounded-2xl">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <div className="w-8 h-8 bg-gradient-to-br from-[#5A9BA3] to-[#6AABB4] rounded-lg flex items-center justify-center"><Phone className="w-4 h-4 text-white" /></div>
-              {callStep === 'result' ? "Résultat de l'appel" : 'Appel répondu — et ensuite ?'}
+        <DialogContent className="w-[400px] max-w-[92vw] rounded-3xl p-0 overflow-hidden gap-0">
+          <div className="h-1.5 bg-gradient-to-r from-[#5A9BA3] via-[#6AABB4] to-emerald-400" />
+          <DialogHeader className="px-6 pt-5 pb-0 space-y-1">
+            <DialogTitle className="flex items-center gap-2.5 text-lg">
+              <div className="w-9 h-9 bg-gradient-to-br from-[#5A9BA3] to-[#6AABB4] rounded-xl flex items-center justify-center shrink-0">
+                <Phone className="w-4 h-4 text-white" />
+              </div>
+              <span className="truncate">{callStep === 'result' ? "Résultat de l'appel" : 'Et ensuite ?'}</span>
             </DialogTitle>
-            <DialogDescription>{prospect.nom_societe}</DialogDescription>
+            <DialogDescription className="truncate text-left">{prospect.nom_societe}</DialogDescription>
           </DialogHeader>
 
-          {callStep === 'result' ? (
-            <div className="flex flex-col gap-3 py-4">
-              <Button onClick={handleCallAnswered} className="gap-2 bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 text-white h-12 text-base rounded-xl shadow-md shadow-emerald-500/20">
-                <PhoneCall className="w-5 h-5" /> Appel répondu
-              </Button>
-              <Button onClick={handleCallNoAnswer} variant="outline" className="gap-2 border-red-200 text-red-600 hover:bg-red-50 h-12 text-base rounded-xl">
-                <PhoneOff className="w-5 h-5" /> Non répondu (NRP)
-              </Button>
-            </div>
-          ) : (
-            <div className="flex flex-col gap-3 py-2">
-              <Button onClick={() => { setShowCallDialog(false); setCallStep('result'); handleLogVisio(); }} className="gap-2 bg-gradient-to-r from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700 text-white h-11 rounded-xl">
-                <Video className="w-4 h-4" /> Visio
-              </Button>
-              <div className="rounded-xl border border-slate-200 p-3">
-                <Label className="text-xs text-slate-500">Relance à une date précise</Label>
-                <input
-                  type="datetime-local"
-                  value={relanceDateTime}
-                  onChange={(e) => setRelanceDateTime(e.target.value)}
-                  className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#6AABB4]/40"
-                />
-                <Button onClick={() => handleSetRelanceDate(relanceDateTime)} disabled={!relanceDateTime} size="sm" className="mt-2 w-full gap-2 bg-gradient-to-r from-[#5A9BA3] to-[#6AABB4] hover:from-[#4A8B93] hover:to-[#5A9BA4] text-white rounded-xl">
-                  <CalendarClock className="w-4 h-4" /> Planifier la relance
+          <div className="px-6 py-5 h-[230px]">
+            {callStep === 'result' ? (
+              <div className="h-full grid grid-rows-2 gap-3">
+                <Button onClick={handleCallAnswered} className="h-full text-base font-black rounded-2xl bg-gradient-to-br from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 text-white gap-2 hover:scale-[1.02] transition-transform">
+                  <PhoneCall className="w-5 h-5" /> Appel répondu
+                </Button>
+                <Button onClick={handleCallNoAnswer} variant="outline" className="h-full text-base font-black rounded-2xl border-2 border-red-200 text-red-600 hover:bg-red-50 gap-2 hover:scale-[1.02] transition-transform">
+                  <PhoneOff className="w-5 h-5" /> Non répondu (NRP)
                 </Button>
               </div>
-              <Button onClick={() => { setShowCallDialog(false); setCallStep('result'); handleStatusChange('Refus / Perdu'); }} variant="outline" className="gap-2 border-red-200 text-red-600 hover:bg-red-50 h-11 rounded-xl">
-                <XCircle className="w-4 h-4" /> Refus
-              </Button>
-            </div>
-          )}
-          <DialogFooter><Button variant="ghost" onClick={() => { setShowCallDialog(false); setCallStep('result'); }} className="w-full rounded-xl">Fermer</Button></DialogFooter>
+            ) : (
+              <div className="h-full flex flex-col justify-center gap-2.5">
+                <div className="grid grid-cols-2 gap-2.5">
+                  <Button onClick={() => { setShowCallDialog(false); setCallStep('result'); handleLogVisio(); }} className="h-12 rounded-xl bg-gradient-to-br from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700 text-white gap-2 font-bold"><Video className="w-4 h-4" /> Visio</Button>
+                  <Button onClick={() => { setShowCallDialog(false); setCallStep('result'); handleStatusChange('Refus / Perdu'); }} variant="outline" className="h-12 rounded-xl border-2 border-red-200 text-red-600 hover:bg-red-50 gap-2 font-bold"><XCircle className="w-4 h-4" /> Refus</Button>
+                </div>
+                <div className="rounded-2xl border-2 border-slate-100 p-3">
+                  <p className="text-xs font-semibold text-slate-500 mb-1.5">Relance à une date précise</p>
+                  <div className="flex gap-2">
+                    <input type="datetime-local" value={relanceDateTime} onChange={(e) => setRelanceDateTime(e.target.value)}
+                      className="flex-1 min-w-0 h-10 rounded-xl border-2 border-slate-200 px-2.5 text-sm focus:outline-none focus:border-[#6AABB4]" />
+                    <Button onClick={() => handleSetRelanceDate(relanceDateTime)} disabled={!relanceDateTime} className="h-10 shrink-0 gap-1.5 bg-gradient-to-r from-[#5A9BA3] to-[#6AABB4] text-white rounded-xl font-bold"><CalendarClock className="w-4 h-4" /> OK</Button>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
+          <DialogFooter className="px-6 pb-5 pt-0">
+            <Button variant="ghost" onClick={() => { setShowCallDialog(false); setCallStep('result'); }} className="w-full rounded-xl">Fermer</Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

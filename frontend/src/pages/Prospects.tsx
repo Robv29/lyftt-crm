@@ -1,4 +1,5 @@
 import { useState, useRef, useMemo, useCallback } from 'react';
+import { usePersistentState } from '../hooks/use-persistent-state';
 import { client } from '../lib/api';
 import { Link, useNavigate } from 'react-router-dom';
 import {
@@ -180,6 +181,19 @@ function parseUpdates(XLSX: typeof XLSXType, workbook: XLSXType.WorkBook): Map<s
   return map;
 }
 
+
+// Correspondance des statuts Monday -> statuts CRM.
+//  - "RDV calé"          -> Visio
+//  - "à rappeler"        -> Relance 1 (puis 2/3/4 au fil des relances NRP)
+//  - "Entreprise fermée" -> sorti du pipeline actif (Refus / Perdu)
+function mapMondayStatut(s: string): { statut_avancement: string; statut_gagne_perdu: string } {
+  const v = (s || '').toLowerCase();
+  if (v.includes('rdv')) return { statut_avancement: 'Visio', statut_gagne_perdu: 'actif' };
+  if (v.includes('rappeler')) return { statut_avancement: 'Relance 1', statut_gagne_perdu: 'actif' };
+  if (v.includes('ferm')) return { statut_avancement: 'Refus / Perdu', statut_gagne_perdu: 'perdu' };
+  return { statut_avancement: 'Appel telephonique', statut_gagne_perdu: 'actif' };
+}
+
 export default function Prospects() {
   const { data: prospects = [], isLoading: loading, error, refetch, isFetching } = useProspects();
   const { data: registeredUsers = [] } = useRegisteredUsers();
@@ -187,10 +201,10 @@ export default function Prospects() {
   const invalidateProspects = useInvalidateProspects();
 
   const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState('Tous');
-  const [sectorFilter, setSectorFilter] = useState('Tous');
-  const [cityFilter, setCityFilter] = useState('Toutes');
-  const [commercialFilter, setCommercialFilter] = useState('Tous');
+  const [statusFilter, setStatusFilter] = usePersistentState('lyftt.prospects.statut', 'Tous');
+  const [sectorFilter, setSectorFilter] = usePersistentState('lyftt.prospects.secteur', 'Tous');
+  const [cityFilter, setCityFilter] = usePersistentState('lyftt.prospects.ville', 'Toutes');
+  const [commercialFilter, setCommercialFilter] = usePersistentState('lyftt.prospects.commercial', 'Tous');
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [deleting, setDeleting] = useState(false);
@@ -275,8 +289,9 @@ export default function Prospects() {
             p.statut_monday ? `Statut Monday: ${p.statut_monday}` : '',
           ].filter(Boolean).join(' · ');
           const note = [ctx, upd].filter(Boolean).join('\n\n');
+          const mapped = mapMondayStatut(p.statut_monday);
           await client.entities.prospects.create({
-            data: { nom_societe: p.nom_societe, nom_dirigeant: p.nom_dirigeant, telephone: p.telephone, email: p.email || '', zone_geographique: p.zone_geographique, categorie_metier: p.categorie_metier, commercial_assigne: p.commercial_assigne, source_lead: 'Import Excel', montant_potentiel: 0, notes: note, statut_avancement: 'Appel telephonique', priorite: 'moyenne', statut_gagne_perdu: 'actif', nombre_appels: 0, nombre_appels_repondus: 0, nombre_relances: 0 },
+            data: { nom_societe: p.nom_societe, nom_dirigeant: p.nom_dirigeant, telephone: p.telephone, email: p.email || '', zone_geographique: p.zone_geographique, categorie_metier: p.categorie_metier, commercial_assigne: p.commercial_assigne, source_lead: 'Import Excel', montant_potentiel: 0, notes: note, statut_avancement: mapped.statut_avancement, priorite: 'moyenne', statut_gagne_perdu: mapped.statut_gagne_perdu, nombre_appels: 0, nombre_appels_repondus: 0, nombre_relances: 0 },
           });
           imported++;
           if (imported % 10 === 0) toast.loading(`Import en cours... ${imported}/${parsed.length}`, { id: toastId });

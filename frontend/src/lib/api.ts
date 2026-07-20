@@ -33,25 +33,40 @@ interface QueryAllOptions {
 
 function makeEntity(table: string) {
   return {
+    // Pagination automatique : Supabase plafonne chaque requête (1000 lignes).
+    // On boucle par pages pour ramener la totalité des enregistrements,
+    // sans limite pratique sur le nombre de prospects.
     async queryAll(opts: QueryAllOptions = {}) {
-      const { query = {}, sort, limit = 1000, skip = 0 } = opts;
-      let q = supabase.from(table).select('*');
+      const { query = {}, sort, limit = 1_000_000, skip = 0 } = opts;
+      const PAGE = 1000;
+      const items: unknown[] = [];
+      let offset = skip;
 
-      for (const [key, value] of Object.entries(query)) {
-        if (value !== undefined && value !== null && value !== '') {
-          q = q.eq(key, value as never);
+      while (items.length < limit) {
+        const take = Math.min(PAGE, limit - items.length);
+        let q = supabase.from(table).select('*');
+
+        for (const [key, value] of Object.entries(query)) {
+          if (value !== undefined && value !== null && value !== '') {
+            q = q.eq(key, value as never);
+          }
         }
-      }
-      if (sort) {
-        const desc = sort.startsWith('-');
-        const col = desc ? sort.slice(1) : sort;
-        q = q.order(col, { ascending: !desc });
-      }
-      if (limit) q = q.range(skip, skip + limit - 1);
+        if (sort) {
+          const desc = sort.startsWith('-');
+          const col = desc ? sort.slice(1) : sort;
+          q = q.order(col, { ascending: !desc });
+        }
+        q = q.range(offset, offset + take - 1);
 
-      const { data, error } = await q;
-      if (error) throw wrapError(error);
-      return { data: { items: data ?? [], total: (data ?? []).length } };
+        const { data, error } = await q;
+        if (error) throw wrapError(error);
+        const batch = data ?? [];
+        items.push(...batch);
+        if (batch.length < take) break; // plus rien à charger
+        offset += batch.length;
+      }
+
+      return { data: { items, total: items.length } };
     },
 
     async create(payload: { data?: AnyObj } | AnyObj) {

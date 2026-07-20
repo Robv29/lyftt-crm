@@ -1,4 +1,5 @@
 import { useState, useMemo, useCallback } from 'react';
+import { usePersistentState } from '../hooks/use-persistent-state';
 import { useAuth } from '../contexts/AuthContext';
 import {
   useProspects,
@@ -127,8 +128,8 @@ export default function Dashboard() {
     if (errorA) refetchA();
   }, [errorP, errorA, refetchP, refetchA]);
 
-  const [selectedPeriod, setSelectedPeriod] = useState<PeriodKey>('today');
-  const [selectedCommercial, setSelectedCommercial] = useState<string>('global');
+  const [selectedPeriod, setSelectedPeriod] = usePersistentState<PeriodKey>('lyftt.dash.periode', 'today');
+  const [selectedCommercial, setSelectedCommercial] = usePersistentState<string>('lyftt.dash.commercial', 'global');
   const [showSpeedRun, setShowSpeedRun] = useState(false);
 
   const loading = loadingP || loadingA;
@@ -233,8 +234,9 @@ export default function Dashboard() {
       .slice(0, 10);
   }, [prospects]);
 
-  // Relances DATÉES du jour, triées par heure croissante.
-  const relancesDateToday = useMemo(() => {
+  // Relances DATÉES : celles du jour (triées par heure) + celles en retard.
+  // Une relance datée non appelée passe EN ROUGE dès le lendemain.
+  const relancesDate = useMemo(() => {
     const now = new Date();
     const start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     const end = new Date(start.getTime() + 86400000);
@@ -242,10 +244,10 @@ export default function Dashboard() {
       .filter((p) => {
         if (p.statut_gagne_perdu !== 'actif') return false;
         if (!p.date_relance_planifiee) return false;
-        const d = new Date(p.date_relance_planifiee);
-        return d >= start && d < end;
+        return new Date(p.date_relance_planifiee) < end;
       })
-      .sort((a, b) => new Date(a.date_relance_planifiee).getTime() - new Date(b.date_relance_planifiee).getTime());
+      .sort((a, b) => new Date(a.date_relance_planifiee).getTime() - new Date(b.date_relance_planifiee).getTime())
+      .map((p) => ({ p, overdue: new Date(p.date_relance_planifiee) < start }));
   }, [prospects]);
 
   const activeProspects = useMemo(() => prospects.filter((p) => p.statut_gagne_perdu === 'actif').length, [prospects]);
@@ -462,7 +464,7 @@ export default function Dashboard() {
               </div>
             ) : (
               <div className="space-y-2 max-h-[400px] overflow-y-auto pr-1">
-                {prospectsToCallback.map((p) => <CallbackRow key={p.id} prospect={p} />)}
+                {prospectsToCallback.map((p) => <CallbackRow key={p.id} prospect={p} overdue={!!p.date_prochaine_relance && new Date(p.date_prochaine_relance) <= new Date()} />)}
               </div>
             )}
           </CardContent>
@@ -477,14 +479,14 @@ export default function Dashboard() {
             <p className="text-xs text-slate-400 mt-1">Relances planifiées aujourd'hui, classées par heure</p>
           </CardHeader>
           <CardContent>
-            {relancesDateToday.length === 0 ? (
+            {relancesDate.length === 0 ? (
               <div className="text-center py-8">
                 <div className="w-12 h-12 bg-slate-100 rounded-2xl flex items-center justify-center mx-auto mb-3"><Clock className="w-5 h-5 text-slate-400" /></div>
                 <p className="text-sm text-slate-400">Aucune relance datée aujourd'hui</p>
               </div>
             ) : (
               <div className="space-y-2 max-h-[400px] overflow-y-auto pr-1">
-                {relancesDateToday.map((p) => <RelanceDateRow key={p.id} prospect={p} />)}
+                {relancesDate.map(({ p, overdue }) => <RelanceDateRow key={p.id} prospect={p} overdue={overdue} />)}
               </div>
             )}
           </CardContent>
@@ -515,16 +517,18 @@ function StatBox({ icon: Icon, value, label, gradient, iconBg, iconColor, valueC
   );
 }
 
-function RelanceDateRow({ prospect: p }: { prospect: Prospect }) {
+function RelanceDateRow({ prospect: p, overdue = false }: { prospect: Prospect; overdue?: boolean }) {
   const dt = p.date_relance_planifiee ? new Date(p.date_relance_planifiee) : null;
   const heure = dt ? dt.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) : '--:--';
+  const jour = dt ? dt.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' }) : '';
   return (
     <Link
       to={`/prospects/${p.id}`}
-      className="flex items-center gap-3 p-3 rounded-xl border border-slate-100 hover:border-[#6AABB4]/40 hover:bg-gradient-to-r hover:from-teal-50/50 hover:to-cyan-50/30 transition-colors group"
+      className={`flex items-center gap-3 p-3 rounded-xl border transition-colors group ${overdue ? 'border-red-200 bg-red-50/70 hover:bg-red-50' : 'border-slate-100 hover:border-[#6AABB4]/40 hover:bg-gradient-to-r hover:from-teal-50/50 hover:to-cyan-50/30'}`}
     >
-      <div className="w-14 shrink-0 text-center">
-        <span className="inline-block px-2 py-1 rounded-lg bg-[#5A9BA3]/10 text-[#5A9BA3] text-sm font-bold tabular-nums">{heure}</span>
+      <div className="w-16 shrink-0 text-center">
+        <span className={`inline-block px-2 py-1 rounded-lg text-sm font-bold tabular-nums ${overdue ? 'bg-red-500 text-white' : 'bg-[#5A9BA3]/10 text-[#5A9BA3]'}`}>{heure}</span>
+        {overdue && <p className="text-[10px] font-bold text-red-600 mt-0.5">{jour} en retard</p>}
       </div>
       <div className="min-w-0 flex-1">
         <p className="text-sm font-semibold text-slate-900 truncate group-hover:text-[#5A9BA3] transition-colors">{p.nom_societe}</p>
@@ -535,13 +539,13 @@ function RelanceDateRow({ prospect: p }: { prospect: Prospect }) {
   );
 }
 
-function CallbackRow({ prospect: p }: { prospect: Prospect }) {
+function CallbackRow({ prospect: p, overdue = false }: { prospect: Prospect; overdue?: boolean }) {
   const lastCallDate = p.date_dernier_appel ? new Date(p.date_dernier_appel) : null;
   const daysAgo = lastCallDate ? Math.floor((Date.now() - lastCallDate.getTime()) / 86400000) : null;
   return (
     <Link
       to={`/prospects/${p.id}`}
-      className="block p-3 rounded-xl border border-slate-100 hover:border-[#6AABB4]/40 hover:bg-gradient-to-r hover:from-teal-50/50 hover:to-cyan-50/30 transition-colors group"
+      className={`block p-3 rounded-xl border transition-colors group ${overdue ? 'border-red-200 bg-red-50/70 hover:bg-red-50' : 'border-slate-100 hover:border-[#6AABB4]/40 hover:bg-gradient-to-r hover:from-teal-50/50 hover:to-cyan-50/30'}`}
     >
       <div className="flex items-start justify-between">
         <div className="min-w-0">

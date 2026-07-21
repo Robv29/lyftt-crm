@@ -32,38 +32,62 @@ interface QueryAllOptions {
 }
 
 function makeEntity(table: string) {
+  // Applique filtres/tri à un query builder Supabase (facteur commun entre
+  // la 1ère page et les pages suivantes chargées en parallèle).
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  function applyFilters(q: any, query: AnyObj, sort?: string) {
+    let qq = q;
+    for (const [key, value] of Object.entries(query)) {
+      if (value !== undefined && value !== null && value !== '') {
+        qq = qq.eq(key, value as never);
+      }
+    }
+    if (sort) {
+      const desc = sort.startsWith('-');
+      const col = desc ? sort.slice(1) : sort;
+      qq = qq.order(col, { ascending: !desc });
+    }
+    return qq;
+  }
+
   return {
     // Pagination automatique : Supabase plafonne chaque requête (1000 lignes).
-    // On boucle par pages pour ramener la totalité des enregistrements,
-    // sans limite pratique sur le nombre de prospects.
+    // La 1ère page est chargée avec un COUNT exact (1 aller-retour), ce qui
+    // permet de charger TOUTES les pages suivantes EN PARALLÈLE plutôt qu'en
+    // boucle séquentielle — avec ~15 000 lignes (15 pages), ça change le
+    // temps de chargement d'une somme de 15 aller-retours à la durée du
+    // plus lent d'entre eux. Sans ça, chaque ouverture de page (Prospects,
+    // Dashboard, Pipeline) attendait plusieurs secondes avant le premier
+    // rendu.
     async queryAll(opts: QueryAllOptions = {}) {
       const { query = {}, sort, limit = 1_000_000, skip = 0 } = opts;
       const PAGE = 1000;
-      const items: unknown[] = [];
-      let offset = skip;
 
-      while (items.length < limit) {
-        const take = Math.min(PAGE, limit - items.length);
-        let q = supabase.from(table).select('*');
+      const firstTake = Math.min(PAGE, limit);
+      const { data: firstData, count, error: firstError } = await applyFilters(
+        supabase.from(table).select('*', { count: 'exact' }),
+        query,
+        sort
+      ).range(skip, skip + firstTake - 1);
+      if (firstError) throw wrapError(firstError);
 
-        for (const [key, value] of Object.entries(query)) {
-          if (value !== undefined && value !== null && value !== '') {
-            q = q.eq(key, value as never);
-          }
+      const items: unknown[] = [...(firstData ?? [])];
+      const total = Math.min(count ?? items.length, limit);
+
+      if (items.length === firstTake && items.length < total) {
+        const pageStarts: number[] = [];
+        for (let offset = skip + firstTake; offset < total; offset += PAGE) pageStarts.push(offset);
+
+        const pages = await Promise.all(
+          pageStarts.map((offset) => {
+            const take = Math.min(PAGE, total - offset);
+            return applyFilters(supabase.from(table).select('*'), query, sort).range(offset, offset + take - 1);
+          })
+        );
+        for (const { data, error } of pages) {
+          if (error) throw wrapError(error);
+          items.push(...(data ?? []));
         }
-        if (sort) {
-          const desc = sort.startsWith('-');
-          const col = desc ? sort.slice(1) : sort;
-          q = q.order(col, { ascending: !desc });
-        }
-        q = q.range(offset, offset + take - 1);
-
-        const { data, error } = await q;
-        if (error) throw wrapError(error);
-        const batch = data ?? [];
-        items.push(...batch);
-        if (batch.length < take) break; // plus rien à charger
-        offset += batch.length;
       }
 
       return { data: { items, total: items.length } };

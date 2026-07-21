@@ -1,4 +1,4 @@
-import { useState, useRef, useMemo, useCallback } from 'react';
+import { useState, useRef, useMemo, useCallback, useEffect } from 'react';
 import { usePersistentState } from '../hooks/use-persistent-state';
 import { client } from '../lib/api';
 import { Link, useNavigate } from 'react-router-dom';
@@ -25,7 +25,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { toast } from 'sonner';
 import {
   Search, Upload, Plus, Phone, ExternalLink, Filter, Trash2, X,
-  MapPin, Building2, UserCircle, Download,
+  MapPin, Building2, UserCircle, Download, ChevronLeft, ChevronRight,
 } from 'lucide-react';
 import ErrorState from '../components/ErrorState';
 import type * as XLSXType from 'xlsx';
@@ -276,6 +276,19 @@ export default function Prospects() {
     });
   }, [prospects, search, statusFilter, sectorFilter, cityFilter, commercialFilter, selectedCommercialCities]);
 
+  // Pagination côté client : avec ~15 000 prospects, rendre TOUTES les lignes
+  // filtrées d'un coup fait ramer le navigateur (des milliers de <tr> dans le
+  // DOM). On n'affiche qu'une page à la fois.
+  const PAGE_SIZE = 50;
+  const [page, setPage] = useState(1);
+  useEffect(() => { setPage(1); }, [search, statusFilter, sectorFilter, cityFilter, commercialFilter]);
+  const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const currentPage = Math.min(page, pageCount);
+  const paginated = useMemo(
+    () => filtered.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE),
+    [filtered, currentPage]
+  );
+
   const handleImport = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -346,10 +359,18 @@ export default function Prospects() {
     setSelectedIds((prev) => { const next = new Set(prev); if (next.has(id)) next.delete(id); else next.add(id); return next; });
   }, []);
 
+  // "Sélectionner tout" porte sur la page affichée (pas sur les ~15 000
+  // lignes filtrées) — cohérent avec ce que l'utilisateur voit à l'écran.
   const toggleSelectAll = useCallback(() => {
-    if (selectedIds.size === filtered.length) setSelectedIds(new Set());
-    else setSelectedIds(new Set(filtered.map((p) => p.id)));
-  }, [selectedIds.size, filtered]);
+    const pageIds = paginated.map((p) => p.id);
+    const allPageSelected = pageIds.length > 0 && pageIds.every((id) => selectedIds.has(id));
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (allPageSelected) pageIds.forEach((id) => next.delete(id));
+      else pageIds.forEach((id) => next.add(id));
+      return next;
+    });
+  }, [paginated, selectedIds]);
 
   const handleBulkDelete = useCallback(async () => {
     if (selectedIds.size === 0) return;
@@ -385,8 +406,8 @@ export default function Prospects() {
     } catch { toast.error("Erreur lors de l'export"); }
   }, [filtered]);
 
-  const allSelected = filtered.length > 0 && selectedIds.size === filtered.length;
-  const someSelected = selectedIds.size > 0 && selectedIds.size < filtered.length;
+  const allSelected = paginated.length > 0 && paginated.every((p) => selectedIds.has(p.id));
+  const someSelected = paginated.some((p) => selectedIds.has(p.id)) && !allSelected;
 
   if (loading) {
     return (
@@ -495,12 +516,30 @@ export default function Prospects() {
                     <p className="text-slate-400">Aucun prospect trouvé</p>
                   </div>
                 </td></tr>
-              ) : filtered.map((p) => (
+              ) : paginated.map((p) => (
                 <ProspectRow key={p.id} prospect={p} selected={selectedIds.has(p.id)} onToggle={toggleSelect} />
               ))}
             </tbody>
           </table>
         </div>
+
+        {/* Pagination — évite de rendre les ~15 000 lignes filtrées d'un coup */}
+        {filtered.length > 0 && (
+          <div className="flex items-center justify-between gap-3 px-4 py-3 border-t border-slate-100">
+            <p className="text-xs text-slate-500">
+              {(currentPage - 1) * PAGE_SIZE + 1}–{Math.min(currentPage * PAGE_SIZE, filtered.length)} sur {filtered.length}
+            </p>
+            <div className="flex items-center gap-2">
+              <Button variant="outline" size="sm" onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={currentPage === 1} className="gap-1 rounded-xl border-slate-200">
+                <ChevronLeft className="w-4 h-4" /> Précédent
+              </Button>
+              <span className="text-xs font-medium text-slate-500 px-1">Page {currentPage} / {pageCount}</span>
+              <Button variant="outline" size="sm" onClick={() => setPage((p) => Math.min(pageCount, p + 1))} disabled={currentPage === pageCount} className="gap-1 rounded-xl border-slate-200">
+                Suivant <ChevronRight className="w-4 h-4" />
+              </Button>
+            </div>
+          </div>
+        )}
       </Card>
 
       {/* Add Dialog */}

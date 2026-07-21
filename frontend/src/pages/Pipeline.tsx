@@ -73,6 +73,12 @@ export default function Pipeline() {
     }
   }, [prospects, queryClient, invalidateProspects, invalidateActions]);
 
+  // Avec ~15 000 prospects, une colonne (ex. "Appel téléphonique") peut
+  // contenir plusieurs milliers de cartes : les rendre toutes fait ramer le
+  // navigateur. On plafonne l'affichage par colonne et on renvoie vers
+  // Prospects (filtré par statut) pour voir le reste.
+  const CARDS_PER_STAGE = 40;
+
   const totalActive = useMemo(() => prospects.filter((p) => p.statut_gagne_perdu === 'actif').length, [prospects]);
   const totalValue = useMemo(() => prospects.filter((p) => p.statut_gagne_perdu === 'actif').reduce((s, p) => s + (p.montant_potentiel || 0), 0), [prospects]);
 
@@ -121,9 +127,21 @@ export default function Pipeline() {
               <div className="space-y-2">
                 {stageProspects.length === 0 ? (
                   <div className="rounded-2xl border-2 border-dashed border-slate-200 p-6 text-center"><p className="text-xs text-slate-400">Aucun prospect</p></div>
-                ) : stageProspects.map((p) => (
-                  <PipelineCard key={p.id} prospect={p} onMove={handleMoveProspect} />
-                ))}
+                ) : (
+                  <>
+                    {stageProspects.slice(0, CARDS_PER_STAGE).map((p) => (
+                      <PipelineCard key={p.id} prospect={p} onMove={handleMoveProspect} />
+                    ))}
+                    {stageProspects.length > CARDS_PER_STAGE && (
+                      <Link
+                        to="/prospects"
+                        className="block text-center text-xs font-semibold text-[#5A9BA3] hover:text-[#4A8B93] py-2 rounded-xl border border-dashed border-slate-200 hover:border-[#6AABB4]/40"
+                      >
+                        +{stageProspects.length - CARDS_PER_STAGE} autre(s) — voir dans Prospects
+                      </Link>
+                    )}
+                  </>
+                )}
               </div>
             </div>
           );

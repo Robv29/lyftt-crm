@@ -25,7 +25,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { toast } from 'sonner';
 import {
   Search, Upload, Plus, Phone, ExternalLink, Filter, Trash2, X,
-  MapPin, Building2, UserCircle, Download, ChevronLeft, ChevronRight,
+  MapPin, Building2, UserCircle, Download, ChevronLeft, ChevronRight, Copy,
 } from 'lucide-react';
 import ErrorState from '../components/ErrorState';
 import type * as XLSXType from 'xlsx';
@@ -203,6 +203,52 @@ function dedupKey(nom: string, tel: string) {
   return `${n}|${t}`;
 }
 
+interface DuplicateGroup {
+  certain: boolean; // true = société ET téléphone identiques ; false = correspondance partielle (probable)
+  items: Prospect[];
+}
+
+// Détecte les doublons existants dans la base (import répété, saisie manuelle
+// en double...). Deux prospects sont liés s'ils partagent le même nom
+// normalisé OU le même téléphone (non vide, >= 6 chiffres pour éviter les
+// faux positifs sur des numéros incomplets) ; les prospects reliés forment un
+// groupe (union-find). Un groupe est "certain" si tous ses membres ont le
+// même nom ET le même téléphone, sinon "probable".
+function findDuplicateGroups(prospects: Prospect[]): DuplicateGroup[] {
+  const n = prospects.length;
+  const parent = Array.from({ length: n }, (_, i) => i);
+  const find = (x: number): number => { while (parent[x] !== x) { parent[x] = parent[parent[x]]; x = parent[x]; } return x; };
+  const union = (a: number, b: number) => { const ra = find(a), rb = find(b); if (ra !== rb) parent[ra] = rb; };
+
+  const byName = new Map<string, number[]>();
+  const byPhone = new Map<string, number[]>();
+  prospects.forEach((p, i) => {
+    const nm = (p.nom_societe || '').toLowerCase().trim().replace(/\s+/g, ' ');
+    if (nm) { if (!byName.has(nm)) byName.set(nm, []); byName.get(nm)!.push(i); }
+    const ph = (p.telephone || '').replace(/\D/g, '');
+    if (ph.length >= 6) { if (!byPhone.has(ph)) byPhone.set(ph, []); byPhone.get(ph)!.push(i); }
+  });
+  for (const idxs of byName.values()) for (let k = 1; k < idxs.length; k++) union(idxs[0], idxs[k]);
+  for (const idxs of byPhone.values()) for (let k = 1; k < idxs.length; k++) union(idxs[0], idxs[k]);
+
+  const groups = new Map<number, number[]>();
+  prospects.forEach((_, i) => {
+    const r = find(i);
+    if (!groups.has(r)) groups.set(r, []);
+    groups.get(r)!.push(i);
+  });
+
+  const result: DuplicateGroup[] = [];
+  for (const idxs of groups.values()) {
+    if (idxs.length < 2) continue;
+    const items = idxs.map((i) => prospects[i]);
+    const keys = new Set(items.map((p) => dedupKey(p.nom_societe, p.telephone)));
+    result.push({ certain: keys.size === 1, items });
+  }
+  result.sort((a, b) => (Number(b.certain) - Number(a.certain)) || (b.items.length - a.items.length));
+  return result;
+}
+
 export default function Prospects() {
   const { data: prospects = [], isLoading: loading, error, refetch, isFetching } = useProspects();
   const { data: registeredUsers = [] } = useRegisteredUsers();
@@ -215,6 +261,8 @@ export default function Prospects() {
   const [cityFilter, setCityFilter] = usePersistentState('lyftt.prospects.ville', 'Toutes');
   const [commercialFilter, setCommercialFilter] = usePersistentState('lyftt.prospects.commercial', 'Tous');
   const [showAddDialog, setShowAddDialog] = useState(false);
+  const [showDuplicatesDialog, setShowDuplicatesDialog] = useState(false);
+  const [deletingDuplicateId, setDeletingDuplicateId] = useState<number | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [deleting, setDeleting] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -234,6 +282,24 @@ export default function Prospects() {
     });
     return { sectors: ['Tous', ...Array.from(sectorSet).sort()], cities: ['Toutes', ...Array.from(citySet).sort()] };
   }, [prospects]);
+
+  const duplicateGroups = useMemo(() => findDuplicateGroups(prospects), [prospects]);
+  const duplicateCount = useMemo(() => duplicateGroups.reduce((s, g) => s + g.items.length, 0), [duplicateGroups]);
+
+  const handleDeleteDuplicate = useCallback(async (p: Prospect) => {
+    if (deletingDuplicateId) return;
+    if (!window.confirm(`Supprimer "${p.nom_societe}" (${p.telephone || 'sans téléphone'}) ? Cette action supprime aussi son historique d'appels et est irréversible.`)) return;
+    setDeletingDuplicateId(p.id);
+    try {
+      await client.entities.prospects.delete({ id: String(p.id) });
+      toast.success('Prospect supprimé');
+      invalidateProspects();
+    } catch {
+      toast.error('Erreur lors de la suppression (droits admin requis)');
+    } finally {
+      setDeletingDuplicateId(null);
+    }
+  }, [deletingDuplicateId, invalidateProspects]);
 
   const commercials = useMemo(() => {
     const names = registeredUsers
@@ -440,6 +506,11 @@ export default function Prospects() {
         </div>
         <div className="flex items-center gap-2">
           <input ref={fileInputRef} type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={handleImport} />
+          {duplicateCount > 0 && (
+            <Button variant="outline" onClick={() => setShowDuplicatesDialog(true)} className="gap-2 rounded-xl border-amber-200 text-amber-700 hover:bg-amber-50">
+              <Copy className="w-4 h-4" /> Doublons <Badge className="bg-amber-100 text-amber-700 border-amber-200 rounded-lg ml-0.5">{duplicateCount}</Badge>
+            </Button>
+          )}
           <Button variant="outline" onClick={handleExportExcel} disabled={filtered.length === 0} className="gap-2 rounded-xl border-slate-200"><Download className="w-4 h-4" /> Exporter</Button>
           <Button variant="outline" onClick={() => fileInputRef.current?.click()} className="gap-2 rounded-xl border-slate-200"><Upload className="w-4 h-4" /> Importer</Button>
           <Button onClick={() => setShowAddDialog(true)} className="gap-2 bg-gradient-to-r from-[#5A9BA3] to-[#6AABB4] hover:from-[#4A8B93] hover:to-[#5A9BA4] text-white rounded-xl shadow-md shadow-[#6AABB4]/20"><Plus className="w-4 h-4" /> Ajouter</Button>
@@ -579,6 +650,52 @@ export default function Prospects() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowAddDialog(false)} disabled={saving} className="rounded-xl">Annuler</Button>
             <Button onClick={handleAddProspect} disabled={saving} className="bg-gradient-to-r from-[#5A9BA3] to-[#6AABB4] hover:from-[#4A8B93] hover:to-[#5A9BA4] text-white rounded-xl">{saving ? 'Ajout...' : 'Ajouter'}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Doublons — groupes détectés par nom et/ou téléphone identiques.
+          "Certain" = société + téléphone identiques. "Probable" = correspondance
+          partielle (même nom, téléphone différent, ou l'inverse). */}
+      <Dialog open={showDuplicatesDialog} onOpenChange={setShowDuplicatesDialog}>
+        <DialogContent className="max-w-2xl rounded-2xl max-h-[85vh] flex flex-col">
+          <DialogHeader>
+            <DialogTitle>Doublons détectés ({duplicateGroups.length} groupe{duplicateGroups.length > 1 ? 's' : ''}, {duplicateCount} prospects)</DialogTitle>
+          </DialogHeader>
+          <div className="flex-1 overflow-y-auto space-y-3 pr-1 -mr-1">
+            {duplicateGroups.length === 0 ? (
+              <p className="text-sm text-slate-400 text-center py-8">Aucun doublon détecté.</p>
+            ) : duplicateGroups.map((group, gi) => (
+              <div key={gi} className={`rounded-2xl border p-3 ${group.certain ? 'border-red-200 bg-red-50/40' : 'border-amber-200 bg-amber-50/40'}`}>
+                <div className="flex items-center gap-2 mb-2">
+                  <Badge className={`text-[10px] rounded-md ${group.certain ? 'bg-red-100 text-red-700 border-red-200' : 'bg-amber-100 text-amber-700 border-amber-200'}`}>
+                    {group.certain ? 'Doublon certain' : 'Doublon probable'}
+                  </Badge>
+                  <span className="text-xs text-slate-500">{group.items.length} fiches</span>
+                </div>
+                <div className="space-y-1.5">
+                  {group.items.map((p) => (
+                    <div key={p.id} className="flex items-center justify-between gap-3 bg-white rounded-xl px-3 py-2 border border-slate-100">
+                      <Link to={`/prospects/${p.id}`} className="min-w-0 flex-1 hover:text-[#5A9BA3]">
+                        <p className="text-sm font-semibold text-slate-900 truncate">{p.nom_societe}</p>
+                        <p className="text-xs text-slate-500 truncate">{p.telephone || 'sans tél.'} · {p.zone_geographique || '—'} · {p.statut_avancement} · {p.nombre_appels || 0} appel(s)</p>
+                      </Link>
+                      <Button
+                        variant="outline" size="sm"
+                        onClick={() => handleDeleteDuplicate(p)}
+                        disabled={deletingDuplicateId === p.id}
+                        className="shrink-0 gap-1.5 rounded-lg border-red-200 text-red-600 hover:bg-red-50"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" /> {deletingDuplicateId === p.id ? '...' : 'Supprimer'}
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowDuplicatesDialog(false)} className="rounded-xl">Fermer</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

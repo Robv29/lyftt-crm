@@ -35,7 +35,7 @@ const toLocalInputValue = (d: Date) => {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 };
 
-type Mode = 'aleatoire' | 'ville' | 'secteur';
+type OrderMode = 'aleatoire' | 'moins_appeles';
 
 const STYLES = `
 @keyframes sr-pop { from { transform: scale(.94) translateY(8px); opacity: 0 } to { transform: scale(1) translateY(0); opacity: 1 } }
@@ -81,8 +81,9 @@ export default function SpeedRun({ onClose, minimized = false, onMinimize, onMax
 
   const [phase, setPhase] = useState<'setup' | 'run' | 'done'>('setup');
   const [commercial, setCommercial] = useState('');
-  const [mode, setMode] = useState<Mode>('aleatoire');
-  const [subValue, setSubValue] = useState('');
+  const [selectedVilles, setSelectedVilles] = useState<string[]>([]);
+  const [selectedSecteurs, setSelectedSecteurs] = useState<string[]>([]);
+  const [orderMode, setOrderMode] = useState<OrderMode>('aleatoire');
   const [queue, setQueue] = useState<Prospect[]>([]);
   const [index, setIndex] = useState(0);
   const [step, setStep] = useState<'card' | 'result' | 'followup'>('card');
@@ -116,23 +117,28 @@ export default function SpeedRun({ onClose, minimized = false, onMinimize, onMax
 
   const basePool = useMemo(() => {
     const set = new Set(commercialCities);
-    return prospects.filter((p) => p.statut_gagne_perdu === 'actif' && set.has(p.zone_geographique));
+    // Un prospect déjà en "Visio" a un RDV calé : il ne doit plus ressortir
+    // en speed dial (sinon on rappelle des gens qui ont déjà un rendez-vous).
+    return prospects.filter((p) => p.statut_gagne_perdu === 'actif' && p.statut_avancement !== 'Visio' && set.has(p.zone_geographique));
   }, [prospects, commercialCities]);
 
   const villes = useMemo(() => Array.from(new Set(basePool.map((p) => p.zone_geographique).filter(Boolean))).sort(), [basePool]);
   const secteurs = useMemo(() => Array.from(new Set(basePool.map((p) => p.categorie_metier).filter(Boolean))).sort(), [basePool]);
 
+  // Sélection multiple : villes ET/OU secteurs combinables (vide = tous).
+  // Permet d'élargir un run ("plusieurs villes") tout en restant ciblé
+  // (croisé avec un ou plusieurs secteurs si besoin).
   const poolPreview = useMemo(() => {
     let pool = basePool;
-    if (mode === 'ville' && subValue) pool = pool.filter((p) => p.zone_geographique === subValue);
-    if (mode === 'secteur' && subValue) pool = pool.filter((p) => p.categorie_metier === subValue);
+    if (selectedVilles.length > 0) pool = pool.filter((p) => selectedVilles.includes(p.zone_geographique));
+    if (selectedSecteurs.length > 0) pool = pool.filter((p) => selectedSecteurs.includes(p.categorie_metier));
     return pool;
-  }, [basePool, mode, subValue]);
+  }, [basePool, selectedVilles, selectedSecteurs]);
 
   const current = queue[index] || null;
 
   const startRun = () => {
-    const q = mode === 'aleatoire'
+    const q = orderMode === 'aleatoire'
       ? shuffle(poolPreview)
       : [...poolPreview].sort((a, b) => (a.nombre_appels || 0) - (b.nombre_appels || 0));
     if (q.length === 0) { toast.error('Aucun prospect pour ce choix'); return; }
@@ -312,45 +318,69 @@ export default function SpeedRun({ onClose, minimized = false, onMinimize, onMax
             <p className="text-slate-400 mt-1 text-sm">Enchaîne tes appels sans réfléchir.</p>
           </div>
 
-          <div className="flex-1 space-y-5 bg-white/[0.06] border border-white/10 rounded-3xl p-6 backdrop-blur">
+          <div className="flex-1 space-y-4 bg-white/[0.06] border border-white/10 rounded-3xl p-6 backdrop-blur">
             <div>
               <label className="text-[11px] font-bold text-slate-300 uppercase tracking-widest flex items-center gap-1.5 mb-2"><User className="w-3.5 h-3.5" /> Ton nom</label>
-              <Select value={commercial} onValueChange={(v) => { setCommercial(v); setSubValue(''); }}>
+              <Select value={commercial} onValueChange={(v) => { setCommercial(v); setSelectedVilles([]); setSelectedSecteurs([]); }}>
                 <SelectTrigger className="rounded-xl bg-white/10 border-white/10 text-white h-11"><SelectValue placeholder="Sélectionne ton nom" /></SelectTrigger>
                 <SelectContent>{commercialNames.map((n) => <SelectItem key={n} value={n}>{n}</SelectItem>)}</SelectContent>
               </Select>
             </div>
 
             {commercial ? (
-              <div className="sr-slide space-y-5">
+              <div className="sr-slide space-y-4">
+                {/* Sélection multiple : combine plusieurs villes et/ou plusieurs
+                    secteurs — élargit le run tout en restant ciblé. Vide = tout. */}
                 <div>
-                  <p className="text-[11px] font-bold text-slate-300 uppercase tracking-widest mb-2">Mode</p>
-                  <div className="grid grid-cols-3 gap-2">
-                    {([['aleatoire', 'Aléatoire', Shuffle], ['ville', 'Ville', MapPin], ['secteur', 'Secteur', Building2]] as const).map(([m, label, Icon]) => (
-                      <button key={m} onClick={() => { setMode(m); setSubValue(''); }}
-                        className={`flex flex-col items-center gap-1.5 py-3 rounded-xl border text-xs font-bold transition-all duration-200 ${mode === m ? 'bg-gradient-to-br from-amber-400 to-orange-500 text-white border-transparent shadow-lg scale-105' : 'bg-white/5 text-slate-300 border-white/10 hover:bg-white/10 hover:scale-[1.02]'}`}>
+                  <p className="text-[11px] font-bold text-slate-300 uppercase tracking-widest mb-2 flex items-center gap-1.5">
+                    <MapPin className="w-3.5 h-3.5" /> Villes <span className="text-slate-500 normal-case font-medium">(vide = toutes)</span>
+                  </p>
+                  <div className="flex flex-wrap gap-1.5 max-h-[92px] overflow-y-auto p-2 rounded-xl bg-white/5 border border-white/10">
+                    {villes.length === 0 ? (
+                      <span className="text-xs text-slate-500 px-1 py-1">Aucune ville attribuée</span>
+                    ) : villes.map((v) => {
+                      const active = selectedVilles.includes(v);
+                      return (
+                        <button key={v} type="button"
+                          onClick={() => setSelectedVilles((prev) => active ? prev.filter((x) => x !== v) : [...prev, v])}
+                          className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all ${active ? 'bg-gradient-to-br from-amber-400 to-orange-500 text-white shadow' : 'bg-white/5 text-slate-300 hover:bg-white/10'}`}>
+                          {v}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div>
+                  <p className="text-[11px] font-bold text-slate-300 uppercase tracking-widest mb-2 flex items-center gap-1.5">
+                    <Building2 className="w-3.5 h-3.5" /> Secteurs <span className="text-slate-500 normal-case font-medium">(vide = tous)</span>
+                  </p>
+                  <div className="flex flex-wrap gap-1.5 max-h-[92px] overflow-y-auto p-2 rounded-xl bg-white/5 border border-white/10">
+                    {secteurs.length === 0 ? (
+                      <span className="text-xs text-slate-500 px-1 py-1">Aucun secteur disponible</span>
+                    ) : secteurs.map((s) => {
+                      const active = selectedSecteurs.includes(s);
+                      return (
+                        <button key={s} type="button"
+                          onClick={() => setSelectedSecteurs((prev) => active ? prev.filter((x) => x !== s) : [...prev, s])}
+                          className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all ${active ? 'bg-gradient-to-br from-amber-400 to-orange-500 text-white shadow' : 'bg-white/5 text-slate-300 hover:bg-white/10'}`}>
+                          {s}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div>
+                  <p className="text-[11px] font-bold text-slate-300 uppercase tracking-widest mb-2">Ordre</p>
+                  <div className="grid grid-cols-2 gap-2">
+                    {([['aleatoire', 'Aléatoire', Shuffle], ['moins_appeles', 'Moins appelés', Flame]] as const).map(([m, label, Icon]) => (
+                      <button key={m} onClick={() => setOrderMode(m)}
+                        className={`flex items-center justify-center gap-1.5 py-2.5 rounded-xl border text-xs font-bold transition-all duration-200 ${orderMode === m ? 'bg-gradient-to-br from-amber-400 to-orange-500 text-white border-transparent shadow-lg scale-105' : 'bg-white/5 text-slate-300 border-white/10 hover:bg-white/10 hover:scale-[1.02]'}`}>
                         <Icon className="w-4 h-4" /> {label}
                       </button>
                     ))}
                   </div>
-                </div>
-
-                <div className="h-11">
-                  {mode === 'ville' && (
-                    <Select value={subValue} onValueChange={setSubValue}>
-                      <SelectTrigger className="rounded-xl bg-white/10 border-white/10 text-white h-11"><SelectValue placeholder="Choisir une ville" /></SelectTrigger>
-                      <SelectContent>{villes.map((v) => <SelectItem key={v} value={v}>{v}</SelectItem>)}</SelectContent>
-                    </Select>
-                  )}
-                  {mode === 'secteur' && (
-                    <Select value={subValue} onValueChange={setSubValue}>
-                      <SelectTrigger className="rounded-xl bg-white/10 border-white/10 text-white h-11"><SelectValue placeholder="Choisir un secteur" /></SelectTrigger>
-                      <SelectContent>{secteurs.map((v) => <SelectItem key={v} value={v}>{v}</SelectItem>)}</SelectContent>
-                    </Select>
-                  )}
-                  {mode === 'aleatoire' && (
-                    <div className="h-11 flex items-center justify-center rounded-xl bg-white/5 border border-white/10 text-xs text-slate-400">Toutes tes villes, dans le désordre</div>
-                  )}
                 </div>
 
                 <div className="flex items-center justify-center gap-2 text-sm">
@@ -359,7 +389,7 @@ export default function SpeedRun({ onClose, minimized = false, onMinimize, onMax
                   <span className="text-slate-400">entreprise{poolPreview.length > 1 ? 's' : ''} à appeler</span>
                 </div>
 
-                <Button onClick={startRun} disabled={poolPreview.length === 0 || ((mode === 'ville' || mode === 'secteur') && !subValue)}
+                <Button onClick={startRun} disabled={poolPreview.length === 0}
                   className="sr-shine w-full h-12 text-base font-black tracking-wide rounded-xl text-white shadow-[0_0_30px_rgba(251,146,60,0.45)] hover:scale-[1.02] transition-transform disabled:opacity-40"
                   style={{ backgroundImage: 'linear-gradient(90deg,#fbbf24,#f97316,#ec4899,#f97316,#fbbf24)' }}>
                   <Zap className="w-5 h-5 mr-1" fill="white" /> C'EST PARTI

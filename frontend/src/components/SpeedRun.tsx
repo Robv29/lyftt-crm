@@ -37,9 +37,11 @@ function extractFromNotes(notes: string | undefined, label: string): string | nu
 type ProspectFormFields = {
   nom_societe: string; nom_dirigeant: string; telephone: string; email: string;
   zone_geographique: string; categorie_metier: string;
+  forme_juridique: string; nombre_salaries: string;
 };
 const emptyProspectForm: ProspectFormFields = {
   nom_societe: '', nom_dirigeant: '', telephone: '', email: '', zone_geographique: '', categorie_metier: '',
+  forme_juridique: '', nombre_salaries: '',
 };
 const toLocalInputValue = (d: Date) => {
   const pad = (n: number) => String(n).padStart(2, '0');
@@ -162,6 +164,8 @@ export default function SpeedRun({ onClose, minimized = false, onMinimize, onMax
       email: current.email || '',
       zone_geographique: current.zone_geographique || '',
       categorie_metier: current.categorie_metier || '',
+      forme_juridique: current.forme_juridique || '',
+      nombre_salaries: current.nombre_salaries || '',
     });
     setShowEditDialog(true);
   }, [current]);
@@ -499,12 +503,15 @@ export default function SpeedRun({ onClose, minimized = false, onMinimize, onMax
                 <span className="line-clamp-2">{current.nom_societe}</span>
               </h2>
               {/* Dirigeant + statut juridique/effectif sur la même ligne à
-                  hauteur fixe (extraits du champ notes, import Monday — pas
-                  de colonne dédiée) : n'ajoute pas de hauteur à la carte. */}
+                  hauteur fixe : n'ajoute pas de hauteur à la carte. Priorité
+                  aux colonnes dédiées (éditables), repli sur le champ notes
+                  pour les fiches importées avant l'ajout de ces colonnes. */}
               <p className="h-[22px] text-sm text-slate-500 truncate">
                 {current.nom_dirigeant || '—'}
                 {(() => {
-                  const extra = [extractFromNotes(current.notes, 'Forme'), extractFromNotes(current.notes, 'Effectif')].filter(Boolean).join(' · ');
+                  const forme = current.forme_juridique || extractFromNotes(current.notes, 'Forme');
+                  const effectif = current.nombre_salaries || extractFromNotes(current.notes, 'Effectif');
+                  const extra = [forme, effectif].filter(Boolean).join(' · ');
                   return extra ? <span className="text-slate-400"> · {extra}</span> : null;
                 })()}
               </p>
@@ -631,6 +638,10 @@ export default function SpeedRun({ onClose, minimized = false, onMinimize, onMax
             <div className="grid grid-cols-2 gap-3">
               <div><Label>Zone géographique</Label><Input value={editForm.zone_geographique} onChange={(e) => setEditForm({ ...editForm, zone_geographique: e.target.value })} className="rounded-xl" /></div>
               <div><Label>Catégorie métier</Label><Input value={editForm.categorie_metier} onChange={(e) => setEditForm({ ...editForm, categorie_metier: e.target.value })} className="rounded-xl" /></div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div><Label>Statut juridique</Label><Input value={editForm.forme_juridique} onChange={(e) => setEditForm({ ...editForm, forme_juridique: e.target.value })} placeholder="SARL, SAS, E.I..." className="rounded-xl" /></div>
+              <div><Label>Nombre d'employés</Label><Input value={editForm.nombre_salaries} onChange={(e) => setEditForm({ ...editForm, nombre_salaries: e.target.value })} placeholder="Ex : 5, plus de 100..." className="rounded-xl" /></div>
             </div>
           </div>
           <DialogFooter>

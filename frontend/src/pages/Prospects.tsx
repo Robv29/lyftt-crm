@@ -25,7 +25,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { toast } from 'sonner';
 import {
   Search, Upload, Plus, Phone, ExternalLink, Filter, Trash2, X,
-  MapPin, Building2, UserCircle, Download, ChevronLeft, ChevronRight, Copy,
+  MapPin, Building2, UserCircle, Download, ChevronLeft, ChevronRight, Copy, GitMerge,
 } from 'lucide-react';
 import ErrorState from '../components/ErrorState';
 import type * as XLSXType from 'xlsx';
@@ -249,6 +249,61 @@ function findDuplicateGroups(prospects: Prospect[]): DuplicateGroup[] {
   return result;
 }
 
+interface CategoryGroup {
+  key: string;
+  variants: { name: string; count: number }[];
+  suggested: string; // variante la plus utilisée, pré-remplie comme nom final
+}
+
+// Normalisation "métier" : casse, accents et pluriel simple ignorés, pour
+// regrouper "RESTAURANTS" / "Restaurant" / "restaurant" / "RESTAURANT" sous
+// une même clé sans fusionner des catégories réellement différentes (ex:
+// "BOULANGERIE" reste distinct de "BOULANGERIE/PÂTISSERIE").
+function normCategory(s: string): string {
+  let v = (s || '').toLowerCase().trim().replace(/\s+/g, ' ');
+  // Retire les accents : décompose (NFD) puis filtre les marques combinantes
+  // (U+0300–U+036F) sans regex sur des caractères littéraux, pour éviter
+  // tout souci d'encodage.
+  v = v.normalize('NFD').split('').filter((ch) => {
+    const code = ch.codePointAt(0) || 0;
+    return code < 0x0300 || code > 0x036f;
+  }).join('');
+  if (v.length > 3 && v.endsWith('s')) v = v.slice(0, -1);
+  return v;
+}
+
+function findSimilarCategoryGroups(prospects: Prospect[]): CategoryGroup[] {
+  const counts = new Map<string, number>(); // nom brut -> nb de prospects
+  prospects.forEach((p) => {
+    const c = (p.categorie_metier || '').trim();
+    if (!c) return;
+    counts.set(c, (counts.get(c) || 0) + 1);
+  });
+
+  const byNormKey = new Map<string, string[]>(); // clé normalisée -> noms bruts
+  for (const raw of counts.keys()) {
+    const key = normCategory(raw);
+    if (!key) continue;
+    if (!byNormKey.has(key)) byNormKey.set(key, []);
+    byNormKey.get(key)!.push(raw);
+  }
+
+  const groups: CategoryGroup[] = [];
+  for (const [key, rawNames] of byNormKey.entries()) {
+    if (rawNames.length < 2) continue;
+    const variants = rawNames
+      .map((name) => ({ name, count: counts.get(name) || 0 }))
+      .sort((a, b) => b.count - a.count);
+    groups.push({ key, variants, suggested: variants[0].name });
+  }
+  groups.sort((a, b) => {
+    const totalA = a.variants.reduce((s, v) => s + v.count, 0);
+    const totalB = b.variants.reduce((s, v) => s + v.count, 0);
+    return totalB - totalA;
+  });
+  return groups;
+}
+
 export default function Prospects() {
   const { data: prospects = [], isLoading: loading, error, refetch, isFetching } = useProspects();
   const { data: registeredUsers = [] } = useRegisteredUsers();
@@ -263,6 +318,9 @@ export default function Prospects() {
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [showDuplicatesDialog, setShowDuplicatesDialog] = useState(false);
   const [deletingDuplicateId, setDeletingDuplicateId] = useState<number | null>(null);
+  const [showMergeDialog, setShowMergeDialog] = useState(false);
+  const [canonicalNames, setCanonicalNames] = useState<Record<string, string>>({});
+  const [mergingKey, setMergingKey] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [deleting, setDeleting] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -270,6 +328,7 @@ export default function Prospects() {
     nom_societe: '', nom_dirigeant: '', telephone: '', email: '',
     zone_geographique: '', categorie_metier: '', source_lead: '',
     montant_potentiel: 0, notes: '', priorite: 'moyenne',
+    forme_juridique: '', nombre_salaries: '',
   });
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -301,6 +360,28 @@ export default function Prospects() {
     }
   }, [deletingDuplicateId, invalidateProspects]);
 
+  const categoryGroups = useMemo(() => findSimilarCategoryGroups(prospects), [prospects]);
+
+  const handleMergeCategory = useCallback(async (group: CategoryGroup) => {
+    if (mergingKey) return;
+    const target = (canonicalNames[group.key] ?? group.suggested).trim();
+    if (!target) { toast.error('Le nom final ne peut pas être vide'); return; }
+    const variantsToRename = group.variants.map((v) => v.name).filter((n) => n !== target);
+    if (variantsToRename.length === 0) { toast.error('Rien à fusionner : le nom final est déjà le seul utilisé'); return; }
+    const totalAffected = group.variants.filter((v) => v.name !== target).reduce((s, v) => s + v.count, 0);
+    if (!window.confirm(`Renommer ${totalAffected} prospect(s) en "${target}" ? (${variantsToRename.join(', ')})`)) return;
+    setMergingKey(group.key);
+    try {
+      const res = await client.entities.prospects.updateWhereIn('categorie_metier', variantsToRename, { categorie_metier: target });
+      toast.success(`${res.data.count} prospect(s) fusionné(s) sous "${target}"`);
+      invalidateProspects();
+    } catch {
+      toast.error('Erreur lors de la fusion');
+    } finally {
+      setMergingKey(null);
+    }
+  }, [mergingKey, canonicalNames, invalidateProspects]);
+
   const commercials = useMemo(() => {
     const names = registeredUsers
       .filter((u) => u.first_name || u.last_name)
@@ -329,9 +410,18 @@ export default function Prospects() {
 
   const filtered = useMemo(() => {
     const sl = search.toLowerCase();
+    // Téléphone : comparaison sur les chiffres seuls, pour que "0123456789"
+    // trouve "01 23 45 67 89" et inversement, quel que soit le format saisi.
+    const searchDigits = search.replace(/\D/g, '');
     const commSet = selectedCommercialCities ? new Set(selectedCommercialCities) : null;
     return prospects.filter((p) => {
-      const ms = !search || p.nom_societe?.toLowerCase().includes(sl) || p.nom_dirigeant?.toLowerCase().includes(sl) || p.email?.toLowerCase().includes(sl) || p.telephone?.includes(search) || p.categorie_metier?.toLowerCase().includes(sl);
+      const phoneDigits = p.telephone ? p.telephone.replace(/\D/g, '') : '';
+      const ms = !search
+        || p.nom_societe?.toLowerCase().includes(sl)
+        || p.nom_dirigeant?.toLowerCase().includes(sl)
+        || p.email?.toLowerCase().includes(sl)
+        || p.categorie_metier?.toLowerCase().includes(sl)
+        || (searchDigits.length > 0 && phoneDigits.includes(searchDigits));
       // Filtre commercial = restreint à ses villes attribuées (pas au champ commercial_assigne, peu fiable).
       const okCommercial = commercialFilter === 'Tous' || (commSet ? commSet.has(p.zone_geographique) : false);
       return ms
@@ -379,15 +469,13 @@ export default function Prospects() {
           const key = dedupKey(p.nom_societe, p.telephone);
           if (existingKeys.has(key)) { skipped++; continue; }
           const upd = updates.get(p.nom_societe.trim().toLowerCase()) || '';
-          const ctx = [
-            p.effectif ? `Effectif: ${p.effectif}` : '',
-            p.forme ? `Forme: ${p.forme}` : '',
-            p.statut_monday ? `Statut Monday: ${p.statut_monday}` : '',
-          ].filter(Boolean).join(' · ');
+          // Effectif/Forme vont désormais dans leurs colonnes dédiées
+          // (forme_juridique, nombre_salaries) plutôt que dans notes.
+          const ctx = p.statut_monday ? `Statut Monday: ${p.statut_monday}` : '';
           const note = [ctx, upd].filter(Boolean).join('\n\n');
           const mapped = mapMondayStatut(p.statut_monday);
           await client.entities.prospects.create({
-            data: { nom_societe: p.nom_societe, nom_dirigeant: p.nom_dirigeant, telephone: p.telephone, email: p.email || '', zone_geographique: p.zone_geographique, categorie_metier: p.categorie_metier, commercial_assigne: p.commercial_assigne, source_lead: 'Import Excel', montant_potentiel: 0, notes: note, statut_avancement: mapped.statut_avancement, priorite: 'moyenne', statut_gagne_perdu: mapped.statut_gagne_perdu, nombre_appels: 0, nombre_appels_repondus: 0, nombre_relances: 0 },
+            data: { nom_societe: p.nom_societe, nom_dirigeant: p.nom_dirigeant, telephone: p.telephone, email: p.email || '', zone_geographique: p.zone_geographique, categorie_metier: p.categorie_metier, commercial_assigne: p.commercial_assigne, source_lead: 'Import Excel', montant_potentiel: 0, notes: note, forme_juridique: p.forme || '', nombre_salaries: p.effectif || '', statut_avancement: mapped.statut_avancement, priorite: 'moyenne', statut_gagne_perdu: mapped.statut_gagne_perdu, nombre_appels: 0, nombre_appels_repondus: 0, nombre_relances: 0 },
           });
           existingKeys.add(key);
           imported++;
@@ -416,7 +504,7 @@ export default function Prospects() {
       });
       toast.success('Prospect ajouté');
       setShowAddDialog(false);
-      setNewProspect({ nom_societe: '', nom_dirigeant: '', telephone: '', email: '', zone_geographique: '', categorie_metier: '', source_lead: '', montant_potentiel: 0, notes: '', priorite: 'moyenne' });
+      setNewProspect({ nom_societe: '', nom_dirigeant: '', telephone: '', email: '', zone_geographique: '', categorie_metier: '', source_lead: '', montant_potentiel: 0, notes: '', priorite: 'moyenne', forme_juridique: '', nombre_salaries: '' });
       invalidateProspects();
     } catch { toast.error("Erreur lors de l'ajout"); } finally { setSaving(false); }
   }, [newProspect, invalidateProspects, prospects, saving]);
@@ -509,6 +597,11 @@ export default function Prospects() {
           {duplicateCount > 0 && (
             <Button variant="outline" onClick={() => setShowDuplicatesDialog(true)} className="gap-2 rounded-xl border-amber-200 text-amber-700 hover:bg-amber-50">
               <Copy className="w-4 h-4" /> Doublons <Badge className="bg-amber-100 text-amber-700 border-amber-200 rounded-lg ml-0.5">{duplicateCount}</Badge>
+            </Button>
+          )}
+          {categoryGroups.length > 0 && (
+            <Button variant="outline" onClick={() => setShowMergeDialog(true)} className="gap-2 rounded-xl border-indigo-200 text-indigo-700 hover:bg-indigo-50">
+              <GitMerge className="w-4 h-4" /> Fusionner catégories <Badge className="bg-indigo-100 text-indigo-700 border-indigo-200 rounded-lg ml-0.5">{categoryGroups.length}</Badge>
             </Button>
           )}
           <Button variant="outline" onClick={handleExportExcel} disabled={filtered.length === 0} className="gap-2 rounded-xl border-slate-200"><Download className="w-4 h-4" /> Exporter</Button>
@@ -631,6 +724,10 @@ export default function Prospects() {
               <div><Label>Catégorie métier</Label><Input value={newProspect.categorie_metier} onChange={(e) => setNewProspect({ ...newProspect, categorie_metier: e.target.value })} placeholder="BTP, Restaurant..." className="rounded-xl" /></div>
             </div>
             <div className="grid grid-cols-2 gap-3">
+              <div><Label>Statut juridique</Label><Input value={newProspect.forme_juridique} onChange={(e) => setNewProspect({ ...newProspect, forme_juridique: e.target.value })} placeholder="SARL, SAS, E.I..." className="rounded-xl" /></div>
+              <div><Label>Nombre d'employés</Label><Input value={newProspect.nombre_salaries} onChange={(e) => setNewProspect({ ...newProspect, nombre_salaries: e.target.value })} placeholder="Ex : 5, plus de 100..." className="rounded-xl" /></div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
               <div><Label>Source du lead</Label><Input value={newProspect.source_lead} onChange={(e) => setNewProspect({ ...newProspect, source_lead: e.target.value })} placeholder="LinkedIn, Salon..." className="rounded-xl" /></div>
               <div><Label>Montant potentiel (€)</Label><Input type="number" value={newProspect.montant_potentiel} onChange={(e) => setNewProspect({ ...newProspect, montant_potentiel: Number(e.target.value) })} className="rounded-xl" /></div>
             </div>
@@ -696,6 +793,55 @@ export default function Prospects() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowDuplicatesDialog(false)} className="rounded-xl">Fermer</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Fusion de catégories — variantes du même métier détectées par casse/
+          accents/pluriel (ex: RESTAURANTS, Restaurant, restaurant...). Le nom
+          final est éditable avant fusion, pré-rempli avec la variante la plus
+          utilisée. Une fusion = un seul UPDATE ... WHERE categorie_metier IN
+          (...), pas une boucle ligne par ligne. */}
+      <Dialog open={showMergeDialog} onOpenChange={setShowMergeDialog}>
+        <DialogContent className="max-w-2xl rounded-2xl max-h-[85vh] flex flex-col">
+          <DialogHeader>
+            <DialogTitle>Fusionner les catégories ({categoryGroups.length} groupe{categoryGroups.length > 1 ? 's' : ''})</DialogTitle>
+          </DialogHeader>
+          <div className="flex-1 overflow-y-auto space-y-3 pr-1 -mr-1">
+            {categoryGroups.length === 0 ? (
+              <p className="text-sm text-slate-400 text-center py-8">Aucune catégorie à fusionner.</p>
+            ) : categoryGroups.map((group) => {
+              const total = group.variants.reduce((s, v) => s + v.count, 0);
+              const canonical = canonicalNames[group.key] ?? group.suggested;
+              return (
+                <div key={group.key} className="rounded-2xl border border-indigo-200 bg-indigo-50/40 p-3">
+                  <div className="flex flex-wrap gap-1.5 mb-2.5">
+                    {group.variants.map((v) => (
+                      <Badge key={v.name} variant="outline" className="text-xs rounded-lg bg-white">{v.name} <span className="text-slate-400 ml-1">({v.count})</span></Badge>
+                    ))}
+                    <span className="text-xs text-slate-500 self-center ml-1">{total} prospects au total</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Input
+                      value={canonical}
+                      onChange={(e) => setCanonicalNames((prev) => ({ ...prev, [group.key]: e.target.value }))}
+                      placeholder="Nom final après fusion"
+                      className="rounded-xl bg-white flex-1"
+                    />
+                    <Button
+                      onClick={() => handleMergeCategory(group)}
+                      disabled={mergingKey === group.key}
+                      className="shrink-0 gap-1.5 rounded-xl bg-gradient-to-r from-indigo-500 to-indigo-600 hover:from-indigo-600 hover:to-indigo-700 text-white"
+                    >
+                      <GitMerge className="w-4 h-4" /> {mergingKey === group.key ? 'Fusion...' : 'Fusionner'}
+                    </Button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowMergeDialog(false)} className="rounded-xl">Fermer</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

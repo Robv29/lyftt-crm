@@ -23,6 +23,8 @@ export interface Prospect {
   date_signature: string;
   date_rdv: string;
   notes: string;
+  forme_juridique: string;
+  nombre_salaries: string;
   priorite: string;
   source_lead: string;
   montant_potentiel: number;

@@ -60,12 +60,14 @@ type ProspectFormFields = {
   nom_societe: string; nom_dirigeant: string; telephone: string; email: string;
   zone_geographique: string; categorie_metier: string; source_lead: string;
   montant_potentiel: number; priorite: string;
+  forme_juridique: string; nombre_salaries: string;
 };
 
 const emptyProspectForm: ProspectFormFields = {
   nom_societe: '', nom_dirigeant: '', telephone: '', email: '',
   zone_geographique: '', categorie_metier: '', source_lead: '',
   montant_potentiel: 0, priorite: 'moyenne',
+  forme_juridique: '', nombre_salaries: '',
 };
 
 export default function ProspectDetail() {
@@ -139,6 +141,8 @@ export default function ProspectDetail() {
       source_lead: prospect.source_lead || '',
       montant_potentiel: prospect.montant_potentiel || 0,
       priorite: prospect.priorite || 'moyenne',
+      forme_juridique: prospect.forme_juridique || '',
+      nombre_salaries: prospect.nombre_salaries || '',
     });
     setShowEditDialog(true);
   }, [prospect]);
@@ -405,6 +409,8 @@ export default function ProspectDetail() {
             ))}
             <div className="pt-3 border-t border-slate-100 space-y-2.5">
               {[
+                { label: 'Statut juridique', value: prospect.forme_juridique || '-' },
+                { label: "Nombre d'employés", value: prospect.nombre_salaries || '-' },
                 { label: 'Source', value: prospect.source_lead || '-' },
                 { label: 'Total appels', value: String(prospect.nombre_appels || 0), bold: true },
                 { label: 'Appels répondus', value: String(prospect.nombre_appels_repondus || 0), color: 'text-emerald-600', bold: true },
@@ -598,6 +604,16 @@ export default function ProspectDetail() {
             <div className="grid grid-cols-2 gap-3">
               <div><Label>Zone géographique</Label><Input value={editForm.zone_geographique} onChange={(e) => setEditForm({ ...editForm, zone_geographique: e.target.value })} placeholder="Paris, Lyon..." className="rounded-xl" /></div>
               <div><Label>Catégorie métier</Label><Input value={editForm.categorie_metier} onChange={(e) => setEditForm({ ...editForm, categorie_metier: e.target.value })} placeholder="BTP, Restaurant..." className="rounded-xl" /></div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label>Statut juridique</Label>
+                <Input value={editForm.forme_juridique} onChange={(e) => setEditForm({ ...editForm, forme_juridique: e.target.value })} placeholder="SARL, SAS, E.I..." className="rounded-xl" list="formes-juridiques" />
+                <datalist id="formes-juridiques">
+                  <option value="SARL" /><option value="SAS / SASU" /><option value="E.I" /><option value="EURL" /><option value="Auto-entrepreneur" /><option value="SA" /><option value="Association" />
+                </datalist>
+              </div>
+              <div><Label>Nombre d'employés</Label><Input value={editForm.nombre_salaries} onChange={(e) => setEditForm({ ...editForm, nombre_salaries: e.target.value })} placeholder="Ex : 5, Entre 6 et 9, plus de 100..." className="rounded-xl" /></div>
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div><Label>Source du lead</Label><Input value={editForm.source_lead} onChange={(e) => setEditForm({ ...editForm, source_lead: e.target.value })} placeholder="LinkedIn, Salon..." className="rounded-xl" /></div>

@@ -119,6 +119,21 @@ function makeEntity(table: string) {
       if (error) throw wrapError(error);
       return { data: { success: true } };
     },
+
+    // Mise à jour en masse par filtre "colonne IN (valeurs)" — UNE seule
+    // requête au lieu d'une boucle ligne par ligne. Utilisé par exemple pour
+    // fusionner des catégories homonymes (renommer categorie_metier pour
+    // toutes les lignes qui portent une des variantes détectées).
+    async updateWhereIn(column: string, values: (string | number)[], patch: AnyObj) {
+      if (values.length === 0) return { data: { count: 0 } };
+      const { data, error } = await supabase
+        .from(table)
+        .update(patch)
+        .in(column, values as never[])
+        .select('id');
+      if (error) throw wrapError(error);
+      return { data: { count: (data ?? []).length } };
+    },
   };
 }
 

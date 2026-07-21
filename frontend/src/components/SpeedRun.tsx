@@ -6,11 +6,14 @@ import {
 } from '../hooks/use-prospects';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
 import { ConfettiBurst, MoneyFireworks, FlashPulse, usePrefersReducedMotion } from './Celebration';
 import {
   Zap, X, Copy, Check, PhoneCall, PhoneOff, Video, CalendarClock,
-  XCircle, Shuffle, MapPin, Building2, Trophy, User, Flame, Minus,
+  XCircle, Shuffle, MapPin, Building2, Trophy, User, Flame, Minus, Pencil,
 } from 'lucide-react';
 
 const norm = (s?: string) => (s || '').toLowerCase().replace(/\s+/g, ' ').trim();
@@ -30,6 +33,14 @@ function extractFromNotes(notes: string | undefined, label: string): string | nu
   const m = notes.match(new RegExp(`${label}\\s*:\\s*([^·\\n]+)`, 'i'));
   return m ? m[1].trim() : null;
 }
+
+type ProspectFormFields = {
+  nom_societe: string; nom_dirigeant: string; telephone: string; email: string;
+  zone_geographique: string; categorie_metier: string;
+};
+const emptyProspectForm: ProspectFormFields = {
+  nom_societe: '', nom_dirigeant: '', telephone: '', email: '', zone_geographique: '', categorie_metier: '',
+};
 const toLocalInputValue = (d: Date) => {
   const pad = (n: number) => String(n).padStart(2, '0');
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
@@ -99,6 +110,9 @@ export default function SpeedRun({ onClose, minimized = false, onMinimize, onMax
   const [exitDirection, setExitDirection] = useState<'left' | 'right' | 'up' | null>(null);
   const [stats, setStats] = useState({ done: 0, answered: 0 });
   const reducedMotion = usePrefersReducedMotion();
+  const [showEditDialog, setShowEditDialog] = useState(false);
+  const [editForm, setEditForm] = useState<ProspectFormFields>(emptyProspectForm);
+  const [savingInfo, setSavingInfo] = useState(false);
 
   // Finale : gros lâcher de confettis à l'arrivée sur l'écran de fin.
   useEffect(() => {
@@ -136,6 +150,38 @@ export default function SpeedRun({ onClose, minimized = false, onMinimize, onMax
   }, [basePool, selectedVilles, selectedSecteurs]);
 
   const current = queue[index] || null;
+
+  // Modifier la fiche sans quitter le Speed Run : corrige un numéro/nom faux
+  // repéré pendant l'appel, sans casser le fil de la session en cours.
+  const handleOpenEdit = useCallback(() => {
+    if (!current) return;
+    setEditForm({
+      nom_societe: current.nom_societe || '',
+      nom_dirigeant: current.nom_dirigeant || '',
+      telephone: current.telephone || '',
+      email: current.email || '',
+      zone_geographique: current.zone_geographique || '',
+      categorie_metier: current.categorie_metier || '',
+    });
+    setShowEditDialog(true);
+  }, [current]);
+
+  const handleSaveInfo = useCallback(async () => {
+    if (!current || savingInfo) return;
+    if (!editForm.nom_societe.trim()) { toast.error('Le nom de la société est requis'); return; }
+    setSavingInfo(true);
+    try {
+      await client.entities.prospects.update({ id: String(current.id), data: editForm });
+      // La file du run est une copie locale (pas branchée sur le cache React
+      // Query) : on met à jour la carte affichée tout de suite, en plus
+      // d'invalider le cache pour le reste de l'app.
+      setQueue((q) => q.map((p) => (p.id === current.id ? { ...p, ...editForm } : p)));
+      invalidateProspects();
+      toast.success('Fiche mise à jour');
+      setShowEditDialog(false);
+    } catch { toast.error('Erreur lors de la mise à jour'); }
+    finally { setSavingInfo(false); }
+  }, [current, editForm, savingInfo, invalidateProspects]);
 
   const startRun = () => {
     const q = orderMode === 'aleatoire'
@@ -427,11 +473,22 @@ export default function SpeedRun({ onClose, minimized = false, onMinimize, onMax
               suivante entre avec sr-pop (remount via key). */}
           <div
             key={current.id}
-            className={`mt-3 h-[500px] bg-white rounded-3xl shadow-2xl flex flex-col overflow-hidden ${
+            className={`relative mt-3 h-[500px] bg-white rounded-3xl shadow-2xl flex flex-col overflow-hidden ${
               exitDirection === 'left' ? 'sr-exit-left' : exitDirection === 'right' ? 'sr-exit-right' : exitDirection === 'up' ? 'sr-exit-up' : 'sr-pop'
             }`}
           >
             <div className="h-1.5 shrink-0 sr-shine" style={{ backgroundImage: 'linear-gradient(90deg,#fbbf24,#f97316,#ec4899,#f97316,#fbbf24)' }} />
+
+            {/* Modifier la fiche sans quitter le run — corrige un nom/numéro faux
+                repéré pendant l'appel. Positionné en absolu : n'ajoute pas de
+                hauteur à la carte (dimensions fixes). */}
+            <button
+              onClick={handleOpenEdit}
+              title="Modifier la fiche"
+              className="absolute top-4 right-4 z-10 w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 hover:text-slate-700 flex items-center justify-center transition-colors"
+            >
+              <Pencil className="w-3.5 h-3.5" />
+            </button>
 
             {/* identité — hauteur réservée, texte tronqué */}
             <div className="px-7 pt-5 text-center shrink-0">
@@ -555,6 +612,33 @@ export default function SpeedRun({ onClose, minimized = false, onMinimize, onMax
           </div>
         </div>
       )}
+
+      {/* Modifier la fiche — accessible depuis la carte en plein run, sans
+          quitter le Speed Run. Champs essentiels seulement (édition complète
+          disponible sur la fiche prospect). */}
+      <Dialog open={showEditDialog} onOpenChange={setShowEditDialog}>
+        <DialogContent className="max-w-md rounded-2xl">
+          <DialogHeader><DialogTitle>Modifier la fiche</DialogTitle></DialogHeader>
+          <div className="space-y-3">
+            <div className="grid grid-cols-2 gap-3">
+              <div><Label>Société *</Label><Input value={editForm.nom_societe} onChange={(e) => setEditForm({ ...editForm, nom_societe: e.target.value })} className="rounded-xl" /></div>
+              <div><Label>Dirigeant</Label><Input value={editForm.nom_dirigeant} onChange={(e) => setEditForm({ ...editForm, nom_dirigeant: e.target.value })} className="rounded-xl" /></div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div><Label>Téléphone</Label><Input value={editForm.telephone} onChange={(e) => setEditForm({ ...editForm, telephone: e.target.value })} className="rounded-xl" /></div>
+              <div><Label>Email</Label><Input value={editForm.email} onChange={(e) => setEditForm({ ...editForm, email: e.target.value })} className="rounded-xl" /></div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div><Label>Zone géographique</Label><Input value={editForm.zone_geographique} onChange={(e) => setEditForm({ ...editForm, zone_geographique: e.target.value })} className="rounded-xl" /></div>
+              <div><Label>Catégorie métier</Label><Input value={editForm.categorie_metier} onChange={(e) => setEditForm({ ...editForm, categorie_metier: e.target.value })} className="rounded-xl" /></div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowEditDialog(false)} disabled={savingInfo} className="rounded-xl">Annuler</Button>
+            <Button onClick={handleSaveInfo} disabled={savingInfo} className="bg-gradient-to-r from-[#5A9BA3] to-[#6AABB4] hover:from-[#4A8B93] hover:to-[#5A9BA4] text-white rounded-xl">{savingInfo ? 'Enregistrement...' : 'Enregistrer'}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

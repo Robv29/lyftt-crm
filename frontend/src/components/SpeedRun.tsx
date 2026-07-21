@@ -19,6 +19,17 @@ function shuffle<T>(arr: T[]): T[] {
   for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; }
   return a;
 }
+
+// Le statut juridique ("Forme") et l'effectif ("Effectif") ne sont pas des
+// colonnes dédiées en base : ils viennent de l'import Monday et sont
+// embarqués dans le champ notes au format "Effectif: X · Forme: Y · ...".
+// On les extrait à l'affichage pour donner ce contexte en un coup d'œil
+// pendant un appel, sans changer le schéma de la table.
+function extractFromNotes(notes: string | undefined, label: string): string | null {
+  if (!notes) return null;
+  const m = notes.match(new RegExp(`${label}\\s*:\\s*([^·\\n]+)`, 'i'));
+  return m ? m[1].trim() : null;
+}
 const toLocalInputValue = (d: Date) => {
   const pad = (n: number) => String(n).padStart(2, '0');
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
@@ -400,7 +411,16 @@ export default function SpeedRun({ onClose, minimized = false, onMinimize, onMax
               <h2 className="mt-1.5 h-[62px] flex items-center justify-center text-[26px] leading-[1.15] font-black text-slate-900 overflow-hidden">
                 <span className="line-clamp-2">{current.nom_societe}</span>
               </h2>
-              <p className="h-[22px] text-base text-slate-500 truncate">{current.nom_dirigeant || '—'}</p>
+              {/* Dirigeant + statut juridique/effectif sur la même ligne à
+                  hauteur fixe (extraits du champ notes, import Monday — pas
+                  de colonne dédiée) : n'ajoute pas de hauteur à la carte. */}
+              <p className="h-[22px] text-sm text-slate-500 truncate">
+                {current.nom_dirigeant || '—'}
+                {(() => {
+                  const extra = [extractFromNotes(current.notes, 'Forme'), extractFromNotes(current.notes, 'Effectif')].filter(Boolean).join(' · ');
+                  return extra ? <span className="text-slate-400"> · {extra}</span> : null;
+                })()}
+              </p>
             </div>
 
             {/* téléphone + copier — hauteur fixe */}

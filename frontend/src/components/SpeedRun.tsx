@@ -7,6 +7,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
+import { ConfettiBurst, MoneyFireworks } from './Celebration';
 import {
   Zap, X, Copy, Check, PhoneCall, PhoneOff, Video, CalendarClock,
   XCircle, Shuffle, MapPin, Building2, Trophy, User, Flame,
@@ -18,6 +19,10 @@ function shuffle<T>(arr: T[]): T[] {
   for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; }
   return a;
 }
+const toLocalInputValue = (d: Date) => {
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+};
 
 type Mode = 'aleatoire' | 'ville' | 'secteur';
 
@@ -50,6 +55,11 @@ export default function SpeedRun({ onClose }: { onClose: () => void }) {
   const [step, setStep] = useState<'card' | 'result' | 'followup'>('card');
   const [copied, setCopied] = useState(false);
   const [relanceDateTime, setRelanceDateTime] = useState('');
+  const [followupMode, setFollowupMode] = useState<'default' | 'visio'>('default');
+  const [visioDateTime, setVisioDateTime] = useState('');
+  const [noteText, setNoteText] = useState('');
+  const [confettiId, setConfettiId] = useState(0);
+  const [moneyId, setMoneyId] = useState(0);
   const [stats, setStats] = useState({ done: 0, answered: 0 });
 
   const commercialNames = useMemo(
@@ -85,11 +95,13 @@ export default function SpeedRun({ onClose }: { onClose: () => void }) {
       : [...poolPreview].sort((a, b) => (a.nombre_appels || 0) - (b.nombre_appels || 0));
     if (q.length === 0) { toast.error('Aucun prospect pour ce choix'); return; }
     setQueue(q); setIndex(0); setStep('card'); setCopied(false); setRelanceDateTime('');
+    setFollowupMode('default'); setVisioDateTime(''); setNoteText('');
     setStats({ done: 0, answered: 0 }); setPhase('run');
   };
 
   const next = useCallback(() => {
     setStep('card'); setCopied(false); setRelanceDateTime('');
+    setFollowupMode('default'); setVisioDateTime(''); setNoteText('');
     setIndex((i) => {
       if (i + 1 >= queue.length) { setPhase('done'); return i; }
       return i + 1;
@@ -123,49 +135,56 @@ export default function SpeedRun({ onClose }: { onClose: () => void }) {
   const answered = useCallback(async () => {
     const p = current; if (!p) return;
     try {
-      await client.entities.prospects.update({ id: String(p.id), data: { nombre_appels: (p.nombre_appels || 0) + 1, nombre_appels_repondus: (p.nombre_appels_repondus || 0) + 1, date_dernier_appel: new Date().toISOString() } });
+      // Un appel répondu consomme la relance datée : elle disparaît de la colonne "Relance date".
+      await client.entities.prospects.update({ id: String(p.id), data: { nombre_appels: (p.nombre_appels || 0) + 1, nombre_appels_repondus: (p.nombre_appels_repondus || 0) + 1, date_dernier_appel: new Date().toISOString(), date_relance_planifiee: null } });
       await client.entities.commercial_actions.create({ data: { prospect_id: p.id, action_type: 'appel', appel_repondu: true, from_status: p.statut_avancement, to_status: p.statut_avancement, notes: 'Appel répondu (speed run)', action_date: new Date().toISOString() } });
     } catch { /* ignore */ }
     setStats((s) => ({ ...s, answered: s.answered + 1 }));
-    invalidateProspects(); invalidateActions(p.id); setStep('followup');
+    setConfettiId((n) => n + 1);
+    invalidateProspects(); invalidateActions(p.id); setStep('followup'); setFollowupMode('default');
   }, [current, invalidateProspects, invalidateActions]);
 
-  const doVisio = useCallback(async () => {
+  // Visio : demande la date & heure du rendez-vous plutôt que de figer l'instant présent.
+  const doVisio = useCallback(async (dateTimeLocal?: string) => {
     const p = current; if (!p) return;
+    const iso = dateTimeLocal ? new Date(dateTimeLocal).toISOString() : new Date().toISOString();
     try {
-      await client.entities.prospects.update({ id: String(p.id), data: { statut_avancement: 'Visio', date_visio: new Date().toISOString() } });
-      await client.entities.commercial_actions.create({ data: { prospect_id: p.id, action_type: 'visio', appel_repondu: false, from_status: p.statut_avancement, to_status: 'Visio', notes: 'Visio (speed run)', action_date: new Date().toISOString() } });
+      await client.entities.prospects.update({ id: String(p.id), data: { statut_avancement: 'Visio', date_visio: iso, date_relance_planifiee: null } });
+      await client.entities.commercial_actions.create({ data: { prospect_id: p.id, action_type: 'visio', appel_repondu: false, from_status: p.statut_avancement, to_status: 'Visio', notes: noteText || `Visio planifiée ${new Date(iso).toLocaleString('fr-FR')} (speed run)`, action_date: new Date().toISOString() } });
     } catch { /* ignore */ }
     setStats((s) => ({ ...s, done: s.done + 1 }));
+    setMoneyId((n) => n + 1);
     invalidateProspects(); invalidateActions(p.id); next();
-  }, [current, next, invalidateProspects, invalidateActions]);
+  }, [current, noteText, next, invalidateProspects, invalidateActions]);
 
   const doRelanceDate = useCallback(async () => {
     const p = current; if (!p || !relanceDateTime) return;
     const iso = new Date(relanceDateTime).toISOString();
     try {
       await client.entities.prospects.update({ id: String(p.id), data: { date_relance_planifiee: iso } });
-      await client.entities.commercial_actions.create({ data: { prospect_id: p.id, action_type: 'relance_planifiee', appel_repondu: false, from_status: p.statut_avancement, to_status: p.statut_avancement, notes: `Relance planifiée ${new Date(iso).toLocaleString('fr-FR')} (speed run)`, action_date: new Date().toISOString() } });
+      await client.entities.commercial_actions.create({ data: { prospect_id: p.id, action_type: 'relance_planifiee', appel_repondu: false, from_status: p.statut_avancement, to_status: p.statut_avancement, notes: noteText || `Relance planifiée ${new Date(iso).toLocaleString('fr-FR')} (speed run)`, action_date: new Date().toISOString() } });
     } catch { /* ignore */ }
     setStats((s) => ({ ...s, done: s.done + 1 }));
     invalidateProspects(); invalidateActions(p.id); next();
-  }, [current, relanceDateTime, next, invalidateProspects, invalidateActions]);
+  }, [current, relanceDateTime, noteText, next, invalidateProspects, invalidateActions]);
 
   const doRefus = useCallback(async () => {
     const p = current; if (!p) return;
     try {
       await client.entities.prospects.update({ id: String(p.id), data: { statut_avancement: 'Refus / Perdu', statut_gagne_perdu: 'perdu' } });
-      await client.entities.commercial_actions.create({ data: { prospect_id: p.id, action_type: 'status_change', appel_repondu: false, from_status: p.statut_avancement, to_status: 'Refus / Perdu', notes: 'Refus (speed run)', action_date: new Date().toISOString() } });
+      await client.entities.commercial_actions.create({ data: { prospect_id: p.id, action_type: 'status_change', appel_repondu: false, from_status: p.statut_avancement, to_status: 'Refus / Perdu', notes: noteText || 'Refus (speed run)', action_date: new Date().toISOString() } });
     } catch { /* ignore */ }
     setStats((s) => ({ ...s, done: s.done + 1 }));
     invalidateProspects(); invalidateActions(p.id); next();
-  }, [current, next, invalidateProspects, invalidateActions]);
+  }, [current, noteText, next, invalidateProspects, invalidateActions]);
 
   const progress = queue.length ? ((index) / queue.length) * 100 : 0;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#0b1220]/95 backdrop-blur-md">
       <style>{STYLES}</style>
+      <ConfettiBurst id={confettiId} />
+      <MoneyFireworks id={moneyId} />
 
       {/* halos décoratifs */}
       <div className="pointer-events-none absolute -top-24 -left-24 w-96 h-96 rounded-full bg-orange-500/20 blur-3xl" />
@@ -268,7 +287,7 @@ export default function SpeedRun({ onClose }: { onClose: () => void }) {
           </div>
 
           {/* carte à dimensions FIXES */}
-          <div key={current.id} className="sr-pop mt-3 h-[430px] bg-white rounded-3xl shadow-2xl flex flex-col overflow-hidden">
+          <div key={current.id} className="sr-pop mt-3 h-[500px] bg-white rounded-3xl shadow-2xl flex flex-col overflow-hidden">
             <div className="h-1.5 shrink-0 sr-shine" style={{ backgroundImage: 'linear-gradient(90deg,#fbbf24,#f97316,#ec4899,#f97316,#fbbf24)' }} />
 
             {/* identité — hauteur réservée, texte tronqué */}
@@ -295,7 +314,7 @@ export default function SpeedRun({ onClose }: { onClose: () => void }) {
             </div>
 
             {/* zone d'action — hauteur FIXE : le contenu change, la carte ne bouge pas */}
-            <div className="px-7 pb-5 pt-4 h-[186px] shrink-0">
+            <div className="px-7 pb-5 pt-4 h-[256px] shrink-0">
               {step === 'card' && (
                 <div className="sr-slide h-full flex flex-col items-center justify-center gap-2">
                   <Copy className="w-7 h-7 text-slate-300" />
@@ -315,16 +334,37 @@ export default function SpeedRun({ onClose }: { onClose: () => void }) {
               )}
 
               {step === 'followup' && (
-                <div className="sr-slide h-full flex flex-col justify-center gap-2.5">
-                  <div className="grid grid-cols-2 gap-2.5">
-                    <Button onClick={doVisio} className="h-11 rounded-xl bg-gradient-to-br from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700 text-white gap-2 font-bold hover:scale-[1.03] transition-transform"><Video className="w-4 h-4" /> Visio</Button>
-                    <Button onClick={doRefus} variant="outline" className="h-11 rounded-xl border-2 border-red-200 text-red-600 hover:bg-red-50 gap-2 font-bold hover:scale-[1.03] transition-transform"><XCircle className="w-4 h-4" /> Refus</Button>
-                  </div>
-                  <div className="flex gap-2">
-                    <input type="datetime-local" value={relanceDateTime} onChange={(e) => setRelanceDateTime(e.target.value)}
-                      className="flex-1 min-w-0 h-11 rounded-xl border-2 border-slate-200 px-3 text-sm focus:outline-none focus:border-[#6AABB4]" />
-                    <Button onClick={doRelanceDate} disabled={!relanceDateTime} className="h-11 shrink-0 gap-1.5 bg-gradient-to-r from-[#5A9BA3] to-[#6AABB4] text-white rounded-xl font-bold"><CalendarClock className="w-4 h-4" /> Relance</Button>
-                  </div>
+                <div className="sr-slide h-full flex flex-col gap-2.5">
+                  <textarea
+                    value={noteText}
+                    onChange={(e) => setNoteText(e.target.value)}
+                    placeholder="Note sur l'appel (optionnel)..."
+                    rows={2}
+                    className="w-full rounded-xl border-2 border-slate-200 px-3 py-2 text-sm resize-none focus:outline-none focus:border-[#6AABB4]"
+                  />
+                  {followupMode === 'default' ? (
+                    <>
+                      <div className="grid grid-cols-2 gap-2.5">
+                        <Button onClick={() => { setVisioDateTime(toLocalInputValue(new Date())); setFollowupMode('visio'); }} className="h-11 rounded-xl bg-gradient-to-br from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700 text-white gap-2 font-bold hover:scale-[1.03] transition-transform"><Video className="w-4 h-4" /> Visio</Button>
+                        <Button onClick={doRefus} variant="outline" className="h-11 rounded-xl border-2 border-red-200 text-red-600 hover:bg-red-50 gap-2 font-bold hover:scale-[1.03] transition-transform"><XCircle className="w-4 h-4" /> Refus</Button>
+                      </div>
+                      <div className="flex gap-2">
+                        <input type="datetime-local" value={relanceDateTime} onChange={(e) => setRelanceDateTime(e.target.value)}
+                          className="flex-1 min-w-0 h-11 rounded-xl border-2 border-slate-200 px-3 text-sm focus:outline-none focus:border-[#6AABB4]" />
+                        <Button onClick={doRelanceDate} disabled={!relanceDateTime} className="h-11 shrink-0 gap-1.5 bg-gradient-to-r from-[#5A9BA3] to-[#6AABB4] text-white rounded-xl font-bold"><CalendarClock className="w-4 h-4" /> Relance</Button>
+                      </div>
+                    </>
+                  ) : (
+                    <div className="rounded-2xl border-2 border-purple-100 bg-purple-50/40 p-3 flex-1 flex flex-col justify-center gap-2.5">
+                      <p className="text-xs font-semibold text-purple-600 flex items-center gap-1.5"><Video className="w-3.5 h-3.5" /> Date &amp; heure de la visio</p>
+                      <input type="datetime-local" value={visioDateTime} onChange={(e) => setVisioDateTime(e.target.value)}
+                        className="w-full h-10 rounded-xl border-2 border-purple-200 px-2.5 text-sm focus:outline-none focus:border-purple-400 bg-white" />
+                      <div className="flex gap-2">
+                        <Button onClick={() => setFollowupMode('default')} variant="ghost" className="h-10 rounded-xl flex-1">← Retour</Button>
+                        <Button onClick={() => doVisio(visioDateTime)} disabled={!visioDateTime} className="h-10 flex-[1.4] gap-1.5 bg-gradient-to-r from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700 text-white rounded-xl font-bold"><Video className="w-4 h-4" /> Confirmer</Button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
             </div>

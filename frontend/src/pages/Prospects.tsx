@@ -200,7 +200,7 @@ export default function Prospects() {
   const { data: cityAttributions = [] } = useCityAttributions();
   const invalidateProspects = useInvalidateProspects();
 
-  const [search, setSearch] = useState('');
+  const [search, setSearch] = usePersistentState('lyftt.prospects.recherche', '');
   const [statusFilter, setStatusFilter] = usePersistentState('lyftt.prospects.statut', 'Tous');
   const [sectorFilter, setSectorFilter] = usePersistentState('lyftt.prospects.secteur', 'Tous');
   const [cityFilter, setCityFilter] = usePersistentState('lyftt.prospects.ville', 'Toutes');

@@ -1,23 +1,37 @@
 import { useEffect, useState } from 'react';
 
 /**
- * Effets de célébration réutilisables : confettis (appel répondu) et
- * feu d'artifice de billets (visio décrochée). Purement CSS/JS, sans
- * dépendance externe. Se déclenchent en passant un `id` incrémental —
- * chaque nouvel id relance l'animation.
+ * Effets de célébration réutilisables : confettis (appel répondu), feu
+ * d'artifice de billets (visio décrochée) et flash coloré (transition
+ * entre deux entreprises). Purement CSS/JS, sans dépendance externe.
+ * Se déclenchent en passant un `id` incrémental — chaque nouvel id
+ * relance l'animation. Respecte `prefers-reduced-motion`.
  */
+
+export function usePrefersReducedMotion() {
+  const [reduced, setReduced] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia('(prefers-reduced-motion: reduce)');
+    setReduced(mq.matches);
+    const handler = (e: MediaQueryListEvent) => setReduced(e.matches);
+    mq.addEventListener('change', handler);
+    return () => mq.removeEventListener('change', handler);
+  }, []);
+  return reduced;
+}
 
 const CONFETTI_COLORS = ['#fbbf24', '#f97316', '#ec4899', '#10b981', '#6AABB4', '#8b5cf6', '#3b82f6'];
 
 export function ConfettiBurst({ id }: { id: number }) {
   const [show, setShow] = useState(false);
+  const reduced = usePrefersReducedMotion();
 
   useEffect(() => {
-    if (!id) return;
+    if (!id || reduced) return;
     setShow(true);
     const t = setTimeout(() => setShow(false), 1500);
     return () => clearTimeout(t);
-  }, [id]);
+  }, [id, reduced]);
 
   if (!show) return null;
 
@@ -63,13 +77,14 @@ export function ConfettiBurst({ id }: { id: number }) {
 
 export function MoneyFireworks({ id }: { id: number }) {
   const [show, setShow] = useState(false);
+  const reduced = usePrefersReducedMotion();
 
   useEffect(() => {
-    if (!id) return;
+    if (!id || reduced) return;
     setShow(true);
     const t = setTimeout(() => setShow(false), 1900);
     return () => clearTimeout(t);
-  }, [id]);
+  }, [id, reduced]);
 
   if (!show) return null;
 
@@ -118,6 +133,46 @@ export function MoneyFireworks({ id }: { id: number }) {
           </div>
         );
       })}
+    </div>
+  );
+}
+
+const FLASH_TONES = {
+  success: 'radial-gradient(circle at 50% 45%, rgba(16,185,129,.35), transparent 62%)',
+  danger: 'radial-gradient(circle at 50% 45%, rgba(239,68,68,.30), transparent 62%)',
+  neutral: 'radial-gradient(circle at 50% 45%, rgba(148,163,184,.25), transparent 62%)',
+} as const;
+
+/**
+ * Flash coloré plein écran, très bref — accompagne la transition entre
+ * deux entreprises en Speed Run (vert = succès, rouge = NRP/refus,
+ * gris = passée). Purement décoratif, ne bloque jamais le clic.
+ */
+export function FlashPulse({ id, tone = 'neutral' }: { id: number; tone?: keyof typeof FLASH_TONES }) {
+  const [show, setShow] = useState(false);
+  const reduced = usePrefersReducedMotion();
+
+  useEffect(() => {
+    if (!id) return;
+    setShow(true);
+    const t = setTimeout(() => setShow(false), reduced ? 220 : 420);
+    return () => clearTimeout(t);
+  }, [id, reduced]);
+
+  if (!show) return null;
+
+  return (
+    <div
+      className="fixed inset-0 pointer-events-none z-[150]"
+      style={{
+        background: FLASH_TONES[tone],
+        animation: reduced ? 'flash-fade-reduced .22s ease-out forwards' : 'flash-fade .42s cubic-bezier(.16,1,.3,1) forwards',
+      }}
+    >
+      <style>{`
+        @keyframes flash-fade { 0% { opacity: 1 } 100% { opacity: 0 } }
+        @keyframes flash-fade-reduced { 0% { opacity: .6 } 100% { opacity: 0 } }
+      `}</style>
     </div>
   );
 }

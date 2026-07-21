@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useEffect } from 'react';
 import { client } from '../lib/api';
 import {
   useProspects, useRegisteredUsers, useCityAttributions,
@@ -7,7 +7,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
-import { ConfettiBurst, MoneyFireworks } from './Celebration';
+import { ConfettiBurst, MoneyFireworks, FlashPulse, usePrefersReducedMotion } from './Celebration';
 import {
   Zap, X, Copy, Check, PhoneCall, PhoneOff, Video, CalendarClock,
   XCircle, Shuffle, MapPin, Building2, Trophy, User, Flame,
@@ -32,11 +32,23 @@ const STYLES = `
 @keyframes sr-shine { from { background-position: 0% 50% } to { background-position: 200% 50% } }
 @keyframes sr-ring { from { box-shadow: 0 0 0 0 rgba(16,185,129,.55) } to { box-shadow: 0 0 0 20px rgba(16,185,129,0) } }
 @keyframes sr-slide { from { transform: translateY(10px); opacity: 0 } to { transform: translateY(0); opacity: 1 } }
+@keyframes sr-exit-left { to { transform: translate(-130%, 8%) rotate(-10deg); opacity: 0 } }
+@keyframes sr-exit-right { to { transform: translate(130%, 8%) rotate(10deg); opacity: 0 } }
+@keyframes sr-exit-up { to { transform: translate(0, -120%) scale(.92); opacity: 0 } }
+@keyframes sr-digit { from { transform: translateY(60%); opacity: 0 } to { transform: translateY(0); opacity: 1 } }
 .sr-pop { animation: sr-pop .35s cubic-bezier(.22,1,.36,1) both }
 .sr-slide { animation: sr-slide .25s ease-out both }
 .sr-float { animation: sr-float 3.5s ease-in-out infinite }
 .sr-shine { background-size: 200% 100%; animation: sr-shine 3s linear infinite }
 .sr-ring { animation: sr-ring 1.4s ease-out infinite }
+.sr-exit-left { animation: sr-exit-left .26s cubic-bezier(.16,1,.3,1) forwards }
+.sr-exit-right { animation: sr-exit-right .26s cubic-bezier(.16,1,.3,1) forwards }
+.sr-exit-up { animation: sr-exit-up .22s cubic-bezier(.16,1,.3,1) forwards }
+.sr-digit { display: inline-block; animation: sr-digit .32s cubic-bezier(.16,1,.3,1) both }
+@media (prefers-reduced-motion: reduce) {
+  .sr-pop, .sr-float, .sr-shine, .sr-ring, .sr-slide, .sr-digit { animation: none !important; }
+  .sr-exit-left, .sr-exit-right, .sr-exit-up { animation: sr-pop .15s ease-out reverse both !important; }
+}
 `;
 
 export default function SpeedRun({ onClose }: { onClose: () => void }) {
@@ -60,7 +72,16 @@ export default function SpeedRun({ onClose }: { onClose: () => void }) {
   const [noteText, setNoteText] = useState('');
   const [confettiId, setConfettiId] = useState(0);
   const [moneyId, setMoneyId] = useState(0);
+  const [flashId, setFlashId] = useState(0);
+  const [flashTone, setFlashTone] = useState<'success' | 'danger' | 'neutral'>('neutral');
+  const [exitDirection, setExitDirection] = useState<'left' | 'right' | 'up' | null>(null);
   const [stats, setStats] = useState({ done: 0, answered: 0 });
+  const reducedMotion = usePrefersReducedMotion();
+
+  // Finale : gros lâcher de confettis à l'arrivée sur l'écran de fin.
+  useEffect(() => {
+    if (phase === 'done') setConfettiId((n) => n + 1);
+  }, [phase]);
 
   const commercialNames = useMemo(
     () => users.filter((u) => u.first_name || u.last_name).map((u) => `${u.first_name || ''} ${u.last_name || ''}`.trim()).filter(Boolean).sort(),
@@ -99,14 +120,29 @@ export default function SpeedRun({ onClose }: { onClose: () => void }) {
     setStats({ done: 0, answered: 0 }); setPhase('run');
   };
 
-  const next = useCallback(() => {
-    setStep('card'); setCopied(false); setRelanceDateTime('');
-    setFollowupMode('default'); setVisioDateTime(''); setNoteText('');
-    setIndex((i) => {
-      if (i + 1 >= queue.length) { setPhase('done'); return i; }
-      return i + 1;
-    });
-  }, [queue.length]);
+  // direction/tone pilotent la sortie de la carte (swipe + flash coloré) avant
+  // d'enchaîner sur l'entreprise suivante. Sans direction (ou en mode "mouvement
+  // réduit"), on avance immédiatement.
+  const next = useCallback((direction?: 'left' | 'right' | 'up', tone?: 'success' | 'danger' | 'neutral') => {
+    const advance = () => {
+      setStep('card'); setCopied(false); setRelanceDateTime('');
+      setFollowupMode('default'); setVisioDateTime(''); setNoteText('');
+      setExitDirection(null);
+      setIndex((i) => {
+        if (i + 1 >= queue.length) { setPhase('done'); return i; }
+        return i + 1;
+      });
+    };
+    if (direction && !reducedMotion) {
+      setExitDirection(direction);
+      setFlashTone(tone || 'neutral');
+      setFlashId((n) => n + 1);
+      setTimeout(advance, 260);
+    } else {
+      if (tone) { setFlashTone(tone); setFlashId((n) => n + 1); }
+      advance();
+    }
+  }, [queue.length, reducedMotion]);
 
   const copyPhone = async () => {
     if (!current) return;
@@ -129,7 +165,7 @@ export default function SpeedRun({ onClose }: { onClose: () => void }) {
       await client.entities.commercial_actions.create({ data: { prospect_id: p.id, action_type: isFirst ? 'appel' : 'relance', appel_repondu: false, from_status: p.statut_avancement, to_status: st, notes: 'NRP (speed run)', action_date: new Date().toISOString() } });
     } catch { /* ignore */ }
     setStats((s) => ({ ...s, done: s.done + 1 }));
-    invalidateProspects(); invalidateActions(p.id); next();
+    invalidateProspects(); invalidateActions(p.id); next('left', 'danger');
   }, [current, next, invalidateProspects, invalidateActions]);
 
   const answered = useCallback(async () => {
@@ -154,7 +190,7 @@ export default function SpeedRun({ onClose }: { onClose: () => void }) {
     } catch { /* ignore */ }
     setStats((s) => ({ ...s, done: s.done + 1 }));
     setMoneyId((n) => n + 1);
-    invalidateProspects(); invalidateActions(p.id); next();
+    invalidateProspects(); invalidateActions(p.id); next('right', 'success');
   }, [current, noteText, next, invalidateProspects, invalidateActions]);
 
   const doRelanceDate = useCallback(async () => {
@@ -165,7 +201,7 @@ export default function SpeedRun({ onClose }: { onClose: () => void }) {
       await client.entities.commercial_actions.create({ data: { prospect_id: p.id, action_type: 'relance_planifiee', appel_repondu: false, from_status: p.statut_avancement, to_status: p.statut_avancement, notes: noteText || `Relance planifiée ${new Date(iso).toLocaleString('fr-FR')} (speed run)`, action_date: new Date().toISOString() } });
     } catch { /* ignore */ }
     setStats((s) => ({ ...s, done: s.done + 1 }));
-    invalidateProspects(); invalidateActions(p.id); next();
+    invalidateProspects(); invalidateActions(p.id); next('right', 'success');
   }, [current, relanceDateTime, noteText, next, invalidateProspects, invalidateActions]);
 
   const doRefus = useCallback(async () => {
@@ -175,7 +211,7 @@ export default function SpeedRun({ onClose }: { onClose: () => void }) {
       await client.entities.commercial_actions.create({ data: { prospect_id: p.id, action_type: 'status_change', appel_repondu: false, from_status: p.statut_avancement, to_status: 'Refus / Perdu', notes: noteText || 'Refus (speed run)', action_date: new Date().toISOString() } });
     } catch { /* ignore */ }
     setStats((s) => ({ ...s, done: s.done + 1 }));
-    invalidateProspects(); invalidateActions(p.id); next();
+    invalidateProspects(); invalidateActions(p.id); next('left', 'danger');
   }, [current, noteText, next, invalidateProspects, invalidateActions]);
 
   const progress = queue.length ? ((index) / queue.length) * 100 : 0;
@@ -185,6 +221,7 @@ export default function SpeedRun({ onClose }: { onClose: () => void }) {
       <style>{STYLES}</style>
       <ConfettiBurst id={confettiId} />
       <MoneyFireworks id={moneyId} />
+      <FlashPulse id={flashId} tone={flashTone} />
 
       {/* halos décoratifs */}
       <div className="pointer-events-none absolute -top-24 -left-24 w-96 h-96 rounded-full bg-orange-500/20 blur-3xl" />
@@ -286,8 +323,14 @@ export default function SpeedRun({ onClose }: { onClose: () => void }) {
             </div>
           </div>
 
-          {/* carte à dimensions FIXES */}
-          <div key={current.id} className="sr-pop mt-3 h-[500px] bg-white rounded-3xl shadow-2xl flex flex-col overflow-hidden">
+          {/* carte à dimensions FIXES — sort en swipe coloré selon l'issue, puis la
+              suivante entre avec sr-pop (remount via key). */}
+          <div
+            key={current.id}
+            className={`mt-3 h-[500px] bg-white rounded-3xl shadow-2xl flex flex-col overflow-hidden ${
+              exitDirection === 'left' ? 'sr-exit-left' : exitDirection === 'right' ? 'sr-exit-right' : exitDirection === 'up' ? 'sr-exit-up' : 'sr-pop'
+            }`}
+          >
             <div className="h-1.5 shrink-0 sr-shine" style={{ backgroundImage: 'linear-gradient(90deg,#fbbf24,#f97316,#ec4899,#f97316,#fbbf24)' }} />
 
             {/* identité — hauteur réservée, texte tronqué */}
@@ -304,7 +347,13 @@ export default function SpeedRun({ onClose }: { onClose: () => void }) {
             {/* téléphone + copier — hauteur fixe */}
             <div className="px-7 mt-3 shrink-0">
               <div className="h-[68px] flex items-center justify-center gap-3 bg-slate-50 rounded-2xl px-4">
-                <span className="text-[26px] font-black text-slate-900 tabular-nums tracking-tight truncate">{current.telephone || 'Aucun numéro'}</span>
+                <span className="text-[26px] font-black text-slate-900 tabular-nums tracking-tight truncate">
+                  {current.telephone
+                    ? current.telephone.split('').map((ch, i) => (
+                        <span key={i} className="sr-digit" style={{ animationDelay: `${Math.min(i, 14) * 0.025}s` }}>{ch}</span>
+                      ))
+                    : 'Aucun numéro'}
+                </span>
                 <button onClick={copyPhone} disabled={!current.telephone}
                   className={`shrink-0 w-12 h-12 rounded-xl flex items-center justify-center transition-all active:scale-90 ${copied ? 'bg-emerald-500 text-white' : 'bg-[#5A9BA3] text-white hover:bg-[#4A8B93] sr-ring'}`}
                   title="Copier le numéro">
@@ -370,7 +419,7 @@ export default function SpeedRun({ onClose }: { onClose: () => void }) {
             </div>
           </div>
 
-          <button onClick={next} className="mt-3 mx-auto block text-sm text-white/50 hover:text-white transition-colors">Passer cette entreprise →</button>
+          <button onClick={() => next('up', 'neutral')} className="mt-3 mx-auto block text-sm text-white/50 hover:text-white transition-colors">Passer cette entreprise →</button>
         </div>
       )}
 

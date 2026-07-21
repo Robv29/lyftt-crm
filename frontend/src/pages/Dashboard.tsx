@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from 'react';
+import { useMemo, useCallback } from 'react';
 import { usePersistentState } from '../hooks/use-persistent-state';
 import { useAuth } from '../contexts/AuthContext';
 import {
@@ -21,7 +21,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Link } from 'react-router-dom';
-import SpeedRun from '../components/SpeedRun';
+import { useSpeedRun } from '../contexts/SpeedRunContext';
 import {
   Phone,
   PhoneCall,
@@ -130,7 +130,9 @@ export default function Dashboard() {
 
   const [selectedPeriod, setSelectedPeriod] = usePersistentState<PeriodKey>('lyftt.dash.periode', 'today');
   const [selectedCommercial, setSelectedCommercial] = usePersistentState<string>('lyftt.dash.commercial', 'global');
-  const [showSpeedRun, setShowSpeedRun] = useState(false);
+  // Session Speed Run gérée au niveau global (App.tsx) pour survivre à un
+  // changement de page — cette page ne fait plus que déclencher l'ouverture.
+  const { open: openSpeedRun } = useSpeedRun();
 
   const loading = loadingP || loadingA;
 
@@ -278,7 +280,6 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-6">
-      {showSpeedRun && <SpeedRun onClose={() => setShowSpeedRun(false)} />}
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
@@ -291,7 +292,7 @@ export default function Dashboard() {
         </div>
         <div className="flex items-center gap-3">
           <button
-            onClick={() => setShowSpeedRun(true)}
+            onClick={openSpeedRun}
             className="group relative inline-flex items-center gap-2 rounded-xl px-4 py-2 font-bold text-white bg-gradient-to-r from-amber-400 via-orange-500 to-pink-500 shadow-[0_0_25px_rgba(251,146,60,0.45)] hover:shadow-[0_0_35px_rgba(251,146,60,0.7)] hover:scale-[1.03] active:scale-95 transition-all"
           >
             <span className="absolute inset-0 rounded-xl bg-white/20 opacity-0 group-hover:opacity-100 animate-pulse" />

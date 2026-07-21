@@ -7,9 +7,11 @@ import AuthCallback from './pages/AuthCallback';
 import AuthError from './pages/AuthError';
 import Login from './pages/Login';
 import { AuthProvider } from './contexts/AuthContext';
+import { SpeedRunProvider } from './contexts/SpeedRunContext';
 import Layout from './components/Layout';
 import LoadingSpinner from './components/LoadingSpinner';
 import ProtectedAdminRoute from './components/ProtectedAdminRoute';
+import SpeedRunHost from './components/SpeedRunHost';
 
 // Lazy load all page components for code splitting
 const Dashboard = lazy(() => import('./pages/Dashboard'));
@@ -50,7 +52,11 @@ const App = () => (
     <AuthProvider>
       <TooltipProvider>
         <Toaster />
+        <SpeedRunProvider>
         <BrowserRouter>
+          {/* Monté au-dessus de <Routes> : la session Speed Run (file d'appels,
+              index, stats) survit à tout changement de page. */}
+          <SpeedRunHost />
           <Routes>
             <Route path="/login" element={<Login />} />
             <Route path="/auth/callback" element={<AuthCallback />} />
@@ -127,6 +133,7 @@ const App = () => (
             />
           </Routes>
         </BrowserRouter>
+        </SpeedRunProvider>
       </TooltipProvider>
     </AuthProvider>
   </QueryClientProvider>

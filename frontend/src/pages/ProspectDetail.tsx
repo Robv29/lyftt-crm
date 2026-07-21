@@ -1,6 +1,7 @@
 import { useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { client } from '../lib/api';
+import { useAuth } from '../contexts/AuthContext';
 import {
   useProspects, useProspectActions, useInvalidateProspects, useInvalidateActions,
   type Prospect, type CommercialAction,
@@ -20,7 +21,7 @@ import {
 import { toast } from 'sonner';
 import {
   ArrowLeft, Phone, Mail, MapPin, Building2, Save, ChevronRight,
-  PhoneCall, PhoneOff, User, Video, CalendarClock, XCircle,
+  PhoneCall, PhoneOff, User, Video, CalendarClock, XCircle, Pencil, Trash2,
 } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { queryKeys } from '../hooks/use-prospects';
@@ -55,9 +56,22 @@ const actionTypeLabels: Record<string, string> = {
   refus: 'Refus', status_change: 'Changement de statut',
 };
 
+type ProspectFormFields = {
+  nom_societe: string; nom_dirigeant: string; telephone: string; email: string;
+  zone_geographique: string; categorie_metier: string; source_lead: string;
+  montant_potentiel: number; priorite: string;
+};
+
+const emptyProspectForm: ProspectFormFields = {
+  nom_societe: '', nom_dirigeant: '', telephone: '', email: '',
+  zone_geographique: '', categorie_metier: '', source_lead: '',
+  montant_potentiel: 0, priorite: 'moyenne',
+};
+
 export default function ProspectDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { isAdmin } = useAuth();
   const prospectId = id ? Number(id) : undefined;
 
   const { data: allProspects = [], isLoading: loadingP } = useProspects();
@@ -81,6 +95,10 @@ export default function ProspectDetail() {
   const [moneyId, setMoneyId] = useState(0);
   const [saving, setSaving] = useState(false);
   const [notesInitialized, setNotesInitialized] = useState(false);
+  const [showEditDialog, setShowEditDialog] = useState(false);
+  const [editForm, setEditForm] = useState<ProspectFormFields>(emptyProspectForm);
+  const [savingInfo, setSavingInfo] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   // Initialize notes from prospect data
   if (prospect && !notesInitialized) {
@@ -105,6 +123,55 @@ export default function ProspectDetail() {
     } catch { toast.error('Erreur lors de la sauvegarde'); }
     finally { setSaving(false); }
   }, [prospect, editNotes, updateProspectOptimistic]);
+
+  // Ouvre la fiche en édition : pré-remplit le formulaire avec les valeurs
+  // actuelles (permet d'ajouter, modifier ou vider — donc "supprimer" — un
+  // champ précis : téléphone, email, dirigeant, montant, etc.).
+  const handleOpenEdit = useCallback(() => {
+    if (!prospect) return;
+    setEditForm({
+      nom_societe: prospect.nom_societe || '',
+      nom_dirigeant: prospect.nom_dirigeant || '',
+      telephone: prospect.telephone || '',
+      email: prospect.email || '',
+      zone_geographique: prospect.zone_geographique || '',
+      categorie_metier: prospect.categorie_metier || '',
+      source_lead: prospect.source_lead || '',
+      montant_potentiel: prospect.montant_potentiel || 0,
+      priorite: prospect.priorite || 'moyenne',
+    });
+    setShowEditDialog(true);
+  }, [prospect]);
+
+  const handleSaveInfo = useCallback(async () => {
+    if (!prospect || savingInfo) return;
+    if (!editForm.nom_societe.trim()) { toast.error('Le nom de la société est requis'); return; }
+    setSavingInfo(true);
+    try {
+      await client.entities.prospects.update({ id: String(prospect.id), data: editForm });
+      updateProspectOptimistic(editForm);
+      toast.success('Fiche mise à jour');
+      setShowEditDialog(false);
+    } catch { toast.error('Erreur lors de la mise à jour'); }
+    finally { setSavingInfo(false); }
+  }, [prospect, editForm, savingInfo, updateProspectOptimistic]);
+
+  // Suppression réservée aux admins (RLS : delete sur prospects/commercial_actions
+  // limité aux admins depuis le correctif de sécurité de l'audit du 21/07/2026).
+  const handleDeleteProspect = useCallback(async () => {
+    if (!prospect || deleting) return;
+    if (!window.confirm(`Supprimer définitivement "${prospect.nom_societe}" ? Cette action supprime aussi tout son historique d'appels et est irréversible.`)) return;
+    setDeleting(true);
+    try {
+      await client.entities.prospects.delete({ id: String(prospect.id) });
+      toast.success('Prospect supprimé');
+      invalidateProspects();
+      navigate('/prospects');
+    } catch {
+      toast.error("Erreur lors de la suppression (droits admin requis)");
+      setDeleting(false);
+    }
+  }, [prospect, deleting, invalidateProspects, navigate]);
 
   const handleStatusChange = useCallback(async (newStatus: string, noteOverride?: string) => {
     if (!prospect || prospect.statut_avancement === newStatus) return;
@@ -269,10 +336,20 @@ export default function ProspectDetail() {
     <div className="space-y-6">
       <ConfettiBurst id={confettiId} />
       <MoneyFireworks id={moneyId} />
-      <div className="flex items-center gap-4">
+      <div className="flex items-center justify-between gap-4">
         <Button variant="ghost" onClick={() => navigate('/prospects')} className="gap-2 rounded-xl hover:bg-slate-100">
           <ArrowLeft className="w-4 h-4" /> Retour
         </Button>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" onClick={handleOpenEdit} className="gap-1.5 rounded-xl border-slate-200">
+            <Pencil className="w-3.5 h-3.5" /> Modifier la fiche
+          </Button>
+          {isAdmin && (
+            <Button variant="outline" size="sm" onClick={handleDeleteProspect} disabled={deleting} className="gap-1.5 rounded-xl border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700">
+              <Trash2 className="w-3.5 h-3.5" /> {deleting ? 'Suppression...' : 'Supprimer'}
+            </Button>
+          )}
+        </div>
       </div>
 
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -500,6 +577,47 @@ export default function ProspectDetail() {
 
           <DialogFooter className="px-6 pb-5 pt-0">
             <Button variant="ghost" onClick={() => { setShowCallDialog(false); setCallStep('result'); setFollowupMode('default'); setCallAnsweredNote(''); }} className="w-full rounded-xl">Fermer</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Édition de la fiche — société, dirigeant, coordonnées, montant, priorité.
+          Vider un champ puis sauvegarder revient à "supprimer" cette info. */}
+      <Dialog open={showEditDialog} onOpenChange={setShowEditDialog}>
+        <DialogContent className="max-w-lg rounded-2xl">
+          <DialogHeader><DialogTitle>Modifier la fiche prospect</DialogTitle></DialogHeader>
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-3">
+              <div><Label>Société *</Label><Input value={editForm.nom_societe} onChange={(e) => setEditForm({ ...editForm, nom_societe: e.target.value })} placeholder="Nom de la société" className="rounded-xl" /></div>
+              <div><Label>Dirigeant</Label><Input value={editForm.nom_dirigeant} onChange={(e) => setEditForm({ ...editForm, nom_dirigeant: e.target.value })} placeholder="Nom du dirigeant" className="rounded-xl" /></div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div><Label>Téléphone</Label><Input value={editForm.telephone} onChange={(e) => setEditForm({ ...editForm, telephone: e.target.value })} placeholder="01 23 45 67 89" className="rounded-xl" /></div>
+              <div><Label>Email</Label><Input value={editForm.email} onChange={(e) => setEditForm({ ...editForm, email: e.target.value })} placeholder="email@example.com" className="rounded-xl" /></div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div><Label>Zone géographique</Label><Input value={editForm.zone_geographique} onChange={(e) => setEditForm({ ...editForm, zone_geographique: e.target.value })} placeholder="Paris, Lyon..." className="rounded-xl" /></div>
+              <div><Label>Catégorie métier</Label><Input value={editForm.categorie_metier} onChange={(e) => setEditForm({ ...editForm, categorie_metier: e.target.value })} placeholder="BTP, Restaurant..." className="rounded-xl" /></div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div><Label>Source du lead</Label><Input value={editForm.source_lead} onChange={(e) => setEditForm({ ...editForm, source_lead: e.target.value })} placeholder="LinkedIn, Salon..." className="rounded-xl" /></div>
+              <div><Label>Montant potentiel (€)</Label><Input type="number" value={editForm.montant_potentiel} onChange={(e) => setEditForm({ ...editForm, montant_potentiel: Number(e.target.value) })} className="rounded-xl" /></div>
+            </div>
+            <div>
+              <Label>Priorité</Label>
+              <Select value={editForm.priorite} onValueChange={(v) => setEditForm({ ...editForm, priorite: v })}>
+                <SelectTrigger className="rounded-xl"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="haute">Haute</SelectItem>
+                  <SelectItem value="moyenne">Moyenne</SelectItem>
+                  <SelectItem value="basse">Basse</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowEditDialog(false)} disabled={savingInfo} className="rounded-xl">Annuler</Button>
+            <Button onClick={handleSaveInfo} disabled={savingInfo} className="bg-gradient-to-r from-[#5A9BA3] to-[#6AABB4] hover:from-[#4A8B93] hover:to-[#5A9BA4] text-white rounded-xl">{savingInfo ? 'Enregistrement...' : 'Enregistrer'}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

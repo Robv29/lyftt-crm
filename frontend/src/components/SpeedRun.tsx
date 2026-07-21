@@ -10,7 +10,7 @@ import { toast } from 'sonner';
 import { ConfettiBurst, MoneyFireworks, FlashPulse, usePrefersReducedMotion } from './Celebration';
 import {
   Zap, X, Copy, Check, PhoneCall, PhoneOff, Video, CalendarClock,
-  XCircle, Shuffle, MapPin, Building2, Trophy, User, Flame,
+  XCircle, Shuffle, MapPin, Building2, Trophy, User, Flame, Minus,
 } from 'lucide-react';
 
 const norm = (s?: string) => (s || '').toLowerCase().replace(/\s+/g, ' ').trim();
@@ -51,7 +51,17 @@ const STYLES = `
 }
 `;
 
-export default function SpeedRun({ onClose }: { onClose: () => void }) {
+interface SpeedRunProps {
+  onClose: () => void;
+  // Réduction en pastille flottante : permet de naviguer sur une autre page
+  // du CRM (Prospects, Pipeline...) SANS perdre la session en cours (file
+  // d'appels, index, stats). L'état reste vivant, seul l'affichage change.
+  minimized?: boolean;
+  onMinimize?: () => void;
+  onMaximize?: () => void;
+}
+
+export default function SpeedRun({ onClose, minimized = false, onMinimize, onMaximize }: SpeedRunProps) {
   const { data: prospects = [] } = useProspects();
   const { data: users = [] } = useRegisteredUsers();
   const { data: cityAttributions = [] } = useCityAttributions();
@@ -216,6 +226,43 @@ export default function SpeedRun({ onClose }: { onClose: () => void }) {
 
   const progress = queue.length ? ((index) / queue.length) * 100 : 0;
 
+  // ---- Mode réduit : pastille flottante, laisse le reste de l'app cliquable
+  // (navigation possible vers Prospects/Pipeline/etc.) sans perdre la session.
+  if (minimized) {
+    return (
+      <>
+        <style>{STYLES}</style>
+        <ConfettiBurst id={confettiId} />
+        <MoneyFireworks id={moneyId} />
+        <button
+          onClick={onMaximize}
+          className="sr-pop fixed bottom-5 right-5 z-[120] flex items-center gap-3 pl-3 pr-4 py-2.5 rounded-2xl shadow-[0_8px_30px_rgba(0,0,0,0.35)] text-white hover:scale-[1.03] active:scale-95 transition-transform"
+          style={{ backgroundImage: 'linear-gradient(90deg,#fbbf24,#f97316,#ec4899)' }}
+        >
+          <span className="sr-float w-8 h-8 rounded-xl bg-white/20 flex items-center justify-center shrink-0">
+            <Zap className="w-4 h-4" fill="white" />
+          </span>
+          <span className="text-left leading-tight">
+            <span className="block text-[10px] font-bold uppercase tracking-wider opacity-80">Speed Run en cours</span>
+            <span className="block text-sm font-black truncate max-w-[180px]">
+              {phase === 'run' && current ? `${index + 1}/${queue.length} · ${current.nom_societe}` : phase === 'done' ? 'Terminé — voir résultats' : 'Reprendre'}
+            </span>
+          </span>
+          <span
+            role="button"
+            tabIndex={0}
+            onClick={(e) => { e.stopPropagation(); onClose(); }}
+            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.stopPropagation(); onClose(); } }}
+            className="w-7 h-7 rounded-full bg-black/20 hover:bg-black/35 flex items-center justify-center shrink-0"
+            aria-label="Quitter le Speed Run"
+          >
+            <X className="w-3.5 h-3.5" />
+          </span>
+        </button>
+      </>
+    );
+  }
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#0b1220]/95 backdrop-blur-md">
       <style>{STYLES}</style>
@@ -227,9 +274,21 @@ export default function SpeedRun({ onClose }: { onClose: () => void }) {
       <div className="pointer-events-none absolute -top-24 -left-24 w-96 h-96 rounded-full bg-orange-500/20 blur-3xl" />
       <div className="pointer-events-none absolute -bottom-24 -right-24 w-96 h-96 rounded-full bg-pink-500/20 blur-3xl" />
 
-      <button onClick={onClose} className="absolute top-5 right-5 w-11 h-11 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-colors z-10" aria-label="Quitter">
-        <X className="w-6 h-6" />
-      </button>
+      <div className="absolute top-5 right-5 flex items-center gap-2 z-10">
+        {onMinimize && phase === 'run' && (
+          <button
+            onClick={onMinimize}
+            title="Réduire — continuer à naviguer sans perdre la session"
+            className="w-11 h-11 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-colors"
+            aria-label="Réduire"
+          >
+            <Minus className="w-6 h-6" />
+          </button>
+        )}
+        <button onClick={onClose} className="w-11 h-11 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-colors" aria-label="Quitter">
+          <X className="w-6 h-6" />
+        </button>
+      </div>
 
       {/* ---------------- SETUP ---------------- */}
       {phase === 'setup' && (

@@ -4,7 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import {
   LayoutDashboard,
   Users,
-  GitBranch,
+  Video,
   LogOut,
   Menu,
   X,
@@ -24,7 +24,7 @@ interface LayoutProps {
 const navItems = [
   { path: '/', label: 'Tableau de bord', icon: LayoutDashboard, adminOnly: false },
   { path: '/prospects', label: 'Prospects', icon: Users, adminOnly: false },
-  { path: '/pipeline', label: 'Pipeline', icon: GitBranch, adminOnly: false },
+  { path: '/visios-passees', label: 'Mes visios passées', icon: Video, adminOnly: false },
   { path: '/attributions', label: 'Attributions', icon: MapPin, adminOnly: false },
   { path: '/admin/users', label: 'Gestion utilisateurs', icon: UserCog, adminOnly: true },
 ];

@@ -18,6 +18,7 @@ const Dashboard = lazy(() => import('./pages/Dashboard'));
 const Prospects = lazy(() => import('./pages/Prospects'));
 const ProspectDetail = lazy(() => import('./pages/ProspectDetail'));
 const Pipeline = lazy(() => import('./pages/Pipeline'));
+const VisiosPassees = lazy(() => import('./pages/VisiosPassees'));
 const AdminUsers = lazy(() => import('./pages/AdminUsers'));
 const Attributions = lazy(() => import('./pages/Attributions'));
 const NotFound = lazy(() => import('./pages/NotFound'));
@@ -97,6 +98,16 @@ const App = () => (
                 <Layout>
                   <LazyPage>
                     <Pipeline />
+                  </LazyPage>
+                </Layout>
+              }
+            />
+            <Route
+              path="/visios-passees"
+              element={
+                <Layout>
+                  <LazyPage>
+                    <VisiosPassees />
                   </LazyPage>
                 </Layout>
               }

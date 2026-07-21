@@ -132,6 +132,14 @@ async function invoke({ url, method = 'GET', data = {} }: InvokeArgs) {
       e.status = 403;
       throw e;
     }
+    // Compte auto-inscrit pas encore validé par un admin : on le traite
+    // comme "accès refusé" (même écran que "aucun rôle") plutôt que de
+    // le laisser entrer avec un rôle inactif.
+    if (role.is_active === false) {
+      const e = new Error('Compte en attente de validation') as Error & { status?: number };
+      e.status = 403;
+      throw e;
+    }
     return { data: role };
   }
 

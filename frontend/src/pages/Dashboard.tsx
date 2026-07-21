@@ -215,7 +215,7 @@ export default function Dashboard() {
     return { totalAppels, appelsRepondus, refus, signatures, visios, currentRate, previousRate, trend };
   }, [actions, selectedPeriod]);
 
-  const prospectsToCallback = useMemo(() => {
+  const prospectsToCallbackAll = useMemo(() => {
     const now = new Date();
     const fiveDaysAgo = new Date(now.getTime() - 5 * 86400000);
     return prospects
@@ -230,9 +230,11 @@ export default function Dashboard() {
         const da = a.date_dernier_appel ? new Date(a.date_dernier_appel).getTime() : 0;
         const db = b.date_dernier_appel ? new Date(b.date_dernier_appel).getTime() : 0;
         return da - db;
-      })
-      .slice(0, 10);
+      });
   }, [prospects]);
+  // On n'affiche que les 10 plus urgentes dans la carte (lisibilité), mais le
+  // total réel est toujours visible pour ne pas masquer le volume restant.
+  const prospectsToCallback = useMemo(() => prospectsToCallbackAll.slice(0, 10), [prospectsToCallbackAll]);
 
   // Relances DATÉES : celles du jour (triées par heure) + celles en retard.
   // Une relance datée non appelée passe EN ROUGE dès le lendemain.
@@ -453,6 +455,9 @@ export default function Dashboard() {
           <CardHeader>
             <CardTitle className="text-lg font-semibold text-slate-900 flex items-center gap-2">
               <PhoneOff className="w-5 h-5 text-red-500" /> Relance NRP
+              {prospectsToCallbackAll.length > 0 && (
+                <Badge className="bg-red-50 text-red-600 border-red-200 rounded-lg text-xs font-bold">{prospectsToCallbackAll.length}</Badge>
+              )}
             </CardTitle>
             <p className="text-xs text-slate-400 mt-1">Appels non répondus à rappeler (dernier appel il y a 5+ jours)</p>
           </CardHeader>
@@ -465,6 +470,14 @@ export default function Dashboard() {
             ) : (
               <div className="space-y-2 max-h-[400px] overflow-y-auto pr-1">
                 {prospectsToCallback.map((p) => <CallbackRow key={p.id} prospect={p} overdue={!!p.date_prochaine_relance && new Date(p.date_prochaine_relance) <= new Date()} />)}
+                {prospectsToCallbackAll.length > prospectsToCallback.length && (
+                  <Link
+                    to="/prospects"
+                    className="block text-center text-xs font-semibold text-[#5A9BA3] hover:text-[#4A8B93] py-2"
+                  >
+                    +{prospectsToCallbackAll.length - prospectsToCallback.length} autre(s) à rappeler — voir tous les prospects
+                  </Link>
+                )}
               </div>
             )}
           </CardContent>

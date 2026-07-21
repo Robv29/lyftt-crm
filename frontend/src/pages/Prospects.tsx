@@ -194,6 +194,15 @@ function mapMondayStatut(s: string): { statut_avancement: string; statut_gagne_p
   return { statut_avancement: 'Appel telephonique', statut_gagne_perdu: 'actif' };
 }
 
+// Clé de dédoublonnage : société + téléphone normalisés (insensible à la casse,
+// aux espaces et au format du numéro). Utilisée pour éviter les doublons créés
+// par ré-import Excel ou double clic sur "Ajouter".
+function dedupKey(nom: string, tel: string) {
+  const n = (nom || '').toLowerCase().trim().replace(/\s+/g, ' ');
+  const t = (tel || '').replace(/\D/g, '');
+  return `${n}|${t}`;
+}
+
 export default function Prospects() {
   const { data: prospects = [], isLoading: loading, error, refetch, isFetching } = useProspects();
   const { data: registeredUsers = [] } = useRegisteredUsers();
@@ -208,6 +217,7 @@ export default function Prospects() {
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [deleting, setDeleting] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [newProspect, setNewProspect] = useState({
     nom_societe: '', nom_dirigeant: '', telephone: '', email: '',
     zone_geographique: '', categorie_metier: '', source_lead: '',
@@ -276,12 +286,19 @@ export default function Prospects() {
       const parsed = parseMondayExcel(XLSX, workbook);
       const updates = parseUpdates(XLSX, workbook); // 2e feuille : "update content" -> notes
       if (parsed.length === 0) { toast.error('Aucun prospect trouvé dans le fichier.'); return; }
+      // Anti-doublon : on connaît déjà les prospects en base, et on retient
+      // au fil de l'import ceux qu'on vient de créer (ré-import du même
+      // fichier, ou fichier contenant deux fois la même société).
+      const existingKeys = new Set(prospects.map((p) => dedupKey(p.nom_societe, p.telephone)));
       let imported = 0;
+      let skipped = 0;
       const toastId = toast.loading(`Import en cours... 0/${parsed.length}`);
       for (let i = 0; i < parsed.length; i++) {
         const p = parsed[i];
         try {
           if (!p.nom_societe.trim()) continue;
+          const key = dedupKey(p.nom_societe, p.telephone);
+          if (existingKeys.has(key)) { skipped++; continue; }
           const upd = updates.get(p.nom_societe.trim().toLowerCase()) || '';
           const ctx = [
             p.effectif ? `Effectif: ${p.effectif}` : '',
@@ -293,18 +310,27 @@ export default function Prospects() {
           await client.entities.prospects.create({
             data: { nom_societe: p.nom_societe, nom_dirigeant: p.nom_dirigeant, telephone: p.telephone, email: p.email || '', zone_geographique: p.zone_geographique, categorie_metier: p.categorie_metier, commercial_assigne: p.commercial_assigne, source_lead: 'Import Excel', montant_potentiel: 0, notes: note, statut_avancement: mapped.statut_avancement, priorite: 'moyenne', statut_gagne_perdu: mapped.statut_gagne_perdu, nombre_appels: 0, nombre_appels_repondus: 0, nombre_relances: 0 },
           });
+          existingKeys.add(key);
           imported++;
           if (imported % 10 === 0) toast.loading(`Import en cours... ${imported}/${parsed.length}`, { id: toastId });
         } catch { console.error('Failed to import:', p.nom_societe); }
       }
-      toast.success(`${imported} prospect(s) importé(s)`, { id: toastId });
+      const skippedMsg = skipped > 0 ? ` (${skipped} doublon(s) ignoré(s))` : '';
+      toast.success(`${imported} prospect(s) importé(s)${skippedMsg}`, { id: toastId });
       invalidateProspects();
     } catch { toast.error("Erreur lors de l'import"); }
     if (fileInputRef.current) fileInputRef.current.value = '';
   }, [invalidateProspects]);
 
   const handleAddProspect = useCallback(async () => {
+    if (saving) return; // anti double-submit (double clic / double Enter)
     if (!newProspect.nom_societe.trim()) { toast.error('Le nom de la société est requis'); return; }
+    const key = dedupKey(newProspect.nom_societe, newProspect.telephone);
+    const isDuplicate = prospects.some((p) => dedupKey(p.nom_societe, p.telephone) === key);
+    if (isDuplicate && !window.confirm(`Un prospect "${newProspect.nom_societe}" avec ce numéro existe déjà. Créer quand même un doublon ?`)) {
+      return;
+    }
+    setSaving(true);
     try {
       await client.entities.prospects.create({
         data: { ...newProspect, statut_avancement: 'Appel telephonique', statut_gagne_perdu: 'actif', nombre_appels: 0, nombre_appels_repondus: 0, nombre_relances: 0 },
@@ -313,8 +339,8 @@ export default function Prospects() {
       setShowAddDialog(false);
       setNewProspect({ nom_societe: '', nom_dirigeant: '', telephone: '', email: '', zone_geographique: '', categorie_metier: '', source_lead: '', montant_potentiel: 0, notes: '', priorite: 'moyenne' });
       invalidateProspects();
-    } catch { toast.error("Erreur lors de l'ajout"); }
-  }, [newProspect, invalidateProspects]);
+    } catch { toast.error("Erreur lors de l'ajout"); } finally { setSaving(false); }
+  }, [newProspect, invalidateProspects, prospects, saving]);
 
   const toggleSelect = useCallback((id: number) => {
     setSelectedIds((prev) => { const next = new Set(prev); if (next.has(id)) next.delete(id); else next.add(id); return next; });
@@ -512,8 +538,8 @@ export default function Prospects() {
             <div><Label>Notes</Label><Textarea value={newProspect.notes} onChange={(e) => setNewProspect({ ...newProspect, notes: e.target.value })} placeholder="Notes..." rows={3} className="rounded-xl" /></div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowAddDialog(false)} className="rounded-xl">Annuler</Button>
-            <Button onClick={handleAddProspect} className="bg-gradient-to-r from-[#5A9BA3] to-[#6AABB4] hover:from-[#4A8B93] hover:to-[#5A9BA4] text-white rounded-xl">Ajouter</Button>
+            <Button variant="outline" onClick={() => setShowAddDialog(false)} disabled={saving} className="rounded-xl">Annuler</Button>
+            <Button onClick={handleAddProspect} disabled={saving} className="bg-gradient-to-r from-[#5A9BA3] to-[#6AABB4] hover:from-[#4A8B93] hover:to-[#5A9BA4] text-white rounded-xl">{saving ? 'Ajout...' : 'Ajouter'}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

@@ -9,6 +9,7 @@ import Login from './pages/Login';
 import { AuthProvider } from './contexts/AuthContext';
 import Layout from './components/Layout';
 import LoadingSpinner from './components/LoadingSpinner';
+import ProtectedAdminRoute from './components/ProtectedAdminRoute';
 
 // Lazy load all page components for code splitting
 const Dashboard = lazy(() => import('./pages/Dashboard'));
@@ -98,9 +99,11 @@ const App = () => (
               path="/admin/users"
               element={
                 <Layout>
-                  <LazyPage>
-                    <AdminUsers />
-                  </LazyPage>
+                  <ProtectedAdminRoute>
+                    <LazyPage>
+                      <AdminUsers />
+                    </LazyPage>
+                  </ProtectedAdminRoute>
                 </Layout>
               }
             />

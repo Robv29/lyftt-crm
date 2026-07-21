@@ -249,6 +249,32 @@ function findDuplicateGroups(prospects: Prospect[]): DuplicateGroup[] {
   return result;
 }
 
+// Choisit quelle fiche garder dans un groupe de doublons : priorité au deal
+// gagné, puis à l'étape la plus avancée du pipeline, puis au volume
+// d'appels, puis aux fiches les plus complètes (email/notes), puis à la
+// plus récemment mise à jour. Les autres fiches du groupe sont supprimées.
+const STAGE_RANK: Record<string, number> = {
+  'Appel telephonique': 0, 'Relance 1': 1, 'Relance 2': 2, 'Relance 3': 3,
+  'Relance 4': 4, Visio: 5, 'Demande de documents': 6, Signature: 7, 'Refus / Perdu': 0,
+};
+function duplicateScore(p: Prospect): number[] {
+  const won = p.statut_gagne_perdu === 'gagne' ? 1 : 0;
+  const stage = STAGE_RANK[p.statut_avancement] ?? 0;
+  const calls = (p.nombre_appels || 0) + (p.nombre_appels_repondus || 0);
+  const hasEmail = p.email?.trim() ? 1 : 0;
+  const hasNotes = p.notes?.trim() ? 1 : 0;
+  const updated = p.updated_at ? new Date(p.updated_at).getTime() : (p.created_at ? new Date(p.created_at).getTime() : 0);
+  return [won, stage, calls, hasEmail, hasNotes, updated];
+}
+function pickLosers(items: Prospect[]): Prospect[] {
+  const ranked = [...items].sort((a, b) => {
+    const sa = duplicateScore(a), sb = duplicateScore(b);
+    for (let i = 0; i < sa.length; i++) if (sa[i] !== sb[i]) return sb[i] - sa[i];
+    return 0;
+  });
+  return ranked.slice(1);
+}
+
 interface CategoryGroup {
   key: string;
   variants: { name: string; count: number }[];
@@ -360,7 +386,74 @@ export default function Prospects() {
     }
   }, [deletingDuplicateId, invalidateProspects]);
 
+  const [bulkDeletingDuplicates, setBulkDeletingDuplicates] = useState(false);
+
+  // Nettoyage en masse : supprime toutes les fiches perdantes des groupes
+  // "certains" (nom ET téléphone identiques — zéro ambiguïté). Les doublons
+  // "probables" restent pour une suppression au cas par cas (bouton
+  // individuel ci-dessus), pour ne jamais effacer par erreur deux
+  // établissements réellement distincts.
+  const handleDeleteAllCertainDuplicates = useCallback(async () => {
+    const certainGroups = duplicateGroups.filter((g) => g.certain);
+    const losers = certainGroups.flatMap((g) => pickLosers(g.items));
+    if (losers.length === 0) return;
+    if (!window.confirm(`Supprimer ${losers.length} fiche(s) en doublon certain (nom + téléphone identiques) ? Une fiche est conservée par groupe (la mieux renseignée / la plus avancée). Action irréversible.`)) return;
+    setBulkDeletingDuplicates(true);
+    let deleted = 0;
+    const toastId = toast.loading(`Suppression des doublons... 0/${losers.length}`);
+    for (const p of losers) {
+      try {
+        await client.entities.prospects.delete({ id: String(p.id) });
+        deleted++;
+        if (deleted % 10 === 0) toast.loading(`Suppression des doublons... ${deleted}/${losers.length}`, { id: toastId });
+      } catch { /* skip */ }
+    }
+    toast.success(`${deleted} doublon(s) certain(s) supprimé(s)`, { id: toastId });
+    setBulkDeletingDuplicates(false);
+    invalidateProspects();
+  }, [duplicateGroups, invalidateProspects]);
+
   const categoryGroups = useMemo(() => findSimilarCategoryGroups(prospects), [prospects]);
+
+  // Mêmes groupes de fusion, mais éclatés par commercial (via ses villes
+  // attribuées, comme partout ailleurs dans l'app) pour que chacun voie ses
+  // propres doublons de catégorie sans se noyer dans la liste globale. La
+  // fusion elle-même reste un renommage global (une catégorie doit garder
+  // une orthographe unique dans toute la base, peu importe qui la fusionne).
+  const cityToCommercialName = useMemo(() => {
+    const nameById = new Map<number, string>();
+    for (const u of registeredUsers) {
+      const name = `${u.first_name || ''} ${u.last_name || ''}`.trim();
+      if (name) nameById.set(u.id, name);
+    }
+    const map = new Map<string, string>();
+    for (const a of cityAttributions) {
+      const name = nameById.get(a.user_role_id);
+      if (name) map.set(a.city, name);
+    }
+    return map;
+  }, [registeredUsers, cityAttributions]);
+
+  const categoryGroupsByCommercial = useMemo(() => {
+    const buckets = new Map<string, Prospect[]>();
+    for (const p of prospects) {
+      const commercial = cityToCommercialName.get(p.zone_geographique?.trim() || '') || 'Non attribué';
+      const arr = buckets.get(commercial) || [];
+      arr.push(p);
+      buckets.set(commercial, arr);
+    }
+    const result: { commercial: string; groups: CategoryGroup[] }[] = [];
+    for (const [commercial, list] of buckets.entries()) {
+      const groups = findSimilarCategoryGroups(list);
+      if (groups.length > 0) result.push({ commercial, groups });
+    }
+    result.sort((a, b) => {
+      if (a.commercial === 'Non attribué') return 1;
+      if (b.commercial === 'Non attribué') return -1;
+      return a.commercial.localeCompare(b.commercial, 'fr');
+    });
+    return result;
+  }, [prospects, cityToCommercialName]);
 
   const handleMergeCategory = useCallback(async (group: CategoryGroup) => {
     if (mergingKey) return;
@@ -791,7 +884,16 @@ export default function Prospects() {
               </div>
             ))}
           </div>
-          <DialogFooter>
+          <DialogFooter className="flex-row sm:justify-between items-center gap-2">
+            {duplicateGroups.some((g) => g.certain) && (
+              <Button
+                onClick={handleDeleteAllCertainDuplicates}
+                disabled={bulkDeletingDuplicates}
+                className="gap-1.5 rounded-xl bg-gradient-to-r from-red-500 to-rose-600 hover:from-red-600 hover:to-rose-700 text-white"
+              >
+                <Trash2 className="w-4 h-4" /> {bulkDeletingDuplicates ? 'Suppression...' : 'Supprimer tous les doublons certains'}
+              </Button>
+            )}
             <Button variant="outline" onClick={() => setShowDuplicatesDialog(false)} className="rounded-xl">Fermer</Button>
           </DialogFooter>
         </DialogContent>
@@ -805,40 +907,51 @@ export default function Prospects() {
       <Dialog open={showMergeDialog} onOpenChange={setShowMergeDialog}>
         <DialogContent className="max-w-2xl rounded-2xl max-h-[85vh] flex flex-col">
           <DialogHeader>
-            <DialogTitle>Fusionner les catégories ({categoryGroups.length} groupe{categoryGroups.length > 1 ? 's' : ''})</DialogTitle>
+            <DialogTitle>Fusionner les catégories ({categoryGroups.length} groupe{categoryGroups.length > 1 ? 's' : ''}, par commercial)</DialogTitle>
           </DialogHeader>
-          <div className="flex-1 overflow-y-auto space-y-3 pr-1 -mr-1">
-            {categoryGroups.length === 0 ? (
+          <div className="flex-1 overflow-y-auto space-y-5 pr-1 -mr-1">
+            {categoryGroupsByCommercial.length === 0 ? (
               <p className="text-sm text-slate-400 text-center py-8">Aucune catégorie à fusionner.</p>
-            ) : categoryGroups.map((group) => {
-              const total = group.variants.reduce((s, v) => s + v.count, 0);
-              const canonical = canonicalNames[group.key] ?? group.suggested;
-              return (
-                <div key={group.key} className="rounded-2xl border border-indigo-200 bg-indigo-50/40 p-3">
-                  <div className="flex flex-wrap gap-1.5 mb-2.5">
-                    {group.variants.map((v) => (
-                      <Badge key={v.name} variant="outline" className="text-xs rounded-lg bg-white">{v.name} <span className="text-slate-400 ml-1">({v.count})</span></Badge>
-                    ))}
-                    <span className="text-xs text-slate-500 self-center ml-1">{total} prospects au total</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Input
-                      value={canonical}
-                      onChange={(e) => setCanonicalNames((prev) => ({ ...prev, [group.key]: e.target.value }))}
-                      placeholder="Nom final après fusion"
-                      className="rounded-xl bg-white flex-1"
-                    />
-                    <Button
-                      onClick={() => handleMergeCategory(group)}
-                      disabled={mergingKey === group.key}
-                      className="shrink-0 gap-1.5 rounded-xl bg-gradient-to-r from-indigo-500 to-indigo-600 hover:from-indigo-600 hover:to-indigo-700 text-white"
-                    >
-                      <GitMerge className="w-4 h-4" /> {mergingKey === group.key ? 'Fusion...' : 'Fusionner'}
-                    </Button>
-                  </div>
+            ) : categoryGroupsByCommercial.map(({ commercial, groups }) => (
+              <div key={commercial}>
+                <div className="flex items-center gap-2 mb-2 sticky -top-1 bg-white/95 backdrop-blur py-1 z-10">
+                  <UserCircle className="w-4 h-4 text-[#5A9BA3]" />
+                  <h3 className="text-sm font-semibold text-slate-900">{commercial}</h3>
+                  <Badge className="bg-indigo-50 text-indigo-700 border-indigo-200 rounded-lg text-xs">{groups.length}</Badge>
                 </div>
-              );
-            })}
+                <div className="space-y-3">
+                  {groups.map((group) => {
+                    const total = group.variants.reduce((s, v) => s + v.count, 0);
+                    const canonical = canonicalNames[group.key] ?? group.suggested;
+                    return (
+                      <div key={`${commercial}-${group.key}`} className="rounded-2xl border border-indigo-200 bg-indigo-50/40 p-3">
+                        <div className="flex flex-wrap gap-1.5 mb-2.5">
+                          {group.variants.map((v) => (
+                            <Badge key={v.name} variant="outline" className="text-xs rounded-lg bg-white">{v.name} <span className="text-slate-400 ml-1">({v.count})</span></Badge>
+                          ))}
+                          <span className="text-xs text-slate-500 self-center ml-1">{total} prospects (chez {commercial})</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Input
+                            value={canonical}
+                            onChange={(e) => setCanonicalNames((prev) => ({ ...prev, [group.key]: e.target.value }))}
+                            placeholder="Nom final après fusion"
+                            className="rounded-xl bg-white flex-1"
+                          />
+                          <Button
+                            onClick={() => handleMergeCategory(group)}
+                            disabled={mergingKey === group.key}
+                            className="shrink-0 gap-1.5 rounded-xl bg-gradient-to-r from-indigo-500 to-indigo-600 hover:from-indigo-600 hover:to-indigo-700 text-white"
+                          >
+                            <GitMerge className="w-4 h-4" /> {mergingKey === group.key ? 'Fusion...' : 'Fusionner'}
+                          </Button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowMergeDialog(false)} className="rounded-xl">Fermer</Button>

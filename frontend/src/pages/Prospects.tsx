@@ -183,16 +183,27 @@ function parseUpdates(XLSX: typeof XLSXType, workbook: XLSXType.WorkBook): Map<s
 
 
 // Correspondance des statuts Monday -> statuts CRM.
+//  - "Non"               -> Refus / Perdu
 //  - "RDV calé"          -> Visio
 //  - "à rappeler"        -> Relance 1 (puis 2/3/4 au fil des relances NRP)
 //  - "Entreprise fermée" -> sorti du pipeline actif (Refus / Perdu)
 function mapMondayStatut(s: string): { statut_avancement: string; statut_gagne_perdu: string } {
-  const v = (s || '').toLowerCase();
+  const v = (s || '').toLowerCase().trim();
+  if (v === 'non') return { statut_avancement: 'Refus / Perdu', statut_gagne_perdu: 'perdu' };
   if (v.includes('rdv')) return { statut_avancement: 'Visio', statut_gagne_perdu: 'actif' };
   if (v.includes('rappeler')) return { statut_avancement: 'Relance 1', statut_gagne_perdu: 'actif' };
   if (v.includes('ferm')) return { statut_avancement: 'Refus / Perdu', statut_gagne_perdu: 'perdu' };
   return { statut_avancement: 'Appel telephonique', statut_gagne_perdu: 'actif' };
 }
+
+// Ordre linéaire du pipeline, utilisé uniquement pour décider si un réimport
+// Monday peut faire AVANCER le statut d'une fiche déjà existante (jamais la
+// faire reculer). "Refus / Perdu" n'est pas dans cet ordre : un prospect
+// refusé peut être réactivé si Monday indique un nouveau RDV calé.
+const MONDAY_PIPELINE_ORDER = [
+  'Appel telephonique', 'Relance 1', 'Relance 2', 'Relance 3', 'Relance 4',
+  'Visio', 'Demande de documents', 'Signature',
+];
 
 // Clé de dédoublonnage : société + téléphone normalisés (insensible à la casse,
 // aux espaces et au format du numéro). Utilisée pour éviter les doublons créés
@@ -548,11 +559,16 @@ export default function Prospects() {
       const parsed = parseMondayExcel(XLSX, workbook);
       const updates = parseUpdates(XLSX, workbook); // 2e feuille : "update content" -> notes
       if (parsed.length === 0) { toast.error('Aucun prospect trouvé dans le fichier.'); return; }
-      // Anti-doublon : on connaît déjà les prospects en base, et on retient
-      // au fil de l'import ceux qu'on vient de créer (ré-import du même
-      // fichier, ou fichier contenant deux fois la même société).
-      const existingKeys = new Set(prospects.map((p) => dedupKey(p.nom_societe, p.telephone)));
+      // Anti-doublon PAR OBJET (pas juste par clé) : une société déjà en base
+      // n'est plus ignorée au réimport, elle est MISE À JOUR (forme
+      // juridique, nombre de salariés, statut selon les règles Monday
+      // ci-dessus). On garde la table à jour au fil de la boucle pour que
+      // deux lignes identiques dans le même fichier se mettent à jour l'une
+      // l'autre au lieu de créer un doublon.
+      const existingByKey = new Map<string, Prospect>();
+      for (const pr of prospects) existingByKey.set(dedupKey(pr.nom_societe, pr.telephone), pr);
       let imported = 0;
+      let updated = 0;
       let skipped = 0;
       const toastId = toast.loading(`Import en cours... 0/${parsed.length}`);
       for (let i = 0; i < parsed.length; i++) {
@@ -560,23 +576,53 @@ export default function Prospects() {
         try {
           if (!p.nom_societe.trim()) continue;
           const key = dedupKey(p.nom_societe, p.telephone);
-          if (existingKeys.has(key)) { skipped++; continue; }
-          const upd = updates.get(p.nom_societe.trim().toLowerCase()) || '';
-          // Effectif/Forme vont désormais dans leurs colonnes dédiées
-          // (forme_juridique, nombre_salaries) plutôt que dans notes.
-          const ctx = p.statut_monday ? `Statut Monday: ${p.statut_monday}` : '';
-          const note = [ctx, upd].filter(Boolean).join('\n\n');
+          const existing = existingByKey.get(key);
           const mapped = mapMondayStatut(p.statut_monday);
-          await client.entities.prospects.create({
-            data: { nom_societe: p.nom_societe, nom_dirigeant: p.nom_dirigeant, telephone: p.telephone, email: p.email || '', zone_geographique: p.zone_geographique, categorie_metier: p.categorie_metier, commercial_assigne: p.commercial_assigne, source_lead: 'Import Excel', montant_potentiel: 0, notes: note, forme_juridique: p.forme || '', nombre_salaries: p.effectif || '', statut_avancement: mapped.statut_avancement, priorite: 'moyenne', statut_gagne_perdu: mapped.statut_gagne_perdu, nombre_appels: 0, nombre_appels_repondus: 0, nombre_relances: 0 },
-          });
-          existingKeys.add(key);
-          imported++;
-          if (imported % 10 === 0) toast.loading(`Import en cours... ${imported}/${parsed.length}`, { id: toastId });
+
+          if (existing) {
+            // Fiche déjà en base : on met à jour la forme juridique / le nombre
+            // de salariés si le fichier en apporte une valeur, et on ne fait
+            // AVANCER le statut que dans les cas non ambigus (jamais reculer,
+            // jamais toucher un deal déjà gagné).
+            const patch: Record<string, unknown> = {};
+            if (p.forme && p.forme !== existing.forme_juridique) patch.forme_juridique = p.forme;
+            if (p.effectif && p.effectif !== existing.nombre_salaries) patch.nombre_salaries = p.effectif;
+            if (existing.statut_gagne_perdu !== 'gagne') {
+              if (mapped.statut_avancement === 'Refus / Perdu' && existing.statut_avancement !== 'Refus / Perdu') {
+                patch.statut_avancement = 'Refus / Perdu';
+                patch.statut_gagne_perdu = 'perdu';
+              } else if (mapped.statut_avancement === 'Visio') {
+                const curIdx = MONDAY_PIPELINE_ORDER.indexOf(existing.statut_avancement);
+                if (curIdx < MONDAY_PIPELINE_ORDER.indexOf('Visio')) {
+                  patch.statut_avancement = 'Visio';
+                  patch.statut_gagne_perdu = 'actif';
+                }
+              }
+            }
+            if (Object.keys(patch).length > 0) {
+              await client.entities.prospects.update({ id: String(existing.id), data: patch });
+              existingByKey.set(key, { ...existing, ...patch } as Prospect);
+              updated++;
+            } else {
+              skipped++;
+            }
+          } else {
+            const upd = updates.get(p.nom_societe.trim().toLowerCase()) || '';
+            // Effectif/Forme vont désormais dans leurs colonnes dédiées
+            // (forme_juridique, nombre_salaries) plutôt que dans notes.
+            const ctx = p.statut_monday ? `Statut Monday: ${p.statut_monday}` : '';
+            const note = [ctx, upd].filter(Boolean).join('\n\n');
+            const res = await client.entities.prospects.create({
+              data: { nom_societe: p.nom_societe, nom_dirigeant: p.nom_dirigeant, telephone: p.telephone, email: p.email || '', zone_geographique: p.zone_geographique, categorie_metier: p.categorie_metier, commercial_assigne: p.commercial_assigne, source_lead: 'Import Excel', montant_potentiel: 0, notes: note, forme_juridique: p.forme || '', nombre_salaries: p.effectif || '', statut_avancement: mapped.statut_avancement, priorite: 'moyenne', statut_gagne_perdu: mapped.statut_gagne_perdu, nombre_appels: 0, nombre_appels_repondus: 0, nombre_relances: 0 },
+            });
+            existingByKey.set(key, res.data as Prospect);
+            imported++;
+          }
+          if ((imported + updated) % 10 === 0) toast.loading(`Import en cours... ${imported + updated}/${parsed.length}`, { id: toastId });
         } catch { console.error('Failed to import:', p.nom_societe); }
       }
-      const skippedMsg = skipped > 0 ? ` (${skipped} doublon(s) ignoré(s))` : '';
-      toast.success(`${imported} prospect(s) importé(s)${skippedMsg}`, { id: toastId });
+      const skippedMsg = skipped > 0 ? ` (${skipped} inchangé(s))` : '';
+      toast.success(`${imported} créé(s), ${updated} mis à jour${skippedMsg}`, { id: toastId });
       invalidateProspects();
     } catch { toast.error("Erreur lors de l'import"); }
     if (fileInputRef.current) fileInputRef.current.value = '';

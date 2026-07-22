@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import {
   useProspects, useRegisteredUsers, useObjectifsCA, useUpsertObjectifCA, useUpdateTauxCommission,
-  usePaiements, useAddPaiement, useDeletePaiement, type Prospect,
+  usePaiements, useAddPaiement, useDeletePaiement, useInvalidateProspects, type Prospect,
 } from '../hooks/use-prospects';
 import { client } from '../lib/api';
 import ErrorState from '../components/ErrorState';
@@ -54,6 +54,7 @@ export default function PerformanceCA() {
   const updateTaux = useUpdateTauxCommission();
   const addPaiement = useAddPaiement();
   const deletePaiement = useDeletePaiement();
+  const invalidateProspects = useInvalidateProspects();
 
   const now = new Date();
   const moisCourant = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
@@ -229,6 +230,7 @@ export default function PerformanceCA() {
       await client.entities.prospects.update({ id: String(p.id), data: { montant_potentiel: val } });
       toast.success('CA max mis à jour');
       setEditingCaMaxId(null);
+      invalidateProspects();
     } catch {
       toast.error("Erreur lors de l'enregistrement du CA max");
     }

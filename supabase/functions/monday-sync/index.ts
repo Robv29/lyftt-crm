@@ -133,7 +133,11 @@ Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
 
   try {
-    const mondayToken = Deno.env.get('MONDAY_API_TOKEN');
+    // .trim() + nettoyage des caractères non imprimables : évite un crash
+    // "not a valid ByteString" si le secret a été collé avec un espace, un
+    // retour à la ligne ou un caractère invisible en trop.
+    const mondayTokenRaw = Deno.env.get('MONDAY_API_TOKEN');
+    const mondayToken = mondayTokenRaw?.replace(/[^\x20-\x7E]/g, '').trim();
     if (!mondayToken) {
       return jsonResponse({ success: false, message: "Clé API Monday non configurée côté serveur (secret MONDAY_API_TOKEN manquant)." }, 500);
     }

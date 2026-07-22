@@ -251,7 +251,9 @@ export default function ProspectDetail() {
     setSyncingMonday(true);
     updateProspectOptimistic({ monday_sync_status: 'pending' } as Partial<Prospect>);
     try {
-      const { data, error } = await supabase.functions.invoke('monday-sync', {
+      // Nom réel de la fonction côté Supabase : "smart-responder" (nom
+      // auto-généré au déploiement, le code source reste monday-sync/index.ts).
+      const { data, error } = await supabase.functions.invoke('smart-responder', {
         body: { prospect_id: prospectId },
       });
       if (error) throw error;

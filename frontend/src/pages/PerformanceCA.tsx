@@ -2,7 +2,9 @@ import { useMemo, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import {
   useProspects, useRegisteredUsers, useObjectifsCA, useUpsertObjectifCA, useUpdateTauxCommission,
+  usePaiements, useAddPaiement, useDeletePaiement, type Prospect,
 } from '../hooks/use-prospects';
+import { client } from '../lib/api';
 import ErrorState from '../components/ErrorState';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -10,11 +12,13 @@ import { Input } from '@/components/ui/input';
 import { toast } from 'sonner';
 import {
   TrendingUp, Target, Wallet, CheckCircle2, Pencil, Check, X,
-  Trophy, Flame, Percent,
+  Trophy, Flame, Percent, Search, Plus, Trash2, Receipt,
 } from 'lucide-react';
 
 // Dossiers "gagnés" mais pas encore confirmés/transmis à Mathilde -> CA probable.
 const PROBABLE_STAGES = new Set(['Signature', 'Dossier complet']);
+// Tous les dossiers "clients signés" (peu importe l'étape) pour l'onglet paiements.
+const WON_STAGES = new Set(['Signature', 'Dossier complet', 'Envoyé à Mathilde']);
 
 const eur = (n: number) =>
   n.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 });
@@ -22,14 +26,19 @@ const eur = (n: number) =>
 // 'YYYY-MM' -> 'YYYY-MM-01' (format attendu par la colonne objectifs_ca.mois)
 const moisToDate = (mois: string) => `${mois}-01`;
 
+const today = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+};
+
 // Jours ouvrés (lun-ven) restants dans le mois, aujourd'hui inclus. Ne tient
 // pas compte des jours fériés (raffinement possible plus tard si besoin).
 function joursOuvresRestants(): number {
-  const today = new Date();
-  const lastDay = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate();
+  const now = new Date();
+  const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
   let count = 0;
-  for (let d = today.getDate(); d <= lastDay; d++) {
-    const day = new Date(today.getFullYear(), today.getMonth(), d).getDay();
+  for (let d = now.getDate(); d <= lastDay; d++) {
+    const day = new Date(now.getFullYear(), now.getMonth(), d).getDay();
     if (day !== 0 && day !== 6) count++;
   }
   return count;
@@ -40,24 +49,46 @@ export default function PerformanceCA() {
   const { data: prospects = [], isLoading: loadingP, error: errorP } = useProspects();
   const { data: registeredUsers = [], isLoading: loadingU } = useRegisteredUsers();
   const { data: objectifs = [], isLoading: loadingO } = useObjectifsCA();
+  const { data: paiements = [], isLoading: loadingPmt } = usePaiements();
   const upsertObjectif = useUpsertObjectifCA();
   const updateTaux = useUpdateTauxCommission();
+  const addPaiement = useAddPaiement();
+  const deletePaiement = useDeletePaiement();
 
   const now = new Date();
   const moisCourant = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  const [tab, setTab] = useState<'apercu' | 'paiements'>('apercu');
   const [mois, setMois] = useState(moisCourant);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editValue, setEditValue] = useState('');
   const [editingTauxId, setEditingTauxId] = useState<number | null>(null);
   const [editTauxValue, setEditTauxValue] = useState('');
 
-  const loading = loadingP || loadingU || loadingO;
+  // --- Onglet "Suivi paiements clients" ---
+  const [search, setSearch] = useState('');
+  const [editingCaMaxId, setEditingCaMaxId] = useState<number | null>(null);
+  const [editCaMaxValue, setEditCaMaxValue] = useState('');
+  const [addingPaiementFor, setAddingPaiementFor] = useState<number | null>(null);
+  const [newMontant, setNewMontant] = useState('');
+  const [newDate, setNewDate] = useState(today());
+
+  const loading = loadingP || loadingU || loadingO || loadingPmt;
   const isMoisCourant = mois === moisCourant;
 
   const commerciaux = useMemo(
     () => registeredUsers.filter((u) => u.is_active && (u.role === 'commercial' || u.role === 'admin')),
     [registeredUsers]
   );
+
+  // Total réglé par dossier — remplace l'ancien flag binaire ca_encaisse : un
+  // client peut payer en plusieurs fois, chaque règlement a sa propre date.
+  const paiementsByProspect = useMemo(() => {
+    const map = new Map<number, number>();
+    for (const pmt of paiements) {
+      map.set(pmt.prospect_id, (map.get(pmt.prospect_id) || 0) + Number(pmt.montant));
+    }
+    return map;
+  }, [paiements]);
 
   const rows = useMemo(() => {
     return commerciaux.map((u) => {
@@ -72,21 +103,27 @@ export default function PerformanceCA() {
 
       let probable = 0, confirme = 0, encaisse = 0;
       for (const p of deals) {
-        const montant = Number(p.montant_potentiel) || 0;
-        if (p.ca_encaisse) encaisse += montant;
-        else if (p.statut_avancement === 'Envoyé à Mathilde') confirme += montant;
-        else if (PROBABLE_STAGES.has(p.statut_avancement)) probable += montant;
+        const montantMax = Number(p.montant_potentiel) || 0;
+        const paye = Math.min(paiementsByProspect.get(p.id) || 0, montantMax);
+        encaisse += paye;
+        const restant = montantMax - paye;
+        if (restant > 0) {
+          if (p.statut_avancement === 'Envoyé à Mathilde') confirme += restant;
+          else if (PROBABLE_STAGES.has(p.statut_avancement)) probable += restant;
+        }
       }
       const realise = probable + confirme + encaisse;
 
-      // La commission, elle, se calcule sur le mois de PAIE = mois de
-      // l'encaissement (date_encaissement), pas le mois de signature — c'est
-      // l'argent réellement collecté et payable ce mois-ci.
+      // La commission se calcule sur les RÈGLEMENTS reçus ce mois-ci (mois de
+      // paiement réel de chaque règlement), pas sur le mois de signature —
+      // chaque règlement génère sa part de commission dès qu'il est encaissé.
       const taux = Number(u.taux_commission) || 0;
-      const encaisseCeMoisPourPaie = prospects.filter((p) =>
-        p.signed_by_user_id === u.id && p.ca_encaisse && p.date_encaissement?.slice(0, 7) === mois
-      );
-      const assietteCommission = encaisseCeMoisPourPaie.reduce((s, p) => s + (Number(p.montant_potentiel) || 0), 0);
+      const paiementsDuMoisPourCeCommercial = paiements.filter((pmt) => {
+        if (pmt.date_paiement.slice(0, 7) !== mois) return false;
+        const p = prospects.find((pp) => pp.id === pmt.prospect_id);
+        return p?.signed_by_user_id === u.id;
+      });
+      const assietteCommission = paiementsDuMoisPourCeCommercial.reduce((s, pmt) => s + Number(pmt.montant), 0);
       const commission = assietteCommission * (taux / 100);
 
       const objectifRow = objectifs.find((o) => o.user_role_id === u.id && o.mois.slice(0, 7) === mois);
@@ -106,7 +143,7 @@ export default function PerformanceCA() {
         ecart, parJourNecessaire,
       };
     });
-  }, [commerciaux, prospects, objectifs, mois, isMoisCourant]);
+  }, [commerciaux, prospects, objectifs, paiements, paiementsByProspect, mois, isMoisCourant]);
 
   const visibleRows = isAdmin ? rows : rows.filter((r) => r.user.id === userRole?.id);
 
@@ -165,6 +202,62 @@ export default function PerformanceCA() {
     }
   };
 
+  // --- Suivi paiements clients : tous les dossiers signés, tous mois confondus ---
+  const clientsSignes = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return prospects
+      .filter((p) => WON_STAGES.has(p.statut_avancement))
+      .filter((p) => !q || p.nom_societe?.toLowerCase().includes(q))
+      .map((p) => {
+        const max = Number(p.montant_potentiel) || 0;
+        const paye = paiementsByProspect.get(p.id) || 0;
+        const pct = max > 0 ? Math.min(100, Math.round((paye / max) * 100)) : 0;
+        const commercialUser = commerciaux.find((u) => u.id === p.signed_by_user_id);
+        const commercialName = commercialUser ? `${commercialUser.first_name || ''} ${commercialUser.last_name || ''}`.trim() : 'Non attribué';
+        const pmts = paiements
+          .filter((pmt) => pmt.prospect_id === p.id)
+          .sort((a, b) => b.date_paiement.localeCompare(a.date_paiement));
+        return { prospect: p, max, paye, pct, commercialName, pmts };
+      })
+      .sort((a, b) => a.prospect.nom_societe.localeCompare(b.prospect.nom_societe, 'fr'));
+  }, [prospects, paiementsByProspect, paiements, commerciaux, search]);
+
+  const saveCaMax = async (p: Prospect) => {
+    const val = Number(editCaMaxValue.replace(',', '.'));
+    if (Number.isNaN(val) || val < 0) { toast.error('Montant invalide'); return; }
+    try {
+      await client.entities.prospects.update({ id: String(p.id), data: { montant_potentiel: val } });
+      toast.success('CA max mis à jour');
+      setEditingCaMaxId(null);
+    } catch {
+      toast.error("Erreur lors de l'enregistrement du CA max");
+    }
+  };
+
+  const savePaiement = async (prospectId: number) => {
+    const val = Number(newMontant.replace(',', '.'));
+    if (Number.isNaN(val) || val <= 0) { toast.error('Montant invalide'); return; }
+    if (!newDate) { toast.error('Date requise'); return; }
+    try {
+      await addPaiement.mutateAsync({ prospectId, montant: val, datePaiement: newDate });
+      toast.success('Règlement enregistré — prime recalculée automatiquement');
+      setAddingPaiementFor(null);
+      setNewMontant('');
+      setNewDate(today());
+    } catch {
+      toast.error("Erreur lors de l'enregistrement du règlement");
+    }
+  };
+
+  const removePaiement = async (id: number) => {
+    try {
+      await deletePaiement.mutateAsync(id);
+      toast.success('Règlement supprimé');
+    } catch {
+      toast.error('Erreur lors de la suppression');
+    }
+  };
+
   if (errorP) return <ErrorState message="Erreur de chargement des données." />;
 
   return (
@@ -178,16 +271,147 @@ export default function PerformanceCA() {
             CA probable (dossiers gagnés), confirmé (transmis à Mathilde) et encaissé, par commercial.
           </p>
         </div>
-        <Input
-          type="month"
-          value={mois}
-          onChange={(e) => setMois(e.target.value)}
-          className="w-44 rounded-xl"
-        />
+        {tab === 'apercu' && (
+          <Input
+            type="month"
+            value={mois}
+            onChange={(e) => setMois(e.target.value)}
+            className="w-44 rounded-xl"
+          />
+        )}
+      </div>
+
+      {/* Onglets */}
+      <div className="flex gap-2">
+        <Button
+          variant={tab === 'apercu' ? 'default' : 'outline'}
+          onClick={() => setTab('apercu')}
+          className={`rounded-xl ${tab === 'apercu' ? 'bg-gradient-to-r from-[#5A9BA3] to-[#6AABB4] text-white' : ''}`}
+        >
+          Aperçu du mois
+        </Button>
+        <Button
+          variant={tab === 'paiements' ? 'default' : 'outline'}
+          onClick={() => setTab('paiements')}
+          className={`rounded-xl gap-1.5 ${tab === 'paiements' ? 'bg-gradient-to-r from-[#5A9BA3] to-[#6AABB4] text-white' : ''}`}
+        >
+          <Receipt className="w-4 h-4" /> Suivi paiements clients
+        </Button>
       </div>
 
       {loading ? (
         <div className="text-sm text-slate-400 py-12 text-center">Chargement...</div>
+      ) : tab === 'paiements' ? (
+        <>
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+            <Input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Rechercher un client..."
+              className="pl-9 rounded-xl max-w-sm"
+            />
+          </div>
+
+          {clientsSignes.length === 0 ? (
+            <Card className="border-0 shadow-sm rounded-2xl">
+              <CardContent className="py-12 text-center text-sm text-slate-400">Aucun client signé pour le moment.</CardContent>
+            </Card>
+          ) : (
+            <div className="space-y-3">
+              {clientsSignes.map(({ prospect: p, max, paye, pct, commercialName, pmts }) => (
+                <Card key={p.id} className="border-0 shadow-sm rounded-2xl">
+                  <CardContent className="p-5 space-y-3">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div>
+                        <p className="font-semibold text-slate-800">{p.nom_societe}</p>
+                        <p className="text-xs text-slate-400">{commercialName} · {p.statut_avancement}</p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-xs text-slate-500 mb-0.5">CA max</p>
+                        {editingCaMaxId === p.id ? (
+                          <div className="flex items-center gap-1">
+                            <Input
+                              autoFocus
+                              type="number"
+                              value={editCaMaxValue}
+                              onChange={(e) => setEditCaMaxValue(e.target.value)}
+                              className="w-28 h-8 rounded-lg text-right"
+                            />
+                            <Button size="icon" variant="ghost" className="w-7 h-7" onClick={() => saveCaMax(p)}>
+                              <Check className="w-4 h-4 text-emerald-600" />
+                            </Button>
+                            <Button size="icon" variant="ghost" className="w-7 h-7" onClick={() => setEditingCaMaxId(null)}>
+                              <X className="w-4 h-4 text-slate-400" />
+                            </Button>
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-1.5 justify-end">
+                            <span className="font-semibold text-slate-700">{eur(max)}</span>
+                            {isAdmin && (
+                              <button onClick={() => { setEditingCaMaxId(p.id); setEditCaMaxValue(max ? String(max) : ''); }} className="text-slate-300 hover:text-slate-600">
+                                <Pencil className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Barre de progression — visible à tous */}
+                    <div>
+                      <div className="flex items-center justify-between text-xs mb-1">
+                        <span className="text-slate-500">Réglé : <strong className="text-emerald-600">{eur(paye)}</strong> / {eur(max)}</span>
+                        <span className="font-semibold text-slate-600">{pct}%</span>
+                      </div>
+                      <div className="h-2.5 rounded-full bg-slate-100 overflow-hidden">
+                        <div
+                          className={`h-full rounded-full ${pct >= 100 ? 'bg-emerald-500' : 'bg-gradient-to-r from-emerald-400 to-emerald-500'}`}
+                          style={{ width: `${pct}%` }}
+                        />
+                      </div>
+                    </div>
+
+                    {/* Règlements */}
+                    {pmts.length > 0 && (
+                      <div className="space-y-1 pt-1">
+                        {pmts.map((pmt) => (
+                          <div key={pmt.id} className="flex items-center justify-between text-xs bg-slate-50 rounded-lg px-2.5 py-1.5">
+                            <span className="text-slate-500">{new Date(pmt.date_paiement).toLocaleDateString('fr-FR')}</span>
+                            <span className="font-semibold text-slate-700">{eur(Number(pmt.montant))}</span>
+                            {isAdmin && (
+                              <button onClick={() => removePaiement(pmt.id)} className="text-slate-300 hover:text-red-500">
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {isAdmin && (
+                      addingPaiementFor === p.id ? (
+                        <div className="flex items-center gap-2 pt-1">
+                          <Input type="date" value={newDate} onChange={(e) => setNewDate(e.target.value)} className="w-36 h-8 rounded-lg" />
+                          <Input type="number" placeholder="Montant" value={newMontant} onChange={(e) => setNewMontant(e.target.value)} className="w-28 h-8 rounded-lg" />
+                          <Button size="sm" onClick={() => savePaiement(p.id)} className="h-8 rounded-lg bg-emerald-500 hover:bg-emerald-600 text-white px-2.5"><Check className="w-3.5 h-3.5" /></Button>
+                          <Button size="sm" variant="ghost" onClick={() => setAddingPaiementFor(null)} className="h-8 rounded-lg px-2.5 text-slate-400"><X className="w-3.5 h-3.5" /></Button>
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => { setAddingPaiementFor(p.id); setNewMontant(''); setNewDate(today()); }}
+                          className="text-xs font-semibold text-[#5A9BA3] hover:text-[#4A8B93] flex items-center gap-1 pt-1"
+                        >
+                          <Plus className="w-3.5 h-3.5" /> Ajouter un règlement
+                        </button>
+                      )
+                    )}
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
+        </>
       ) : (
         <>
           {/* Totaux globaux */}
@@ -367,7 +591,7 @@ export default function PerformanceCA() {
                 </tbody>
               </table>
               <p className="text-xs text-slate-400 mt-3">
-                La commission est calculée sur le CA encaissé <strong>ce mois-ci</strong> (mois de paiement réel), indépendamment du mois de signature du dossier.
+                La commission est calculée sur les règlements reçus <strong>ce mois-ci</strong> (voir l'onglet "Suivi paiements clients"), indépendamment du mois de signature du dossier.
               </p>
             </CardContent>
           </Card>

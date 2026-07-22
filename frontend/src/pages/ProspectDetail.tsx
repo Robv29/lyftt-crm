@@ -1,11 +1,11 @@
 import { useState, useCallback } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, Link } from 'react-router-dom';
 import { client } from '../lib/api';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import {
   useProspects, useProspectActions, useInvalidateProspects, useInvalidateActions,
-  useMondaySyncLog, useInvalidateMondaySyncLog,
+  useMondaySyncLog, useInvalidateMondaySyncLog, usePaiements,
   type Prospect, type CommercialAction,
 } from '../hooks/use-prospects';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -89,12 +89,18 @@ export default function ProspectDetail() {
   const { data: allProspects = [], isLoading: loadingP } = useProspects();
   const { data: actions = [], isLoading: loadingA } = useProspectActions(prospectId);
   const { data: syncLog = [] } = useMondaySyncLog(prospectId);
+  const { data: allPaiements = [] } = usePaiements();
   const invalidateProspects = useInvalidateProspects();
   const invalidateActions = useInvalidateActions();
   const invalidateSyncLog = useInvalidateMondaySyncLog();
   const queryClient = useQueryClient();
 
   const prospect = allProspects.find((p) => p.id === prospectId) || null;
+  // Le suivi détaillé des règlements (ajout/suppression) se fait depuis
+  // l'onglet "Suivi paiements clients" de Performance CA — ici on affiche
+  // juste le total déjà réglé, en lecture seule, pour contexte pendant l'appel.
+  const paiementsProspect = prospectId ? allPaiements.filter((pmt) => pmt.prospect_id === prospectId) : [];
+  const totalPaye = paiementsProspect.reduce((s, pmt) => s + Number(pmt.montant), 0);
 
   const [editNotes, setEditNotes] = useState('');
   const [actionNote, setActionNote] = useState('');
@@ -234,7 +240,6 @@ export default function ProspectDetail() {
   const [markingComplete, setMarkingComplete] = useState(false);
   const [syncingMonday, setSyncingMonday] = useState(false);
   const [showSyncError, setShowSyncError] = useState(false);
-  const [savingEncaisse, setSavingEncaisse] = useState(false);
 
   const handleToggleDoc = useCallback(async (field: 'doc_cfp_recu' | 'doc_kbis_recu' | 'doc_cni_recu', checked: boolean) => {
     if (!prospect) return;
@@ -300,28 +305,6 @@ export default function ProspectDetail() {
       setMarkingComplete(false);
     }
   }, [prospect, markingComplete, invalidateActions, invalidateProspects, runMondaySync]);
-
-  // CA encaissé (admin uniquement) : coché quand le paiement est réellement
-  // constaté — c'est ce qui fait basculer le dossier de "CA confirmé" à
-  // "CA encaissé" dans le module Performance CA.
-  const handleToggleEncaisse = useCallback(async (checked: boolean) => {
-    if (!prospect) return;
-    setSavingEncaisse(true);
-    const nowIso = new Date().toISOString();
-    updateProspectOptimistic({ ca_encaisse: checked, date_encaissement: checked ? nowIso : null } as Partial<Prospect>);
-    try {
-      await client.entities.prospects.update({ id: String(prospect.id), data: { ca_encaisse: checked, date_encaissement: checked ? nowIso : null } });
-      await client.entities.commercial_actions.create({
-        data: { prospect_id: prospect.id, action_type: 'ca_encaisse', appel_repondu: false, from_status: prospect.statut_avancement, to_status: prospect.statut_avancement, notes: checked ? `CA encaissé : ${prospect.montant_potentiel ?? 0} €` : 'CA encaissé annulé', action_date: nowIso },
-      });
-      toast.success(checked ? 'CA marqué comme encaissé' : 'Encaissement annulé');
-    } catch {
-      invalidateProspects();
-      toast.error("Erreur lors de la mise à jour de l'encaissement");
-    } finally {
-      setSavingEncaisse(false);
-    }
-  }, [prospect, updateProspectOptimistic, invalidateProspects]);
 
   const handleRetryMondaySync = useCallback(() => {
     if (!prospect || syncingMonday) return;
@@ -581,22 +564,24 @@ export default function ProspectDetail() {
                     <p className="text-xs text-slate-500">Synchronisé le {formatDate(prospect.monday_synced_at || '')}</p>
                   )}
 
-                  {isAdmin && prospect.statut_avancement === 'Envoyé à Mathilde' && (
-                    <label className="flex items-center gap-2 pt-2 border-t border-slate-100 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={!!prospect.ca_encaisse}
-                        disabled={savingEncaisse}
-                        onChange={(e) => handleToggleEncaisse(e.target.checked)}
-                        className="w-4 h-4 rounded accent-emerald-600"
-                      />
-                      <span className="text-sm text-slate-700">
-                        CA encaissé{prospect.montant_potentiel ? ` (${Number(prospect.montant_potentiel).toLocaleString('fr-FR')} €)` : ''}
-                      </span>
-                      {prospect.ca_encaisse && prospect.date_encaissement && (
-                        <span className="text-xs text-slate-400 ml-auto">le {formatDate(prospect.date_encaissement)}</span>
-                      )}
-                    </label>
+                  {prospect.statut_avancement === 'Envoyé à Mathilde' && (
+                    <div className="pt-2 border-t border-slate-100">
+                      <div className="flex items-center justify-between text-sm mb-1">
+                        <span className="text-slate-500">Réglé</span>
+                        <span className="font-semibold text-slate-700">
+                          {totalPaye.toLocaleString('fr-FR')} € / {Number(prospect.montant_potentiel || 0).toLocaleString('fr-FR')} €
+                        </span>
+                      </div>
+                      <div className="h-2 rounded-full bg-slate-100 overflow-hidden">
+                        <div
+                          className="h-full rounded-full bg-gradient-to-r from-emerald-500 to-emerald-600"
+                          style={{ width: `${prospect.montant_potentiel ? Math.min(100, (totalPaye / Number(prospect.montant_potentiel)) * 100) : 0}%` }}
+                        />
+                      </div>
+                      <Link to="/performance-ca" className="text-xs text-[#5A9BA3] hover:text-[#4A8B93] font-medium mt-1.5 inline-block">
+                        Gérer les règlements → Performance CA
+                      </Link>
+                    </div>
                   )}
 
                   <div className="flex flex-wrap gap-2 pt-1">

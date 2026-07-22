@@ -79,6 +79,15 @@ export interface ObjectifCA {
   updated_at: string;
 }
 
+export interface PaiementClient {
+  id: number;
+  prospect_id: number;
+  montant: number;
+  date_paiement: string; // 'YYYY-MM-DD'
+  note: string | null;
+  created_at: string;
+}
+
 export interface RegisteredUser {
   id: number;
   first_name: string | null;
@@ -210,6 +219,45 @@ export function useUpsertObjectifCA() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['objectifs_ca'] });
+    },
+  });
+}
+
+export function usePaiements() {
+  return useQuery({
+    queryKey: ['paiements_clients'] as const,
+    queryFn: async () => {
+      const res = await client.entities.paiements_clients.queryAll({
+        query: {},
+        sort: '-date_paiement',
+        limit: 50000,
+      });
+      return (res.data?.items || []) as PaiementClient[];
+    },
+    staleTime: 30 * 1000,
+  });
+}
+
+export function useAddPaiement() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (params: { prospectId: number; montant: number; datePaiement: string; note?: string }) => {
+      return client.entities.paiements_clients.create({
+        prospect_id: params.prospectId, montant: params.montant, date_paiement: params.datePaiement, note: params.note || null,
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['paiements_clients'] });
+    },
+  });
+}
+
+export function useDeletePaiement() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: number) => client.entities.paiements_clients.delete({ id }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['paiements_clients'] });
     },
   });
 }

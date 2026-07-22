@@ -516,14 +516,14 @@ export default function ProspectDetail() {
               {prospect.statut_avancement === 'Signature' && (
                 <Button
                   onClick={handleMarkDossierComplet}
-                  disabled={markingComplete || !(prospect.doc_cfp_recu && prospect.doc_kbis_recu && prospect.doc_cni_recu)}
+                  disabled={markingComplete}
                   className="w-full gap-2 rounded-xl bg-gradient-to-r from-teal-500 to-cyan-600 hover:from-teal-600 hover:to-cyan-700 text-white mt-2"
                 >
                   <Send className="w-4 h-4" /> {markingComplete ? 'Traitement...' : 'Marquer dossier complet'}
                 </Button>
               )}
               {!(prospect.doc_cfp_recu && prospect.doc_kbis_recu && prospect.doc_cni_recu) && prospect.statut_avancement === 'Signature' && (
-                <p className="text-xs text-slate-400 text-center">Coche les 3 documents pour pouvoir transmettre le dossier.</p>
+                <p className="text-xs text-slate-400 text-center">Coche les documents déjà reçus — les autres pourront être complétés plus tard, ça ne bloque pas la transmission.</p>
               )}
             </CardContent>
           </Card>

@@ -25,6 +25,16 @@ export interface Prospect {
   notes: string;
   forme_juridique: string;
   nombre_salaries: string;
+  doc_cfp_recu: boolean;
+  doc_kbis_recu: boolean;
+  doc_cni_recu: boolean;
+  signed_by_user_id: number | null;
+  monday_item_id: number | null;
+  monday_item_url: string | null;
+  monday_sync_status: string | null;
+  monday_synced_at: string | null;
+  monday_last_sync_at: string | null;
+  monday_sync_error: string | null;
   priorite: string;
   source_lead: string;
   montant_potentiel: number;
@@ -46,6 +56,15 @@ export interface CommercialAction {
   to_status: string;
   notes: string;
   action_date: string;
+  created_at: string;
+}
+
+export interface MondaySyncLogEntry {
+  id: number;
+  prospect_id: number;
+  event: string;
+  detail: string | null;
+  success: boolean;
   created_at: string;
 }
 
@@ -120,6 +139,30 @@ export function useProspectActions(prospectId: number | undefined) {
     enabled: !!prospectId,
     staleTime: 60 * 1000,
   });
+}
+
+export function useMondaySyncLog(prospectId: number | undefined) {
+  return useQuery({
+    queryKey: ['monday_sync_log', prospectId || 0] as const,
+    queryFn: async () => {
+      if (!prospectId) return [];
+      const res = await client.entities.monday_sync_log.queryAll({
+        query: { prospect_id: prospectId },
+        sort: '-created_at',
+        limit: 50,
+      });
+      return (res.data?.items || []) as MondaySyncLogEntry[];
+    },
+    enabled: !!prospectId,
+    staleTime: 30 * 1000,
+  });
+}
+
+export function useInvalidateMondaySyncLog() {
+  const queryClient = useQueryClient();
+  return (prospectId: number) => {
+    queryClient.invalidateQueries({ queryKey: ['monday_sync_log', prospectId] });
+  };
 }
 
 export function useRegisteredUsers() {

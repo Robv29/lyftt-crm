@@ -32,7 +32,8 @@ import type * as XLSXType from 'xlsx';
 
 const STATUTS = [
   'Tous', 'Appel telephonique', 'Relance 1', 'Relance 2', 'Relance 3',
-  'Relance 4', 'Visio', 'Demande de documents', 'Signature', 'Refus / Perdu',
+  'Relance 4', 'Visio', 'Demande de documents', 'Signature',
+  'Dossier complet', 'Envoyé à Mathilde', 'Refus / Perdu',
 ];
 
 const statusBadgeColors: Record<string, string> = {
@@ -44,6 +45,8 @@ const statusBadgeColors: Record<string, string> = {
   Visio: 'bg-purple-50 text-purple-700 border-purple-200',
   'Demande de documents': 'bg-amber-50 text-amber-700 border-amber-200',
   Signature: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+  'Dossier complet': 'bg-teal-50 text-teal-700 border-teal-200',
+  'Envoyé à Mathilde': 'bg-sky-50 text-sky-700 border-sky-200',
   'Refus / Perdu': 'bg-red-50 text-red-700 border-red-200',
 };
 
@@ -202,7 +205,7 @@ function mapMondayStatut(s: string): { statut_avancement: string; statut_gagne_p
 // refusé peut être réactivé si Monday indique un nouveau RDV calé.
 const MONDAY_PIPELINE_ORDER = [
   'Appel telephonique', 'Relance 1', 'Relance 2', 'Relance 3', 'Relance 4',
-  'Visio', 'Demande de documents', 'Signature',
+  'Visio', 'Demande de documents', 'Signature', 'Dossier complet', 'Envoyé à Mathilde',
 ];
 
 // Clé de dédoublonnage : société + téléphone normalisés (insensible à la casse,
@@ -266,7 +269,8 @@ function findDuplicateGroups(prospects: Prospect[]): DuplicateGroup[] {
 // plus récemment mise à jour. Les autres fiches du groupe sont supprimées.
 const STAGE_RANK: Record<string, number> = {
   'Appel telephonique': 0, 'Relance 1': 1, 'Relance 2': 2, 'Relance 3': 3,
-  'Relance 4': 4, Visio: 5, 'Demande de documents': 6, Signature: 7, 'Refus / Perdu': 0,
+  'Relance 4': 4, Visio: 5, 'Demande de documents': 6, Signature: 7,
+  'Dossier complet': 8, 'Envoyé à Mathilde': 9, 'Refus / Perdu': 0,
 };
 function duplicateScore(p: Prospect): number[] {
   const won = p.statut_gagne_perdu === 'gagne' ? 1 : 0;

@@ -23,8 +23,15 @@ const PIPELINE_STAGES = [
   { key: 'Visio', label: 'Visio', gradient: 'from-purple-500 to-purple-600', light: 'bg-purple-100 text-purple-700' },
   { key: 'Demande de documents', label: 'Demande docs', gradient: 'from-amber-400 to-amber-500', light: 'bg-amber-100 text-amber-700' },
   { key: 'Signature', label: 'Signature', gradient: 'from-emerald-500 to-emerald-600', light: 'bg-emerald-100 text-emerald-700' },
+  { key: 'Dossier complet', label: 'Dossier complet', gradient: 'from-teal-500 to-cyan-600', light: 'bg-teal-100 text-teal-700' },
+  { key: 'Envoyé à Mathilde', label: 'Envoyé à Mathilde', gradient: 'from-cyan-500 to-sky-600', light: 'bg-sky-100 text-sky-700' },
   { key: 'Refus / Perdu', label: 'Refus / Perdu', gradient: 'from-red-400 to-red-500', light: 'bg-red-100 text-red-700' },
 ];
+
+// Une fois signé, le dossier reste "gagne" quel que soit son avancement
+// administratif (Dossier complet / Envoye a Mathilde) — seul un vrai refus
+// repasse en "perdu".
+const WON_STAGES = new Set(['Signature', 'Dossier complet', 'Envoyé à Mathilde']);
 
 const priorityColors: Record<string, string> = {
   haute: 'border-l-red-500',
@@ -46,14 +53,14 @@ export default function Pipeline() {
     queryClient.setQueryData(queryKeys.prospects, (old: Prospect[] | undefined) =>
       (old || []).map((p) =>
         p.id === prospectId
-          ? { ...p, statut_avancement: newStage, statut_gagne_perdu: newStage === 'Signature' ? 'gagne' : newStage === 'Refus / Perdu' ? 'perdu' : p.statut_gagne_perdu }
+          ? { ...p, statut_avancement: newStage, statut_gagne_perdu: WON_STAGES.has(newStage) ? 'gagne' : newStage === 'Refus / Perdu' ? 'perdu' : p.statut_gagne_perdu }
           : p
       )
     );
 
     try {
       const updateData: Record<string, unknown> = { statut_avancement: newStage };
-      if (newStage === 'Signature') updateData.statut_gagne_perdu = 'gagne';
+      if (WON_STAGES.has(newStage)) updateData.statut_gagne_perdu = 'gagne';
       else if (newStage === 'Refus / Perdu') updateData.statut_gagne_perdu = 'perdu';
 
       await client.entities.prospects.update({ id: String(prospectId), data: updateData });

@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import {
   useProspects, useRegisteredUsers, useObjectifsCA, useUpsertObjectifCA, useUpdateTauxCommission,
@@ -9,10 +10,12 @@ import ErrorState from '../components/ErrorState';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
 import {
   TrendingUp, Target, Wallet, CheckCircle2, Pencil, Check, X,
   Trophy, Flame, Percent, Search, Plus, Trash2, Receipt,
+  AlertTriangle, ExternalLink, PiggyBank,
 } from 'lucide-react';
 
 // Dossiers "gagnés" mais pas encore confirmés/transmis à Mathilde -> CA probable.
@@ -67,11 +70,13 @@ export default function PerformanceCA() {
 
   // --- Onglet "Suivi paiements clients" ---
   const [search, setSearch] = useState('');
+  const [commercialFilter, setCommercialFilter] = useState('tous');
   const [editingCaMaxId, setEditingCaMaxId] = useState<number | null>(null);
   const [editCaMaxValue, setEditCaMaxValue] = useState('');
   const [addingPaiementFor, setAddingPaiementFor] = useState<number | null>(null);
   const [newMontant, setNewMontant] = useState('');
   const [newDate, setNewDate] = useState(today());
+  const [newNote, setNewNote] = useState('');
 
   const loading = loadingP || loadingU || loadingO || loadingPmt;
   const isMoisCourant = mois === moisCourant;
@@ -209,6 +214,7 @@ export default function PerformanceCA() {
     return prospects
       .filter((p) => WON_STAGES.has(p.statut_avancement))
       .filter((p) => !q || p.nom_societe?.toLowerCase().includes(q))
+      .filter((p) => commercialFilter === 'tous' || String(p.signed_by_user_id) === commercialFilter)
       .map((p) => {
         const max = Number(p.montant_potentiel) || 0;
         const paye = paiementsByProspect.get(p.id) || 0;
@@ -221,7 +227,24 @@ export default function PerformanceCA() {
         return { prospect: p, max, paye, pct, commercialName, pmts };
       })
       .sort((a, b) => a.prospect.nom_societe.localeCompare(b.prospect.nom_societe, 'fr'));
-  }, [prospects, paiementsByProspect, paiements, commerciaux, search]);
+  }, [prospects, paiementsByProspect, paiements, commerciaux, search, commercialFilter]);
+
+  // Reste à encaisser sur TOUS les clients signés (pas seulement ceux filtrés
+  // par la recherche/commercial) — vision globale de ce qu'il reste à percevoir.
+  const resteAEncaisserTotal = useMemo(() => {
+    return prospects
+      .filter((p) => WON_STAGES.has(p.statut_avancement))
+      .reduce((sum, p) => {
+        const max = Number(p.montant_potentiel) || 0;
+        const paye = Math.min(paiementsByProspect.get(p.id) || 0, max);
+        return sum + Math.max(0, max - paye);
+      }, 0);
+  }, [prospects, paiementsByProspect]);
+
+  const clientsSansCaMax = useMemo(
+    () => prospects.filter((p) => WON_STAGES.has(p.statut_avancement) && !(Number(p.montant_potentiel) > 0)).length,
+    [prospects]
+  );
 
   const saveCaMax = async (p: Prospect) => {
     const val = Number(editCaMaxValue.replace(',', '.'));
@@ -241,14 +264,25 @@ export default function PerformanceCA() {
     if (Number.isNaN(val) || val <= 0) { toast.error('Montant invalide'); return; }
     if (!newDate) { toast.error('Date requise'); return; }
     try {
-      await addPaiement.mutateAsync({ prospectId, montant: val, datePaiement: newDate });
+      await addPaiement.mutateAsync({ prospectId, montant: val, datePaiement: newDate, note: newNote.trim() || undefined });
       toast.success('Règlement enregistré — prime recalculée automatiquement');
       setAddingPaiementFor(null);
       setNewMontant('');
       setNewDate(today());
+      setNewNote('');
     } catch {
       toast.error("Erreur lors de l'enregistrement du règlement");
     }
+  };
+
+  // Raccourci "Marquer soldé" : pré-remplit le formulaire avec le reste à
+  // encaisser exact et la date du jour, pour éviter la saisie manuelle du
+  // dernier règlement quand le client vient de tout payer.
+  const startSolde = (prospectId: number, max: number, paye: number) => {
+    setAddingPaiementFor(prospectId);
+    setNewMontant(String(Math.max(0, max - paye)));
+    setNewDate(today());
+    setNewNote('Solde');
   };
 
   const removePaiement = async (id: number) => {
@@ -305,14 +339,56 @@ export default function PerformanceCA() {
         <div className="text-sm text-slate-400 py-12 text-center">Chargement...</div>
       ) : tab === 'paiements' ? (
         <>
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-            <Input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Rechercher un client..."
-              className="pl-9 rounded-xl max-w-sm"
-            />
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <Card className="border-0 shadow-sm rounded-2xl">
+              <CardContent className="p-4 flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl flex items-center justify-center text-orange-600 bg-orange-50">
+                  <PiggyBank className="w-5 h-5" />
+                </div>
+                <div>
+                  <p className="text-xs text-slate-500">Reste à encaisser (tous clients signés)</p>
+                  <p className="text-lg font-bold text-slate-800">{eur(resteAEncaisserTotal)}</p>
+                </div>
+              </CardContent>
+            </Card>
+            {clientsSansCaMax > 0 && (
+              <Card className="border-0 shadow-sm rounded-2xl bg-amber-50">
+                <CardContent className="p-4 flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl flex items-center justify-center text-amber-600 bg-amber-100">
+                    <AlertTriangle className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <p className="text-xs text-amber-700 font-medium">
+                      {clientsSansCaMax} client{clientsSansCaMax > 1 ? 's' : ''} signé{clientsSansCaMax > 1 ? 's' : ''} sans CA max renseigné
+                    </p>
+                    <p className="text-xs text-amber-600">La barre de progression et les commissions restent à 0 tant que ce n'est pas rempli.</p>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+          </div>
+
+          <div className="flex flex-col sm:flex-row gap-3">
+            <div className="relative flex-1 max-w-sm">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+              <Input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Rechercher un client..."
+                className="pl-9 rounded-xl"
+              />
+            </div>
+            <Select value={commercialFilter} onValueChange={setCommercialFilter}>
+              <SelectTrigger className="w-full sm:w-56 rounded-xl">
+                <SelectValue placeholder="Tous les commerciaux" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="tous">Tous les commerciaux</SelectItem>
+                {commerciaux.map((u) => (
+                  <SelectItem key={u.id} value={String(u.id)}>{u.first_name} {u.last_name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
 
           {clientsSignes.length === 0 ? (
@@ -326,8 +402,18 @@ export default function PerformanceCA() {
                   <CardContent className="p-5 space-y-3">
                     <div className="flex flex-wrap items-start justify-between gap-3">
                       <div>
-                        <p className="font-semibold text-slate-800">{p.nom_societe}</p>
+                        <div className="flex items-center gap-1.5">
+                          <p className="font-semibold text-slate-800">{p.nom_societe}</p>
+                          <Link to={`/prospects/${p.id}`} className="text-slate-300 hover:text-[#5A9BA3]" title="Ouvrir la fiche client">
+                            <ExternalLink className="w-3.5 h-3.5" />
+                          </Link>
+                        </div>
                         <p className="text-xs text-slate-400">{commercialName} · {p.statut_avancement}</p>
+                        {max === 0 && (
+                          <p className="text-xs text-amber-600 font-medium flex items-center gap-1 mt-0.5">
+                            <AlertTriangle className="w-3 h-3" /> CA max non renseigné
+                          </p>
+                        )}
                       </div>
                       <div className="text-right">
                         <p className="text-xs text-slate-500 mb-0.5">CA max</p>
@@ -379,7 +465,10 @@ export default function PerformanceCA() {
                       <div className="space-y-1 pt-1">
                         {pmts.map((pmt) => (
                           <div key={pmt.id} className="flex items-center justify-between text-xs bg-slate-50 rounded-lg px-2.5 py-1.5">
-                            <span className="text-slate-500">{new Date(pmt.date_paiement).toLocaleDateString('fr-FR')}</span>
+                            <span className="text-slate-500">
+                              {new Date(pmt.date_paiement).toLocaleDateString('fr-FR')}
+                              {pmt.note && <span className="text-slate-400 italic ml-1.5">· {pmt.note}</span>}
+                            </span>
                             <span className="font-semibold text-slate-700">{eur(Number(pmt.montant))}</span>
                             {isAdmin && (
                               <button onClick={() => removePaiement(pmt.id)} className="text-slate-300 hover:text-red-500">
@@ -393,19 +482,30 @@ export default function PerformanceCA() {
 
                     {isAdmin && (
                       addingPaiementFor === p.id ? (
-                        <div className="flex items-center gap-2 pt-1">
+                        <div className="flex flex-wrap items-center gap-2 pt-1">
                           <Input type="date" value={newDate} onChange={(e) => setNewDate(e.target.value)} className="w-36 h-8 rounded-lg" />
                           <Input type="number" placeholder="Montant" value={newMontant} onChange={(e) => setNewMontant(e.target.value)} className="w-28 h-8 rounded-lg" />
+                          <Input type="text" placeholder="Note (optionnel)" value={newNote} onChange={(e) => setNewNote(e.target.value)} className="w-36 h-8 rounded-lg" />
                           <Button size="sm" onClick={() => savePaiement(p.id)} className="h-8 rounded-lg bg-emerald-500 hover:bg-emerald-600 text-white px-2.5"><Check className="w-3.5 h-3.5" /></Button>
-                          <Button size="sm" variant="ghost" onClick={() => setAddingPaiementFor(null)} className="h-8 rounded-lg px-2.5 text-slate-400"><X className="w-3.5 h-3.5" /></Button>
+                          <Button size="sm" variant="ghost" onClick={() => { setAddingPaiementFor(null); setNewNote(''); }} className="h-8 rounded-lg px-2.5 text-slate-400"><X className="w-3.5 h-3.5" /></Button>
                         </div>
                       ) : (
-                        <button
-                          onClick={() => { setAddingPaiementFor(p.id); setNewMontant(''); setNewDate(today()); }}
-                          className="text-xs font-semibold text-[#5A9BA3] hover:text-[#4A8B93] flex items-center gap-1 pt-1"
-                        >
-                          <Plus className="w-3.5 h-3.5" /> Ajouter un règlement
-                        </button>
+                        <div className="flex items-center gap-3 pt-1">
+                          <button
+                            onClick={() => { setAddingPaiementFor(p.id); setNewMontant(''); setNewDate(today()); setNewNote(''); }}
+                            className="text-xs font-semibold text-[#5A9BA3] hover:text-[#4A8B93] flex items-center gap-1"
+                          >
+                            <Plus className="w-3.5 h-3.5" /> Ajouter un règlement
+                          </button>
+                          {max > 0 && paye < max && (
+                            <button
+                              onClick={() => startSolde(p.id, max, paye)}
+                              className="text-xs font-semibold text-emerald-600 hover:text-emerald-700 flex items-center gap-1"
+                            >
+                              <CheckCircle2 className="w-3.5 h-3.5" /> Marquer soldé ({eur(max - paye)})
+                            </button>
+                          )}
+                        </div>
                       )
                     )}
                   </CardContent>

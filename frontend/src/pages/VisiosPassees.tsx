@@ -25,6 +25,7 @@ import {
   MapPin, Building2, User, UserCircle,
 } from 'lucide-react';
 import { usePersistentState } from '../hooks/use-persistent-state';
+import { useAuth } from '../contexts/AuthContext';
 
 const toLocalInputValue = (d: Date) => {
   const pad = (n: number) => String(n).padStart(2, '0');
@@ -34,6 +35,7 @@ const toLocalInputValue = (d: Date) => {
 export default function VisiosPassees() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const { userRole } = useAuth();
   const { data: allProspects = [], isLoading: loadingP, error: errorP, refetch: refetchP, isFetching: fetchingP } = useProspects();
   const { data: cityAttributions = [] } = useCityAttributions();
   const { data: registeredUsers = [] } = useRegisteredUsers();
@@ -124,6 +126,12 @@ export default function VisiosPassees() {
     if (extraDateField) updates[extraDateField] = nowIso;
     if (newStatus === 'Signature') updates.statut_gagne_perdu = 'gagne';
     else if (newStatus === 'Refus / Perdu') updates.statut_gagne_perdu = 'perdu';
+    // Commercial signataire (partie 18) : figé à la première Signature, même
+    // règle que sur la fiche prospect — sans ça, le dossier reste invisible
+    // dans tout le module Performance CA (CA, commissions, classement).
+    if (newStatus === 'Signature' && !prospect.signed_by_user_id && userRole?.id) {
+      updates.signed_by_user_id = userRole.id;
+    }
 
     updateProspectOptimistic(prospect.id, updates as Partial<Prospect>);
     try {

@@ -6,6 +6,7 @@ import {
   useActions,
   useCityAttributions,
   useRegisteredUsers,
+  useObjectifsCA,
   type Prospect,
   type CommercialAction,
 } from '../hooks/use-prospects';
@@ -104,6 +105,21 @@ function getPreviousDateRange(period: PeriodKey): { start: Date; end: Date } {
   }
 }
 
+const eur = (n: number) =>
+  n.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 });
+
+// Jours ouvrés (lun-ven) restants dans le mois, aujourd'hui inclus.
+function joursOuvresRestants(): number {
+  const today = new Date();
+  const lastDay = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate();
+  let count = 0;
+  for (let d = today.getDate(); d <= lastDay; d++) {
+    const day = new Date(today.getFullYear(), today.getMonth(), d).getDay();
+    if (day !== 0 && day !== 6) count++;
+  }
+  return count;
+}
+
 function computeConversionRate(actions: CommercialAction[], start: Date, end: Date) {
   const filtered = actions.filter((a) => {
     const d = new Date(a.action_date || a.created_at);
@@ -121,6 +137,7 @@ export default function Dashboard() {
   const { data: allActions = [], isLoading: loadingA, error: errorA, refetch: refetchA, isFetching: fetchingA } = useActions();
   const { data: cityAttributions = [] } = useCityAttributions();
   const { data: registeredUsers = [] } = useRegisteredUsers();
+  const { data: objectifsCA = [] } = useObjectifsCA();
 
   const hasError = errorP || errorA;
   const handleRetryAll = useCallback(() => {
@@ -182,6 +199,47 @@ export default function Dashboard() {
     if (!matched) return [];
     return cityAttributions.filter((a) => a.user_role_id === matched.id).map((a) => a.city);
   }, [selectedCommercial, cityAttributions, registeredUsers]);
+
+  // Utilisateur correspondant au commercial sélectionné dans le filtre —
+  // nécessaire pour aller chercher SES données financières (signed_by_user_id,
+  // objectifs_ca), qui sont rattachées à un id, pas à un nom texte.
+  const matchedCommercialUser = useMemo(() => {
+    if (selectedCommercial === 'global') return null;
+    return registeredUsers.find(
+      (u) => normName(`${u.first_name || ''} ${u.last_name || ''}`) === normName(selectedCommercial)
+    ) || null;
+  }, [selectedCommercial, registeredUsers]);
+
+  // Mapping ville -> commercial pour TOUS les commerciaux (pas seulement celui
+  // sélectionné) — sert à regrouper la relance datée par commercial en vue globale.
+  const cityToCommercialAll = useMemo(() => {
+    const userNameById = new Map<number, string>();
+    for (const u of registeredUsers) {
+      const name = `${u.first_name || ''} ${u.last_name || ''}`.trim();
+      if (name) userNameById.set(u.id, name);
+    }
+    const map = new Map<string, string>();
+    for (const a of cityAttributions) {
+      const name = userNameById.get(a.user_role_id);
+      if (name) map.set(a.city, name);
+    }
+    return map;
+  }, [registeredUsers, cityAttributions]);
+
+  // Résout le commercial d'un prospect : d'abord un nom connu retrouvé dans
+  // commercial_assigne (gère les valeurs combinées type "Utilisateur supprimé,
+  // Yoan RUANS"), sinon la ville attribuée, sinon "Non attribué".
+  const resolveCommercialFor = useCallback((p: Prospect): string => {
+    const assignedNorm = normName(p.commercial_assigne);
+    if (assignedNorm) {
+      for (const name of commercialNames) {
+        if (assignedNorm.includes(normName(name))) return name;
+      }
+    }
+    const viaVille = cityToCommercialAll.get(p.zone_geographique);
+    if (viaVille) return viaVille;
+    return 'Non attribué';
+  }, [commercialNames, cityToCommercialAll]);
 
   const prospects = useMemo(() => {
     if (selectedCommercial === 'global') return allProspects;
@@ -253,6 +311,68 @@ export default function Dashboard() {
       .sort((a, b) => new Date(a.date_relance_planifiee).getTime() - new Date(b.date_relance_planifiee).getTime())
       .map((p) => ({ p, overdue: new Date(p.date_relance_planifiee) < start }));
   }, [prospects]);
+
+  // En vue globale, la relance datée est éclatée par commercial (sinon les
+  // relances de tout le monde se mélangent dans une seule liste illisible).
+  // En vue filtrée sur un commercial précis, la liste reste plate (déjà filtrée).
+  const relancesDateGrouped = useMemo(() => {
+    if (selectedCommercial !== 'global') return null;
+    const map = new Map<string, typeof relancesDate>();
+    for (const item of relancesDate) {
+      const name = resolveCommercialFor(item.p);
+      const arr = map.get(name) || [];
+      arr.push(item);
+      map.set(name, arr);
+    }
+    return Array.from(map.entries()).sort(([a], [b]) => {
+      if (a === 'Non attribué') return 1;
+      if (b === 'Non attribué') return -1;
+      return a.localeCompare(b, 'fr');
+    });
+  }, [relancesDate, selectedCommercial, resolveCommercialFor]);
+
+  // Conseil du jour : nombre d'appels/jour recommandé pour rattraper l'objectif
+  // CA du mois, basé sur le taux de transformation ANNUEL réel du commercial
+  // sélectionné (signatures/appels sur les 12 derniers mois) et son panier
+  // moyen. Uniquement calculable pour un commercial précis (pas en vue globale).
+  const conseilAppels = useMemo(() => {
+    if (!matchedCommercialUser) return null;
+    const uid = matchedCommercialUser.id;
+    const now = new Date();
+    const moisCourant = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    const yearAgo = new Date(now);
+    yearAgo.setFullYear(yearAgo.getFullYear() - 1);
+
+    const dealsCeMois = allProspects.filter(
+      (p) => p.signed_by_user_id === uid && p.date_signature && p.date_signature.slice(0, 7) === moisCourant
+    );
+    const realise = dealsCeMois.reduce((s, p) => s + (Number(p.montant_potentiel) || 0), 0);
+
+    const objectifRow = objectifsCA.find((o) => o.user_role_id === uid && o.mois.slice(0, 7) === moisCourant);
+    const objectifCa = objectifRow?.objectif_ca ?? 0;
+    if (objectifCa <= 0) return { state: 'no_objectif' as const };
+
+    const ecart = objectifCa - realise;
+    if (ecart <= 0) return { state: 'atteint' as const };
+
+    const dealsAnnee = allProspects.filter(
+      (p) => p.signed_by_user_id === uid && p.date_signature && new Date(p.date_signature) >= yearAgo && (Number(p.montant_potentiel) || 0) > 0
+    );
+    const valeurMoyenne = dealsAnnee.length > 0
+      ? dealsAnnee.reduce((s, p) => s + (Number(p.montant_potentiel) || 0), 0) / dealsAnnee.length
+      : 0;
+
+    const tauxAnnuelPct = computeConversionRate(actions, yearAgo, now);
+    if (valeurMoyenne <= 0 || tauxAnnuelPct <= 0) return { state: 'pas_assez_historique' as const };
+
+    const signaturesNecessaires = ecart / valeurMoyenne;
+    const appelsNecessaires = signaturesNecessaires / (tauxAnnuelPct / 100);
+    const jo = joursOuvresRestants();
+    if (jo <= 0) return { state: 'fin_de_mois' as const };
+
+    const appelsParJour = Math.ceil(appelsNecessaires / jo);
+    return { state: 'ok' as const, appelsParJour, ecart, tauxAnnuelPct, valeurMoyenne, jo };
+  }, [matchedCommercialUser, allProspects, objectifsCA, actions]);
 
   const activeProspects = useMemo(() => prospects.filter((p) => p.statut_gagne_perdu === 'actif').length, [prospects]);
   const wonDeals = useMemo(() => prospects.filter((p) => p.statut_gagne_perdu === 'gagne').length, [prospects]);
@@ -350,6 +470,46 @@ export default function Dashboard() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Conseil du jour : appels/jour recommandés pour rattraper l'objectif,
+          basé sur le taux de transformation annuel réel du commercial. */}
+      {selectedCommercial !== 'global' && conseilAppels && (
+        <Card className="border-0 shadow-sm rounded-2xl bg-gradient-to-br from-orange-50 to-amber-50">
+          <CardContent className="p-5">
+            <div className="flex items-start gap-3">
+              <div className="w-10 h-10 rounded-xl bg-orange-100 flex items-center justify-center shrink-0">
+                <PhoneCall className="w-5 h-5 text-orange-600" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-sm font-semibold text-slate-800">Conseil du jour</p>
+                {conseilAppels.state === 'no_objectif' && (
+                  <p className="text-sm text-slate-500 mt-0.5">
+                    Aucun objectif CA défini ce mois-ci pour {selectedCommercial} — à définir dans Performance CA pour obtenir une recommandation.
+                  </p>
+                )}
+                {conseilAppels.state === 'atteint' && (
+                  <p className="text-sm text-emerald-600 font-medium mt-0.5">🎉 Objectif du mois déjà atteint, continue comme ça !</p>
+                )}
+                {conseilAppels.state === 'pas_assez_historique' && (
+                  <p className="text-sm text-slate-500 mt-0.5">
+                    Pas assez d'historique (signatures / appels sur 12 mois) pour calculer une recommandation fiable.
+                  </p>
+                )}
+                {conseilAppels.state === 'fin_de_mois' && (
+                  <p className="text-sm text-red-500 mt-0.5">Plus de jour ouvré restant ce mois-ci pour rattraper l'objectif.</p>
+                )}
+                {conseilAppels.state === 'ok' && (
+                  <p className="text-sm text-slate-700 mt-0.5">
+                    Il manque <strong>{eur(conseilAppels.ecart)}</strong> pour atteindre l'objectif — fais environ{' '}
+                    <strong className="text-orange-600">{conseilAppels.appelsParJour} appel{conseilAppels.appelsParJour > 1 ? 's' : ''}/jour</strong>{' '}
+                    sur les {conseilAppels.jo} jours ouvrés restants (taux de transformation annuel : {conseilAppels.tauxAnnuelPct.toFixed(1)}%, panier moyen {eur(conseilAppels.valeurMoyenne)}).
+                  </p>
+                )}
+              </div>
+            </div>
+          </CardContent>
+        </Card>
       )}
 
       {/* General KPIs */}
@@ -497,6 +657,21 @@ export default function Dashboard() {
               <div className="text-center py-8">
                 <div className="w-12 h-12 bg-slate-100 rounded-2xl flex items-center justify-center mx-auto mb-3"><Clock className="w-5 h-5 text-slate-400" /></div>
                 <p className="text-sm text-slate-400">Aucune relance datée aujourd'hui</p>
+              </div>
+            ) : relancesDateGrouped ? (
+              <div className="space-y-4 max-h-[400px] overflow-y-auto pr-1">
+                {relancesDateGrouped.map(([commercialName, items]) => (
+                  <div key={commercialName}>
+                    <div className="flex items-center gap-1.5 mb-1.5 px-0.5">
+                      <UserCircle className="w-3.5 h-3.5 text-slate-400" />
+                      <span className="text-xs font-bold text-slate-500 uppercase tracking-wide">{commercialName}</span>
+                      <Badge className="bg-slate-100 text-slate-500 border-0 rounded-lg text-[10px] font-bold">{items.length}</Badge>
+                    </div>
+                    <div className="space-y-2">
+                      {items.map(({ p, overdue }) => <RelanceDateRow key={p.id} prospect={p} overdue={overdue} />)}
+                    </div>
+                  </div>
+                ))}
               </div>
             ) : (
               <div className="space-y-2 max-h-[400px] overflow-y-auto pr-1">

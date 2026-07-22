@@ -16,11 +16,15 @@ import { Label } from '@/components/ui/label';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from '@/components/ui/dialog';
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from '@/components/ui/select';
 import { toast } from 'sonner';
 import {
   Video, FileUp, FileCheck2, XCircle, CalendarClock, Phone,
   MapPin, Building2, User, UserCircle,
 } from 'lucide-react';
+import { usePersistentState } from '../hooks/use-persistent-state';
 
 const toLocalInputValue = (d: Date) => {
   const pad = (n: number) => String(n).padStart(2, '0');
@@ -39,6 +43,7 @@ export default function VisiosPassees() {
   const [busyId, setBusyId] = useState<number | null>(null);
   const [relanceTarget, setRelanceTarget] = useState<Prospect | null>(null);
   const [relanceDateTime, setRelanceDateTime] = useState('');
+  const [selectedCommercial, setSelectedCommercial] = usePersistentState<string>('lyftt.visios.commercial', 'tous');
 
   // Une ville n'est attribuée qu'à un seul commercial (l'écran Attributions
   // empêche l'attribution d'une ville déjà prise) : mapping direct ville -> nom.
@@ -90,6 +95,18 @@ export default function VisiosPassees() {
       return a.localeCompare(b, 'fr');
     });
   }, [visiosPassees, cityToCommercial]);
+
+  // Liste des commerciaux pour le filtre — uniquement ceux qui ont au moins
+  // une visio en attente (évite de proposer des noms vides dans le menu).
+  const commercialFilterOptions = useMemo(
+    () => groups.map(([commercial]) => commercial),
+    [groups]
+  );
+
+  const visibleGroups = useMemo(
+    () => selectedCommercial === 'tous' ? groups : groups.filter(([commercial]) => commercial === selectedCommercial),
+    [groups, selectedCommercial]
+  );
 
   const updateProspectOptimistic = useCallback((id: number, updates: Partial<Prospect>) => {
     queryClient.setQueryData(queryKeys.prospects, (old: Prospect[] | undefined) =>
@@ -186,13 +203,29 @@ export default function VisiosPassees() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
-          <Video className="w-6 h-6 text-purple-600" /> Mes visios passées
-        </h1>
-        <p className="text-slate-500 mt-1">
-          {visiosPassees.length} visio{visiosPassees.length > 1 ? 's' : ''} en attente de suite, groupées par commercial.
-        </p>
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
+            <Video className="w-6 h-6 text-purple-600" /> Mes visios passées
+          </h1>
+          <p className="text-slate-500 mt-1">
+            {visiosPassees.length} visio{visiosPassees.length > 1 ? 's' : ''} en attente de suite, groupées par commercial.
+          </p>
+        </div>
+        {commercialFilterOptions.length > 1 && (
+          <Select value={selectedCommercial} onValueChange={setSelectedCommercial}>
+            <SelectTrigger className="w-56 rounded-xl border-slate-200 bg-white shadow-sm">
+              <UserCircle className="w-4 h-4 mr-2 text-[#6AABB4]" />
+              <SelectValue placeholder="Filtrer par commercial" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="tous">🌐 Tous les commerciaux</SelectItem>
+              {commercialFilterOptions.map((name) => (
+                <SelectItem key={name} value={name}>👤 {name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
       </div>
 
       {visiosPassees.length === 0 ? (
@@ -204,9 +237,15 @@ export default function VisiosPassees() {
             <p className="text-sm text-slate-400">Aucune visio en attente de suite pour le moment.</p>
           </CardContent>
         </Card>
+      ) : visibleGroups.length === 0 ? (
+        <Card className="border-0 shadow-sm rounded-2xl">
+          <CardContent className="py-16 text-center">
+            <p className="text-sm text-slate-400">Aucune visio en attente pour ce commercial.</p>
+          </CardContent>
+        </Card>
       ) : (
         <div className="space-y-8">
-          {groups.map(([commercial, prospects]) => (
+          {visibleGroups.map(([commercial, prospects]) => (
             <div key={commercial}>
               <div className="flex items-center gap-2 mb-3">
                 <UserCircle className="w-5 h-5 text-[#5A9BA3]" />

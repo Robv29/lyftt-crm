@@ -652,18 +652,27 @@ export default function Prospects() {
     setSelectedIds((prev) => { const next = new Set(prev); if (next.has(id)) next.delete(id); else next.add(id); return next; });
   }, []);
 
-  // "Sélectionner tout" porte sur la page affichée (pas sur les ~15 000
-  // lignes filtrées) — cohérent avec ce que l'utilisateur voit à l'écran.
+  // "Sélectionner tout" porte sur TOUS les prospects filtrés (les ~15 000
+  // lignes sont déjà chargées côté client par useProspects, pas juste la
+  // page affichée) — pas besoin d'aller rechercher quoi que ce soit côté
+  // serveur, la sélection est donc instantanée même sur un gros volume.
+  const [selectingAll, setSelectingAll] = useState(false);
   const toggleSelectAll = useCallback(() => {
-    const pageIds = paginated.map((p) => p.id);
-    const allPageSelected = pageIds.length > 0 && pageIds.every((id) => selectedIds.has(id));
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      if (allPageSelected) pageIds.forEach((id) => next.delete(id));
-      else pageIds.forEach((id) => next.add(id));
-      return next;
-    });
-  }, [paginated, selectedIds]);
+    const allIds = filtered.map((p) => p.id);
+    const allFilteredSelected = allIds.length > 0 && allIds.every((id) => selectedIds.has(id));
+    if (allFilteredSelected) {
+      setSelectedIds(new Set());
+      return;
+    }
+    setSelectingAll(true);
+    // setTimeout(0) pour laisser le checkbox/spinner s'afficher avant de
+    // construire le Set (perceptible seulement sur les tout gros volumes).
+    setTimeout(() => {
+      setSelectedIds(new Set(allIds));
+      setSelectingAll(false);
+      toast.success(`${allIds.length} prospect(s) sélectionné(s)`);
+    }, 0);
+  }, [filtered, selectedIds]);
 
   const handleBulkDelete = useCallback(async () => {
     if (selectedIds.size === 0) return;
@@ -699,8 +708,8 @@ export default function Prospects() {
     } catch { toast.error("Erreur lors de l'export"); }
   }, [filtered]);
 
-  const allSelected = paginated.length > 0 && paginated.every((p) => selectedIds.has(p.id));
-  const someSelected = paginated.some((p) => selectedIds.has(p.id)) && !allSelected;
+  const allSelected = filtered.length > 0 && filtered.every((p) => selectedIds.has(p.id));
+  const someSelected = selectedIds.size > 0 && !allSelected;
 
   if (loading) {
     return (
@@ -799,7 +808,11 @@ export default function Prospects() {
             <thead>
               <tr className="bg-gradient-to-r from-slate-50 to-slate-100/50 border-b border-slate-200">
                 <th className="px-3 py-3 w-10">
-                  <Checkbox checked={allSelected} ref={(el) => { if (el) { const input = el as unknown as { dataset: DOMStringMap }; if (input.dataset) input.dataset.indeterminate = someSelected ? 'true' : 'false'; } }} onCheckedChange={toggleSelectAll} aria-label="Sélectionner tout" />
+                  {selectingAll ? (
+                    <div className="w-4 h-4 border-2 border-[#6AABB4] border-t-transparent rounded-full animate-spin" />
+                  ) : (
+                    <Checkbox checked={allSelected} ref={(el) => { if (el) { const input = el as unknown as { dataset: DOMStringMap }; if (input.dataset) input.dataset.indeterminate = someSelected ? 'true' : 'false'; } }} onCheckedChange={toggleSelectAll} aria-label="Sélectionner tout" />
+                  )}
                 </th>
                 <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Société</th>
                 <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider hidden md:table-cell">Dirigeant</th>

@@ -85,6 +85,7 @@ export interface RegisteredUser {
   last_name: string | null;
   role: string;
   is_active: boolean;
+  taux_commission?: number | null;
 }
 
 export interface CityAttribution {
@@ -230,6 +231,22 @@ export function useRegisteredUsers() {
     },
     staleTime: 5 * 60 * 1000,
     gcTime: 15 * 60 * 1000,
+  });
+}
+
+export function useUpdateTauxCommission() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (params: { userId: number; taux: number }) => {
+      return client.apiCall.invoke({
+        url: `/api/v1/user-management/users/${params.userId}`,
+        method: 'PUT',
+        data: { taux_commission: params.taux },
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.users });
+    },
   });
 }
 

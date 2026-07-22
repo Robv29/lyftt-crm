@@ -215,7 +215,7 @@ async function invoke({ url, method = 'GET', data = {} }: InvokeArgs) {
   if (path === '/api/v1/user-management/users/public' && m === 'GET') {
     const { data: rows, error } = await supabase
       .from('user_roles')
-      .select('id,email,first_name,last_name,role,is_active')
+      .select('id,email,first_name,last_name,role,is_active,taux_commission')
       .order('created_at', { ascending: true });
     if (error) throw wrapError(error);
     return { data: rows ?? [] };

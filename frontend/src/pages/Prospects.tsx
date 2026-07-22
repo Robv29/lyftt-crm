@@ -346,6 +346,7 @@ function findSimilarCategoryGroups(prospects: Prospect[]): CategoryGroup[] {
 }
 
 export default function Prospects() {
+  const navigate = useNavigate();
   const { data: prospects = [], isLoading: loading, error, refetch, isFetching } = useProspects();
   const { data: registeredUsers = [] } = useRegisteredUsers();
   const { data: cityAttributions = [] } = useCityAttributions();
@@ -411,7 +412,14 @@ export default function Prospects() {
   const handleDeleteAllCertainDuplicates = useCallback(async () => {
     const certainGroups = duplicateGroups.filter((g) => g.certain);
     const losers = certainGroups.flatMap((g) => pickLosers(g.items));
-    if (losers.length === 0) return;
+    if (losers.length === 0) {
+      toast.info(
+        duplicateGroups.length > 0
+          ? "Aucun doublon certain (nom + téléphone identiques) à supprimer. Il reste des doublons probables à traiter au cas par cas dans la liste ci-dessous."
+          : 'Aucun doublon détecté.'
+      );
+      return;
+    }
     if (!window.confirm(`Supprimer ${losers.length} fiche(s) en doublon certain (nom + téléphone identiques) ? Une fiche est conservée par groupe (la mieux renseignée / la plus avancée). Action irréversible.`)) return;
     setBulkDeletingDuplicates(true);
     let deleted = 0;
@@ -642,15 +650,21 @@ export default function Prospects() {
     }
     setSaving(true);
     try {
-      await client.entities.prospects.create({
+      const res = await client.entities.prospects.create({
         data: { ...newProspect, statut_avancement: 'Appel telephonique', statut_gagne_perdu: 'actif', nombre_appels: 0, nombre_appels_repondus: 0, nombre_relances: 0 },
       });
+      const createdId = (res.data as { id?: number } | undefined)?.id;
       toast.success('Prospect ajouté');
       setShowAddDialog(false);
       setNewProspect({ nom_societe: '', nom_dirigeant: '', telephone: '', email: '', zone_geographique: '', categorie_metier: '', source_lead: '', montant_potentiel: 0, notes: '', priorite: 'moyenne', forme_juridique: '', nombre_salaries: '' });
       invalidateProspects();
+      // Redirige directement vers la fiche créée : sinon le nouveau prospect
+      // peut être invisible dans la liste si un filtre actif (statut/ville/
+      // secteur/commercial, mémorisés d'une session à l'autre) l'exclut,
+      // donnant l'impression trompeuse que l'ajout n'a pas fonctionné.
+      if (createdId) navigate(`/prospects/${createdId}`);
     } catch { toast.error("Erreur lors de l'ajout"); } finally { setSaving(false); }
-  }, [newProspect, invalidateProspects, prospects, saving]);
+  }, [newProspect, invalidateProspects, prospects, saving, navigate]);
 
   const toggleSelect = useCallback((id: number) => {
     setSelectedIds((prev) => { const next = new Set(prev); if (next.has(id)) next.delete(id); else next.add(id); return next; });

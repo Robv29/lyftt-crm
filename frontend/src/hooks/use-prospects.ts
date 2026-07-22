@@ -35,6 +35,8 @@ export interface Prospect {
   monday_synced_at: string | null;
   monday_last_sync_at: string | null;
   monday_sync_error: string | null;
+  ca_encaisse: boolean;
+  date_encaissement: string | null;
   priorite: string;
   source_lead: string;
   montant_potentiel: number;
@@ -66,6 +68,15 @@ export interface MondaySyncLogEntry {
   detail: string | null;
   success: boolean;
   created_at: string;
+}
+
+export interface ObjectifCA {
+  id: number;
+  user_role_id: number;
+  mois: string; // 'YYYY-MM-DD', toujours le 1er du mois
+  objectif_ca: number;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface RegisteredUser {
@@ -163,6 +174,43 @@ export function useInvalidateMondaySyncLog() {
   return (prospectId: number) => {
     queryClient.invalidateQueries({ queryKey: ['monday_sync_log', prospectId] });
   };
+}
+
+export function useObjectifsCA() {
+  return useQuery({
+    queryKey: ['objectifs_ca'] as const,
+    queryFn: async () => {
+      const res = await client.entities.objectifs_ca.queryAll({
+        query: {},
+        sort: '-mois',
+        limit: 5000,
+      });
+      return (res.data?.items || []) as ObjectifCA[];
+    },
+    staleTime: 60 * 1000,
+  });
+}
+
+export function useUpsertObjectifCA() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (params: { userRoleId: number; mois: string; objectifCa: number; existingId?: number }) => {
+      if (params.existingId) {
+        return client.entities.objectifs_ca.update({
+          id: params.existingId,
+          data: { objectif_ca: params.objectifCa, updated_at: new Date().toISOString() },
+        });
+      }
+      return client.entities.objectifs_ca.create({
+        user_role_id: params.userRoleId,
+        mois: params.mois,
+        objectif_ca: params.objectifCa,
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['objectifs_ca'] });
+    },
+  });
 }
 
 export function useRegisteredUsers() {

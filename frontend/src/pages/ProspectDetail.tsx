@@ -200,6 +200,11 @@ export default function ProspectDetail() {
     if (newStatus === 'Signature' && !prospect.signed_by_user_id && userRole?.id) {
       updates.signed_by_user_id = userRole.id;
     }
+    // Ancre mensuelle pour le module Performance CA : figée à la première
+    // Signature, jamais réécrite ensuite (même logique que signed_by_user_id).
+    if (newStatus === 'Signature' && !prospect.date_signature) {
+      updates.date_signature = new Date().toISOString();
+    }
 
     updateProspectOptimistic(updates);
     try {
@@ -208,6 +213,9 @@ export default function ProspectDetail() {
       else if (newStatus === 'Refus / Perdu') updateData.statut_gagne_perdu = 'perdu';
       if (newStatus === 'Signature' && !prospect.signed_by_user_id && userRole?.id) {
         updateData.signed_by_user_id = userRole.id;
+      }
+      if (newStatus === 'Signature' && !prospect.date_signature) {
+        updateData.date_signature = new Date().toISOString();
       }
       await client.entities.prospects.update({ id: String(prospect.id), data: updateData });
       await client.entities.commercial_actions.create({
@@ -226,6 +234,7 @@ export default function ProspectDetail() {
   const [markingComplete, setMarkingComplete] = useState(false);
   const [syncingMonday, setSyncingMonday] = useState(false);
   const [showSyncError, setShowSyncError] = useState(false);
+  const [savingEncaisse, setSavingEncaisse] = useState(false);
 
   const handleToggleDoc = useCallback(async (field: 'doc_cfp_recu' | 'doc_kbis_recu' | 'doc_cni_recu', checked: boolean) => {
     if (!prospect) return;
@@ -291,6 +300,28 @@ export default function ProspectDetail() {
       setMarkingComplete(false);
     }
   }, [prospect, markingComplete, invalidateActions, invalidateProspects, runMondaySync]);
+
+  // CA encaissé (admin uniquement) : coché quand le paiement est réellement
+  // constaté — c'est ce qui fait basculer le dossier de "CA confirmé" à
+  // "CA encaissé" dans le module Performance CA.
+  const handleToggleEncaisse = useCallback(async (checked: boolean) => {
+    if (!prospect) return;
+    setSavingEncaisse(true);
+    const nowIso = new Date().toISOString();
+    updateProspectOptimistic({ ca_encaisse: checked, date_encaissement: checked ? nowIso : null } as Partial<Prospect>);
+    try {
+      await client.entities.prospects.update({ id: String(prospect.id), data: { ca_encaisse: checked, date_encaissement: checked ? nowIso : null } });
+      await client.entities.commercial_actions.create({
+        data: { prospect_id: prospect.id, action_type: 'ca_encaisse', appel_repondu: false, from_status: prospect.statut_avancement, to_status: prospect.statut_avancement, notes: checked ? `CA encaissé : ${prospect.montant_potentiel ?? 0} €` : 'CA encaissé annulé', action_date: nowIso },
+      });
+      toast.success(checked ? 'CA marqué comme encaissé' : 'Encaissement annulé');
+    } catch {
+      invalidateProspects();
+      toast.error("Erreur lors de la mise à jour de l'encaissement");
+    } finally {
+      setSavingEncaisse(false);
+    }
+  }, [prospect, updateProspectOptimistic, invalidateProspects]);
 
   const handleRetryMondaySync = useCallback(() => {
     if (!prospect || syncingMonday) return;
@@ -548,6 +579,24 @@ export default function ProspectDetail() {
 
                   {prospect.monday_synced_at && (
                     <p className="text-xs text-slate-500">Synchronisé le {formatDate(prospect.monday_synced_at || '')}</p>
+                  )}
+
+                  {isAdmin && prospect.statut_avancement === 'Envoyé à Mathilde' && (
+                    <label className="flex items-center gap-2 pt-2 border-t border-slate-100 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={!!prospect.ca_encaisse}
+                        disabled={savingEncaisse}
+                        onChange={(e) => handleToggleEncaisse(e.target.checked)}
+                        className="w-4 h-4 rounded accent-emerald-600"
+                      />
+                      <span className="text-sm text-slate-700">
+                        CA encaissé{prospect.montant_potentiel ? ` (${Number(prospect.montant_potentiel).toLocaleString('fr-FR')} €)` : ''}
+                      </span>
+                      {prospect.ca_encaisse && prospect.date_encaissement && (
+                        <span className="text-xs text-slate-400 ml-auto">le {formatDate(prospect.date_encaissement)}</span>
+                      )}
+                    </label>
                   )}
 
                   <div className="flex flex-wrap gap-2 pt-1">

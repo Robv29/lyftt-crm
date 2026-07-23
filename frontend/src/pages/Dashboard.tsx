@@ -401,6 +401,13 @@ export default function Dashboard() {
     return map;
   }, [registeredUsers]);
 
+  // Liste des commerciaux assignables sur les fiches importées — seul l'admin
+  // peut réattribuer (ça touche l'attribution CA/commission dans Performance CA).
+  const assignableCommerciaux = useMemo(
+    () => registeredUsers.filter((u) => u.is_active && (u.role === 'commercial' || u.role === 'admin')),
+    [registeredUsers]
+  );
+
   const markVerified = useCallback(async (id: number) => {
     try {
       await client.entities.prospects.update({ id: String(id), data: { a_verifier: false } });
@@ -408,6 +415,17 @@ export default function Dashboard() {
       toast.success('Fiche marquée comme vérifiée');
     } catch {
       toast.error('Erreur lors de la mise à jour');
+    }
+  }, [invalidateProspects]);
+
+  const assignCommercial = useCallback(async (id: number, value: string) => {
+    const userRoleId = value === 'none' ? null : Number(value);
+    try {
+      await client.entities.prospects.update({ id: String(id), data: { signed_by_user_id: userRoleId } });
+      invalidateProspects();
+      toast.success(userRoleId ? 'Commercial attribué' : 'Attribution retirée');
+    } catch {
+      toast.error("Erreur lors de l'attribution");
     }
   }, [invalidateProspects]);
 
@@ -489,15 +507,27 @@ export default function Dashboard() {
           </CardHeader>
           <CardContent className="space-y-1.5">
             {aVerifierList.slice(0, 10).map((p) => (
-              <div key={p.id} className="flex items-center justify-between gap-3 bg-white rounded-xl px-3 py-2">
-                <Link to={`/prospects/${p.id}`} className="flex-1 min-w-0">
+              <div key={p.id} className="flex items-center justify-between gap-3 bg-white rounded-xl px-3 py-2 flex-wrap">
+                <Link to={`/prospects/${p.id}`} className="flex-1 min-w-[140px]">
                   <p className="font-medium text-slate-800 truncate">{p.nom_societe || '(sans nom)'}</p>
                   <p className="text-xs text-slate-400">
                     {p.montant_potentiel ? `${Number(p.montant_potentiel).toLocaleString('fr-FR')} €` : 'CA non renseigné'}
-                    {isAdmin && p.signed_by_user_id && ` · ${commercialNameById.get(p.signed_by_user_id) || ''}`}
-                    {isAdmin && !p.signed_by_user_id && ' · Non attribué'}
+                    {!isAdmin && p.signed_by_user_id && ` · ${commercialNameById.get(p.signed_by_user_id) || ''}`}
                   </p>
                 </Link>
+                {isAdmin && (
+                  <Select value={p.signed_by_user_id ? String(p.signed_by_user_id) : 'none'} onValueChange={(v) => assignCommercial(p.id, v)}>
+                    <SelectTrigger className="h-8 w-40 rounded-lg text-xs shrink-0">
+                      <SelectValue placeholder="Non attribué" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">Non attribué</SelectItem>
+                      {assignableCommerciaux.map((u) => (
+                        <SelectItem key={u.id} value={String(u.id)}>{u.first_name} {u.last_name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
                 <Button
                   size="sm"
                   variant="ghost"

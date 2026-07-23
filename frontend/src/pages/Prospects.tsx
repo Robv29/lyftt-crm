@@ -73,6 +73,16 @@ interface ParsedProspect {
   effectif: string;
   forme: string;
   statut_monday: string;
+  date_visio: string; // ISO 'YYYY-MM-DD', vide si pas de colonne "Date RDV" ou pas de valeur
+}
+
+// Convertit une cellule Excel "Date RDV" (Date JS grâce à cellDates:true, ou
+// texte type "15/01/2024") en ISO 'YYYY-MM-DD'. Retourne '' si non exploitable.
+function excelCellToIsoDate(raw: string | number | Date | null | undefined): string {
+  if (!raw) return '';
+  const d = raw instanceof Date ? raw : new Date(String(raw));
+  if (Number.isNaN(d.getTime())) return '';
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
 // Import Monday robuste : mappe les colonnes des sous-éléments PAR LEUR NOM
@@ -83,7 +93,7 @@ function parseMondayExcel(XLSX: typeof XLSXType, workbook: XLSXType.WorkBook): P
   if (!sheet) return [];
   const zoneCell = sheet['A2'];
   const zone = zoneCell ? String(zoneCell.v ?? '').trim() : '';
-  const rows: (string | number | null)[][] = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: null });
+  const rows: (string | number | Date | null)[][] = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: null });
 
   const findCol = (headers: string[], ...pats: string[]) =>
     headers.findIndex((h) => pats.some((p) => h.includes(p)));
@@ -110,6 +120,7 @@ function parseMondayExcel(XLSX: typeof XLSXType, workbook: XLSXType.WorkBook): P
         effectif: findCol(headers, 'salari', 'effectif'),
         forme: findCol(headers, 'juridique', 'forme'),
         statut: findCol(headers, 'statut'),
+        rdv: findCol(headers, 'rdv'), // colonne Monday "Date RDV"
       };
       if (colMap.name === -1) colMap.name = 1;
       continue;
@@ -135,6 +146,7 @@ function parseMondayExcel(XLSX: typeof XLSXType, workbook: XLSXType.WorkBook): P
         effectif: g('effectif'),
         forme: g('forme'),
         statut_monday: g('statut'),
+        date_visio: excelCellToIsoDate(cm.rdv >= 0 ? row[cm.rdv] : null),
       });
     }
   }
@@ -567,7 +579,7 @@ export default function Prospects() {
     try {
       const XLSX = await import('xlsx');
       const data = await file.arrayBuffer();
-      const workbook = XLSX.read(data);
+      const workbook = XLSX.read(data, { cellDates: true });
       const parsed = parseMondayExcel(XLSX, workbook);
       const updates = parseUpdates(XLSX, workbook); // 2e feuille : "update content" -> notes
       if (parsed.length === 0) { toast.error('Aucun prospect trouvé dans le fichier.'); return; }
@@ -599,6 +611,12 @@ export default function Prospects() {
             const patch: Record<string, unknown> = {};
             if (p.forme && p.forme !== existing.forme_juridique) patch.forme_juridique = p.forme;
             if (p.effectif && p.effectif !== existing.nombre_salaries) patch.nombre_salaries = p.effectif;
+            // Renseigne la date de visio dès que Monday en fournit une (colonne
+            // "Date RDV") et qu'elle manque en base — même si le dossier a déjà
+            // avancé plus loin dans le pipeline. Sans ça, un prospect déjà "calé"
+            // (visio déjà passée) réimporté restait sans date_visio pour
+            // toujours, invisible dans "Mes visios passées".
+            if (p.date_visio && !existing.date_visio) patch.date_visio = p.date_visio;
             if (existing.statut_gagne_perdu !== 'gagne') {
               if (mapped.statut_avancement === 'Refus / Perdu' && existing.statut_avancement !== 'Refus / Perdu') {
                 patch.statut_avancement = 'Refus / Perdu';
@@ -625,7 +643,7 @@ export default function Prospects() {
             const ctx = p.statut_monday ? `Statut Monday: ${p.statut_monday}` : '';
             const note = [ctx, upd].filter(Boolean).join('\n\n');
             const res = await client.entities.prospects.create({
-              data: { nom_societe: p.nom_societe, nom_dirigeant: p.nom_dirigeant, telephone: p.telephone, email: p.email || '', zone_geographique: p.zone_geographique, categorie_metier: p.categorie_metier, commercial_assigne: p.commercial_assigne, source_lead: 'Import Excel', montant_potentiel: 0, notes: note, forme_juridique: p.forme || '', nombre_salaries: p.effectif || '', statut_avancement: mapped.statut_avancement, priorite: 'moyenne', statut_gagne_perdu: mapped.statut_gagne_perdu, nombre_appels: 0, nombre_appels_repondus: 0, nombre_relances: 0 },
+              data: { nom_societe: p.nom_societe, nom_dirigeant: p.nom_dirigeant, telephone: p.telephone, email: p.email || '', zone_geographique: p.zone_geographique, categorie_metier: p.categorie_metier, commercial_assigne: p.commercial_assigne, source_lead: 'Import Excel', montant_potentiel: 0, notes: note, forme_juridique: p.forme || '', nombre_salaries: p.effectif || '', statut_avancement: mapped.statut_avancement, priorite: 'moyenne', statut_gagne_perdu: mapped.statut_gagne_perdu, nombre_appels: 0, nombre_appels_repondus: 0, nombre_relances: 0, date_visio: p.date_visio || null },
             });
             existingByKey.set(key, res.data as Prospect);
             imported++;

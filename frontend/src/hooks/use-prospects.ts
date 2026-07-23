@@ -38,6 +38,7 @@ export interface Prospect {
   ca_encaisse: boolean;
   date_encaissement: string | null;
   a_verifier: boolean;
+  date_envoi_mathilde: string | null;
   priorite: string;
   source_lead: string;
   montant_potentiel: number;

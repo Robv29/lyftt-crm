@@ -207,7 +207,7 @@ Deno.serve(async (req) => {
 
       const itemUrl = `https://lyftt.monday.com/boards/${MONDAY_BOARD_ID}/pulses/${itemId}`;
       const nowIso = new Date().toISOString();
-      await supabase.from('prospects').update({
+      const prospectUpdate: Record<string, unknown> = {
         monday_item_id: itemId,
         monday_item_url: itemUrl,
         monday_sync_status: 'synced',
@@ -215,7 +215,13 @@ Deno.serve(async (req) => {
         monday_last_sync_at: nowIso,
         monday_sync_error: null,
         statut_avancement: 'Envoyé à Mathilde',
-      }).eq('id', prospect_id);
+      };
+      // Date figée à la première transmission réussie (jamais réécrite ensuite),
+      // sert de référence pour l'export Performance CA.
+      if (!prospect.date_envoi_mathilde) {
+        prospectUpdate.date_envoi_mathilde = nowIso.slice(0, 10);
+      }
+      await supabase.from('prospects').update(prospectUpdate).eq('id', prospect_id);
 
       await supabase.from('commercial_actions').insert({
         prospect_id, action_type: 'status_change', appel_repondu: false,

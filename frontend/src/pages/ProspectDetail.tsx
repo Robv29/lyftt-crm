@@ -211,6 +211,12 @@ export default function ProspectDetail() {
     if (newStatus === 'Signature' && !prospect.date_signature) {
       updates.date_signature = new Date().toISOString();
     }
+    // Idem pour la date d'envoi à Mathilde (sert de référence pour l'export
+    // Performance CA) — figée à la première fois, même si le statut change
+    // manuellement ici plutôt que via la transmission Monday automatique.
+    if (newStatus === 'Envoyé à Mathilde' && !prospect.date_envoi_mathilde) {
+      updates.date_envoi_mathilde = new Date().toISOString().slice(0, 10);
+    }
 
     updateProspectOptimistic(updates);
     try {
@@ -222,6 +228,9 @@ export default function ProspectDetail() {
       }
       if (newStatus === 'Signature' && !prospect.date_signature) {
         updateData.date_signature = new Date().toISOString();
+      }
+      if (newStatus === 'Envoyé à Mathilde' && !prospect.date_envoi_mathilde) {
+        updateData.date_envoi_mathilde = new Date().toISOString().slice(0, 10);
       }
       await client.entities.prospects.update({ id: String(prospect.id), data: updateData });
       await client.entities.commercial_actions.create({

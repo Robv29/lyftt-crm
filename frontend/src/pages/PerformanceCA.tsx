@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { usePersistentState } from '../hooks/use-persistent-state';
 import {
   useProspects, useRegisteredUsers, useObjectifsCA, useUpsertObjectifCA, useUpdateTauxCommission,
   usePaiements, useAddPaiement, useDeletePaiement, useInvalidateProspects, type Prospect,
@@ -15,7 +16,7 @@ import { toast } from 'sonner';
 import {
   TrendingUp, Target, Wallet, CheckCircle2, Pencil, Check, X,
   Trophy, Flame, Percent, Search, Plus, Trash2, Receipt,
-  AlertTriangle, ExternalLink, PiggyBank,
+  AlertTriangle, ExternalLink, PiggyBank, Download,
 } from 'lucide-react';
 
 const MONTH_NAMES = [
@@ -27,6 +28,8 @@ const MONTH_NAMES = [
 const PROBABLE_STAGES = new Set(['Signature', 'Dossier complet']);
 // Tous les dossiers "clients signés" (peu importe l'étape) pour l'onglet paiements.
 const WON_STAGES = new Set(['Signature', 'Dossier complet', 'Envoyé à Mathilde']);
+// Ordre pipeline pour le tri par statut de l'onglet "Suivi paiements clients".
+const STATUT_ORDER: Record<string, number> = { 'Signature': 0, 'Dossier complet': 1, 'Envoyé à Mathilde': 2 };
 
 const eur = (n: number) =>
   n.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 });
@@ -66,16 +69,18 @@ export default function PerformanceCA() {
 
   const now = new Date();
   const moisCourant = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-  const [tab, setTab] = useState<'apercu' | 'paiements'>('apercu');
-  const [mois, setMois] = useState(moisCourant);
+  // Etat de la page persistant (localStorage) : on garde l'onglet, le mois et
+  // les filtres d'une visite à l'autre plutôt que de repartir de zéro.
+  const [tab, setTab] = usePersistentState<'apercu' | 'paiements'>('lyftt.performanceCa.tab', 'apercu');
+  const [mois, setMois] = usePersistentState<string>('lyftt.performanceCa.mois', moisCourant);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editValue, setEditValue] = useState('');
   const [editingTauxId, setEditingTauxId] = useState<number | null>(null);
   const [editTauxValue, setEditTauxValue] = useState('');
 
   // --- Onglet "Suivi paiements clients" ---
-  const [search, setSearch] = useState('');
-  const [commercialFilter, setCommercialFilter] = useState('tous');
+  const [search, setSearch] = usePersistentState<string>('lyftt.performanceCa.search', '');
+  const [commercialFilter, setCommercialFilter] = usePersistentState<string>('lyftt.performanceCa.commercialFilter', 'tous');
   const [editingCaMaxId, setEditingCaMaxId] = useState<number | null>(null);
   const [editCaMaxValue, setEditCaMaxValue] = useState('');
   const [addingPaiementFor, setAddingPaiementFor] = useState<number | null>(null);
@@ -248,7 +253,14 @@ export default function PerformanceCA() {
           .sort((a, b) => b.date_paiement.localeCompare(a.date_paiement));
         return { prospect: p, max, paye, pct, commercialName, pmts };
       })
-      .sort((a, b) => a.prospect.nom_societe.localeCompare(b.prospect.nom_societe, 'fr'));
+      // Groupé par statut (Signature -> Dossier complet -> Envoyé à Mathilde),
+      // puis alphabétique dans chaque groupe.
+      .sort((a, b) => {
+        const sa = STATUT_ORDER[a.prospect.statut_avancement] ?? 99;
+        const sb = STATUT_ORDER[b.prospect.statut_avancement] ?? 99;
+        if (sa !== sb) return sa - sb;
+        return a.prospect.nom_societe.localeCompare(b.prospect.nom_societe, 'fr');
+      });
   }, [prospects, paiementsByProspect, paiements, commerciaux, search, commercialFilter]);
 
   // Reste à encaisser sur TOUS les clients signés (pas seulement ceux filtrés
@@ -267,6 +279,30 @@ export default function PerformanceCA() {
     () => prospects.filter((p) => WON_STAGES.has(p.statut_avancement) && !(Number(p.montant_potentiel) > 0)).length,
     [prospects]
   );
+
+  // Export Excel de la liste actuellement affichée (respecte la recherche,
+  // le filtre commercial et le tri par statut en cours).
+  const handleExportClients = async () => {
+    if (clientsSignes.length === 0) { toast.error('Rien à exporter avec ces filtres.'); return; }
+    const XLSX = await import('xlsx');
+    const rowsXlsx = clientsSignes.map(({ prospect: p, max, paye, pct, commercialName }) => ({
+      'Société': p.nom_societe,
+      'Statut': p.statut_avancement,
+      'Commercial': commercialName,
+      'CA max (€)': max,
+      'Réglé (€)': paye,
+      'Reste (€)': Math.max(0, max - paye),
+      '% réglé': pct,
+      'Date envoi Mathilde': p.date_envoi_mathilde
+        ? new Date(p.date_envoi_mathilde).toLocaleDateString('fr-FR')
+        : '',
+    }));
+    const ws = XLSX.utils.json_to_sheet(rowsXlsx);
+    ws['!cols'] = Object.keys(rowsXlsx[0]).map((h) => ({ wch: Math.max(h.length, 16) }));
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Clients signés');
+    XLSX.writeFile(wb, `performance_ca_clients_${new Date().toISOString().slice(0, 10)}.xlsx`);
+  };
 
   const saveCaMax = async (p: Prospect) => {
     const val = Number(editCaMaxValue.replace(',', '.'));
@@ -423,6 +459,13 @@ export default function PerformanceCA() {
                 ))}
               </SelectContent>
             </Select>
+            <Button
+              variant="outline"
+              onClick={handleExportClients}
+              className="rounded-xl gap-1.5 shrink-0"
+            >
+              <Download className="w-4 h-4" /> Exporter ({clientsSignes.length})
+            </Button>
           </div>
 
           {clientsSignes.length === 0 ? (

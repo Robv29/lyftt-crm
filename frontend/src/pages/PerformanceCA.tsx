@@ -18,6 +18,11 @@ import {
   AlertTriangle, ExternalLink, PiggyBank,
 } from 'lucide-react';
 
+const MONTH_NAMES = [
+  'Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin',
+  'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre',
+];
+
 // Dossiers "gagnés" mais pas encore confirmés/transmis à Mathilde -> CA probable.
 const PROBABLE_STAGES = new Set(['Signature', 'Dossier complet']);
 // Tous les dossiers "clients signés" (peu importe l'étape) pour l'onglet paiements.
@@ -80,6 +85,23 @@ export default function PerformanceCA() {
 
   const loading = loadingP || loadingU || loadingO || loadingPmt;
   const isMoisCourant = mois === moisCourant;
+
+  // Sélecteurs mois / année séparés (plus fiables que l'input date natif,
+  // notamment pour naviguer rapidement d'une année à l'autre).
+  const selectedYear = mois.slice(0, 4);
+  const selectedMonthIdx = Number(mois.slice(5, 7)) - 1;
+  const yearsOptions = useMemo(() => {
+    const years = new Set<number>([now.getFullYear() - 1, now.getFullYear(), now.getFullYear() + 1]);
+    for (const p of prospects) {
+      if (p.date_signature) years.add(Number(p.date_signature.slice(0, 4)));
+    }
+    for (const o of objectifs) {
+      if (o.mois) years.add(Number(o.mois.slice(0, 4)));
+    }
+    return Array.from(years).filter((y) => y > 2000 && y < 3000).sort((a, b) => a - b);
+  }, [prospects, objectifs]);
+  const setMonthPart = (idx: string) => setMois(`${selectedYear}-${String(Number(idx) + 1).padStart(2, '0')}`);
+  const setYearPart = (y: string) => setMois(`${y}-${String(selectedMonthIdx + 1).padStart(2, '0')}`);
 
   const commerciaux = useMemo(
     () => registeredUsers.filter((u) => u.is_active && (u.role === 'commercial' || u.role === 'admin')),
@@ -308,12 +330,24 @@ export default function PerformanceCA() {
           </p>
         </div>
         {tab === 'apercu' && (
-          <Input
-            type="month"
-            value={mois}
-            onChange={(e) => setMois(e.target.value)}
-            className="w-44 rounded-xl"
-          />
+          <div className="flex gap-2">
+            <Select value={String(selectedMonthIdx)} onValueChange={setMonthPart}>
+              <SelectTrigger className="w-36 rounded-xl"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {MONTH_NAMES.map((m, i) => (
+                  <SelectItem key={m} value={String(i)}>{m}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select value={selectedYear} onValueChange={setYearPart}>
+              <SelectTrigger className="w-24 rounded-xl"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {yearsOptions.map((y) => (
+                  <SelectItem key={y} value={String(y)}>{y}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
         )}
       </div>
 

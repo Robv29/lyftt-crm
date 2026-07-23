@@ -97,6 +97,14 @@ function parseMondayExcel(XLSX: typeof XLSXType, workbook: XLSXType.WorkBook): P
 
   const findCol = (headers: string[], ...pats: string[]) =>
     headers.findIndex((h) => pats.some((p) => h.includes(p)));
+  // Variante avec exclusion : nécessaire pour "Statut" car la colonne
+  // "STATUT juridique" contient elle aussi le mot "statut" et arrive AVANT
+  // la vraie colonne de statut pipeline dans l'export -> findCol seul
+  // renvoyait systématiquement la mauvaise colonne (bug persistant de
+  // l'import de Clément : le statut Monday réel n'était jamais lu, les
+  // fiches restaient bloquées sur "Appel telephonique").
+  const findColExcl = (headers: string[], include: string[], exclude: string[]) =>
+    headers.findIndex((h) => include.some((p) => h.includes(p)) && !exclude.some((p) => h.includes(p)));
 
   const prospects: ParsedProspect[] = [];
   let currentCategory = '';
@@ -119,7 +127,7 @@ function parseMondayExcel(XLSX: typeof XLSXType, workbook: XLSXType.WorkBook): P
         commercial: findCol(headers, 'commercial'),
         effectif: findCol(headers, 'salari', 'effectif'),
         forme: findCol(headers, 'juridique', 'forme'),
-        statut: findCol(headers, 'statut'),
+        statut: findColExcl(headers, ['statut'], ['juridique']),
         rdv: findCol(headers, 'rdv'), // colonne Monday "Date RDV"
       };
       if (colMap.name === -1) colMap.name = 1;

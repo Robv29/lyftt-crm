@@ -178,8 +178,8 @@ export default function ProspectDetail() {
     finally { setSavingInfo(false); }
   }, [prospect, editForm, savingInfo, updateProspectOptimistic]);
 
-  // Suppression réservée aux admins (RLS : delete sur prospects/commercial_actions
-  // limité aux admins depuis le correctif de sécurité de l'audit du 21/07/2026).
+  // Suppression ouverte à tous les commerciaux (RLS mise à jour le 23/07/2026
+  // à la demande de Robin, réouverture du correctif admin-only du 21/07/2026).
   const handleDeleteProspect = useCallback(async () => {
     if (!prospect || deleting) return;
     if (!window.confirm(`Supprimer définitivement "${prospect.nom_societe}" ? Cette action supprime aussi tout son historique d'appels et est irréversible.`)) return;
@@ -190,7 +190,7 @@ export default function ProspectDetail() {
       invalidateProspects();
       navigate('/prospects');
     } catch {
-      toast.error("Erreur lors de la suppression (droits admin requis)");
+      toast.error('Erreur lors de la suppression');
       setDeleting(false);
     }
   }, [prospect, deleting, invalidateProspects, navigate]);
@@ -467,11 +467,9 @@ export default function ProspectDetail() {
           <Button variant="outline" size="sm" onClick={handleOpenEdit} className="gap-1.5 rounded-xl border-slate-200">
             <Pencil className="w-3.5 h-3.5" /> Modifier la fiche
           </Button>
-          {isAdmin && (
-            <Button variant="outline" size="sm" onClick={handleDeleteProspect} disabled={deleting} className="gap-1.5 rounded-xl border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700">
-              <Trash2 className="w-3.5 h-3.5" /> {deleting ? 'Suppression...' : 'Supprimer'}
-            </Button>
-          )}
+          <Button variant="outline" size="sm" onClick={handleDeleteProspect} disabled={deleting} className="gap-1.5 rounded-xl border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700">
+            <Trash2 className="w-3.5 h-3.5" /> {deleting ? 'Suppression...' : 'Supprimer'}
+          </Button>
         </div>
       </div>
 

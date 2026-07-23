@@ -416,7 +416,7 @@ export default function Prospects() {
       toast.success('Prospect supprimé');
       invalidateProspects();
     } catch {
-      toast.error('Erreur lors de la suppression (droits admin requis)');
+      toast.error('Erreur lors de la suppression');
     } finally {
       setDeletingDuplicateId(null);
     }

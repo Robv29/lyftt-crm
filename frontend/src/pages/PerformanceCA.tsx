@@ -28,8 +28,17 @@ const MONTH_NAMES = [
 const PROBABLE_STAGES = new Set(['Signature', 'Dossier complet']);
 // Tous les dossiers "clients signés" (peu importe l'étape) pour l'onglet paiements.
 const WON_STAGES = new Set(['Signature', 'Dossier complet', 'Envoyé à Mathilde']);
-// Ordre pipeline pour le tri par statut de l'onglet "Suivi paiements clients".
-const STATUT_ORDER: Record<string, number> = { 'Signature': 0, 'Dossier complet': 1, 'Envoyé à Mathilde': 2 };
+// Classement par statut de règlement pour l'onglet "Suivi paiements clients"
+// (du plus urgent/à traiter au plus abouti) : CA non renseigné en premier
+// (impossible de savoir où on en est tant que ce n'est pas rempli), puis
+// aucun paiement reçu, puis paiement partiel, puis soldé en dernier.
+const PAIEMENT_STATUT_LABELS = ['CA non renseigné', 'Pas de paiement reçu', 'Paiement pas reçu en totalité', 'Paiement reçu'] as const;
+function paiementStatutRank(max: number, paye: number): number {
+  if (!(max > 0)) return 0;
+  if (paye <= 0) return 1;
+  if (paye < max) return 2;
+  return 3;
+}
 
 const eur = (n: number) =>
   n.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 });
@@ -251,14 +260,15 @@ export default function PerformanceCA() {
         const pmts = paiements
           .filter((pmt) => pmt.prospect_id === p.id)
           .sort((a, b) => b.date_paiement.localeCompare(a.date_paiement));
-        return { prospect: p, max, paye, pct, commercialName, pmts };
+        const statutRank = paiementStatutRank(max, paye);
+        const statutLabel = PAIEMENT_STATUT_LABELS[statutRank];
+        return { prospect: p, max, paye, pct, commercialName, pmts, statutRank, statutLabel };
       })
-      // Groupé par statut (Signature -> Dossier complet -> Envoyé à Mathilde),
-      // puis alphabétique dans chaque groupe.
+      // Classé par statut de règlement : CA non renseigné -> pas de paiement
+      // reçu -> paiement partiel -> paiement reçu ; alphabétique dans chaque
+      // groupe.
       .sort((a, b) => {
-        const sa = STATUT_ORDER[a.prospect.statut_avancement] ?? 99;
-        const sb = STATUT_ORDER[b.prospect.statut_avancement] ?? 99;
-        if (sa !== sb) return sa - sb;
+        if (a.statutRank !== b.statutRank) return a.statutRank - b.statutRank;
         return a.prospect.nom_societe.localeCompare(b.prospect.nom_societe, 'fr');
       });
   }, [prospects, paiementsByProspect, paiements, commerciaux, search, commercialFilter]);
@@ -285,9 +295,10 @@ export default function PerformanceCA() {
   const handleExportClients = async () => {
     if (clientsSignes.length === 0) { toast.error('Rien à exporter avec ces filtres.'); return; }
     const XLSX = await import('xlsx');
-    const rowsXlsx = clientsSignes.map(({ prospect: p, max, paye, pct, commercialName }) => ({
+    const rowsXlsx = clientsSignes.map(({ prospect: p, max, paye, pct, commercialName, statutLabel }) => ({
       'Société': p.nom_societe,
-      'Statut': p.statut_avancement,
+      'Statut dossier': p.statut_avancement,
+      'Statut règlement': statutLabel,
       'Commercial': commercialName,
       'CA max (€)': max,
       'Réglé (€)': paye,
@@ -474,8 +485,14 @@ export default function PerformanceCA() {
             </Card>
           ) : (
             <div className="space-y-3">
-              {clientsSignes.map(({ prospect: p, max, paye, pct, commercialName, pmts }) => (
-                <Card key={p.id} className="border-0 shadow-sm rounded-2xl">
+              {clientsSignes.map(({ prospect: p, max, paye, pct, commercialName, pmts, statutRank, statutLabel }, idx) => (
+                <div key={p.id}>
+                  {(idx === 0 || clientsSignes[idx - 1].statutRank !== statutRank) && (
+                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-400 pt-2 pb-1 first:pt-0">
+                      {statutLabel} · {clientsSignes.filter((c) => c.statutRank === statutRank).length}
+                    </p>
+                  )}
+                  <Card className="border-0 shadow-sm rounded-2xl">
                   <CardContent className="p-5 space-y-3">
                     <div className="flex flex-wrap items-start justify-between gap-3">
                       <div>
@@ -586,7 +603,8 @@ export default function PerformanceCA() {
                       )
                     )}
                   </CardContent>
-                </Card>
+                  </Card>
+                </div>
               ))}
             </div>
           )}

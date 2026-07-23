@@ -7,9 +7,12 @@ import {
   useCityAttributions,
   useRegisteredUsers,
   useObjectifsCA,
+  useInvalidateProspects,
   type Prospect,
   type CommercialAction,
 } from '../hooks/use-prospects';
+import { client } from '../lib/api';
+import { toast } from 'sonner';
 import ErrorState from '../components/ErrorState';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -41,6 +44,8 @@ import {
   Percent,
   UserCircle,
   Download,
+  AlertTriangle,
+  CheckCircle2,
 } from 'lucide-react';
 
 type PeriodKey = 'today' | 'week' | 'month' | 'prev_month' | 'year';
@@ -132,12 +137,13 @@ function computeConversionRate(actions: CommercialAction[], start: Date, end: Da
 }
 
 export default function Dashboard() {
-  const { user } = useAuth();
+  const { user, isAdmin, userRole } = useAuth();
   const { data: allProspects = [], isLoading: loadingP, error: errorP, refetch: refetchP, isFetching: fetchingP } = useProspects();
   const { data: allActions = [], isLoading: loadingA, error: errorA, refetch: refetchA, isFetching: fetchingA } = useActions();
   const { data: cityAttributions = [] } = useCityAttributions();
   const { data: registeredUsers = [] } = useRegisteredUsers();
   const { data: objectifsCA = [] } = useObjectifsCA();
+  const invalidateProspects = useInvalidateProspects();
 
   const hasError = errorP || errorA;
   const handleRetryAll = useCallback(() => {
@@ -377,6 +383,34 @@ export default function Dashboard() {
   const activeProspects = useMemo(() => prospects.filter((p) => p.statut_gagne_perdu === 'actif').length, [prospects]);
   const wonDeals = useMemo(() => prospects.filter((p) => p.statut_gagne_perdu === 'gagne').length, [prospects]);
 
+  // Fiches créées automatiquement depuis le Monday "Transmission Clients"
+  // (dossiers sans fiche CRM préexistante) — à compléter/vérifier par le
+  // commercial concerné. Un commercial ne voit que les siennes ; l'admin voit
+  // tout, y compris celles sans commercial identifiable (owners Monday =
+  // Robin/Théo uniquement, donc non attribuables).
+  const aVerifierList = useMemo(() => {
+    return allProspects
+      .filter((p) => p.a_verifier)
+      .filter((p) => isAdmin || p.signed_by_user_id === userRole?.id)
+      .sort((a, b) => (b.montant_potentiel || 0) - (a.montant_potentiel || 0));
+  }, [allProspects, isAdmin, userRole]);
+
+  const commercialNameById = useMemo(() => {
+    const map = new Map<number, string>();
+    for (const u of registeredUsers) map.set(u.id, `${u.first_name || ''} ${u.last_name || ''}`.trim());
+    return map;
+  }, [registeredUsers]);
+
+  const markVerified = useCallback(async (id: number) => {
+    try {
+      await client.entities.prospects.update({ id: String(id), data: { a_verifier: false } });
+      invalidateProspects();
+      toast.success('Fiche marquée comme vérifiée');
+    } catch {
+      toast.error('Erreur lors de la mise à jour');
+    }
+  }, [invalidateProspects]);
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -442,6 +476,44 @@ export default function Dashboard() {
           )}
         </div>
       </div>
+
+      {/* Alerte : fiches importées depuis le Monday Transmission Clients à
+          compléter/vérifier (créées sans être passées par le pipeline CRM). */}
+      {aVerifierList.length > 0 && (
+        <Card className="border-0 shadow-sm rounded-2xl bg-amber-50">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base flex items-center gap-2 text-amber-800">
+              <AlertTriangle className="w-5 h-5" />
+              {aVerifierList.length} dossier{aVerifierList.length > 1 ? 's' : ''} importé{aVerifierList.length > 1 ? 's' : ''} depuis Monday à vérifier
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-1.5">
+            {aVerifierList.slice(0, 10).map((p) => (
+              <div key={p.id} className="flex items-center justify-between gap-3 bg-white rounded-xl px-3 py-2">
+                <Link to={`/prospects/${p.id}`} className="flex-1 min-w-0">
+                  <p className="font-medium text-slate-800 truncate">{p.nom_societe || '(sans nom)'}</p>
+                  <p className="text-xs text-slate-400">
+                    {p.montant_potentiel ? `${Number(p.montant_potentiel).toLocaleString('fr-FR')} €` : 'CA non renseigné'}
+                    {isAdmin && p.signed_by_user_id && ` · ${commercialNameById.get(p.signed_by_user_id) || ''}`}
+                    {isAdmin && !p.signed_by_user_id && ' · Non attribué'}
+                  </p>
+                </Link>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => markVerified(p.id)}
+                  className="h-8 rounded-lg text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 gap-1.5 shrink-0"
+                >
+                  <CheckCircle2 className="w-4 h-4" /> Vérifié
+                </Button>
+              </div>
+            ))}
+            {aVerifierList.length > 10 && (
+              <p className="text-xs text-amber-700 pt-1">+ {aVerifierList.length - 10} autre{aVerifierList.length - 10 > 1 ? 's' : ''}, ouvre la fiche prospect concernée pour les voir.</p>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {/* Commercial info banner */}
       {selectedCommercial !== 'global' && (

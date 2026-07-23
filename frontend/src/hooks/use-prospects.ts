@@ -37,6 +37,7 @@ export interface Prospect {
   monday_sync_error: string | null;
   ca_encaisse: boolean;
   date_encaissement: string | null;
+  a_verifier: boolean;
   priorite: string;
   source_lead: string;
   montant_potentiel: number;

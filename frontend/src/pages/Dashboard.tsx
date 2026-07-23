@@ -462,26 +462,26 @@ export default function Dashboard() {
               : `Statistiques de ${selectedCommercial}`}
           </p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto">
           <button
             onClick={openSpeedRun}
-            className="group relative inline-flex items-center gap-2 rounded-xl px-4 py-2 font-bold text-white bg-gradient-to-r from-amber-400 via-orange-500 to-pink-500 shadow-[0_0_25px_rgba(251,146,60,0.45)] hover:shadow-[0_0_35px_rgba(251,146,60,0.7)] hover:scale-[1.03] active:scale-95 transition-all"
+            className="group relative flex-1 sm:flex-none inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2 font-bold text-white bg-gradient-to-r from-amber-400 via-orange-500 to-pink-500 shadow-[0_0_25px_rgba(251,146,60,0.45)] hover:shadow-[0_0_35px_rgba(251,146,60,0.7)] hover:scale-[1.03] active:scale-95 transition-all"
           >
             <span className="absolute inset-0 rounded-xl bg-white/20 opacity-0 group-hover:opacity-100 animate-pulse" />
-            <Zap className="w-4 h-4 relative" fill="white" />
+            <Zap className="w-4 h-4 relative shrink-0" fill="white" />
             <span className="relative tracking-wide">Speed Run</span>
           </button>
           <Button
             onClick={handleExportExcel}
             disabled={allProspects.length === 0}
-            className="rounded-xl bg-gradient-to-r from-[#5A9BA3] to-[#6AABB4] hover:from-[#4A8B93] hover:to-[#5A9BA4] text-white shadow-md shadow-[#6AABB4]/20"
+            className="flex-1 sm:flex-none rounded-xl bg-gradient-to-r from-[#5A9BA3] to-[#6AABB4] hover:from-[#4A8B93] hover:to-[#5A9BA4] text-white shadow-md shadow-[#6AABB4]/20"
           >
-            <Download className="w-4 h-4 mr-2" /> Exporter Excel
+            <Download className="w-4 h-4 mr-2 shrink-0" /> Exporter Excel
           </Button>
           {commercialNames.length > 0 && (
             <Select value={selectedCommercial} onValueChange={setSelectedCommercial}>
-              <SelectTrigger className="w-56 rounded-xl border-slate-200 bg-white shadow-sm">
-                <UserCircle className="w-4 h-4 mr-2 text-[#6AABB4]" />
+              <SelectTrigger className="w-full sm:w-56 rounded-xl border-slate-200 bg-white shadow-sm">
+                <UserCircle className="w-4 h-4 mr-2 text-[#6AABB4] shrink-0" />
                 <SelectValue placeholder="Sélectionner un commercial" />
               </SelectTrigger>
               <SelectContent>

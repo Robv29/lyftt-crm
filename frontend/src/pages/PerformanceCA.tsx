@@ -90,6 +90,7 @@ export default function PerformanceCA() {
   // --- Onglet "Suivi paiements clients" ---
   const [search, setSearch] = usePersistentState<string>('lyftt.performanceCa.search', '');
   const [commercialFilter, setCommercialFilter] = usePersistentState<string>('lyftt.performanceCa.commercialFilter', 'tous');
+  const [statutFilter, setStatutFilter] = usePersistentState<string>('lyftt.performanceCa.statutFilter', 'tous');
   const [editingCaMaxId, setEditingCaMaxId] = useState<number | null>(null);
   const [editCaMaxValue, setEditCaMaxValue] = useState('');
   const [addingPaiementFor, setAddingPaiementFor] = useState<number | null>(null);
@@ -264,6 +265,7 @@ export default function PerformanceCA() {
         const statutLabel = PAIEMENT_STATUT_LABELS[statutRank];
         return { prospect: p, max, paye, pct, commercialName, pmts, statutRank, statutLabel };
       })
+      .filter((c) => statutFilter === 'tous' || String(c.statutRank) === statutFilter)
       // Classé par statut de règlement : CA non renseigné -> pas de paiement
       // reçu -> paiement partiel -> paiement reçu ; alphabétique dans chaque
       // groupe.
@@ -271,7 +273,7 @@ export default function PerformanceCA() {
         if (a.statutRank !== b.statutRank) return a.statutRank - b.statutRank;
         return a.prospect.nom_societe.localeCompare(b.prospect.nom_societe, 'fr');
       });
-  }, [prospects, paiementsByProspect, paiements, commerciaux, search, commercialFilter]);
+  }, [prospects, paiementsByProspect, paiements, commerciaux, search, commercialFilter, statutFilter]);
 
   // Reste à encaisser sur TOUS les clients signés (pas seulement ceux filtrés
   // par la recherche/commercial) — vision globale de ce qu'il reste à percevoir.
@@ -467,6 +469,17 @@ export default function PerformanceCA() {
                 <SelectItem value="tous">Tous les commerciaux</SelectItem>
                 {commerciaux.map((u) => (
                   <SelectItem key={u.id} value={String(u.id)}>{u.first_name} {u.last_name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select value={statutFilter} onValueChange={setStatutFilter}>
+              <SelectTrigger className="w-full sm:w-56 rounded-xl">
+                <SelectValue placeholder="Tous les statuts" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="tous">Tous les statuts de règlement</SelectItem>
+                {PAIEMENT_STATUT_LABELS.map((label, i) => (
+                  <SelectItem key={label} value={String(i)}>{label}</SelectItem>
                 ))}
               </SelectContent>
             </Select>

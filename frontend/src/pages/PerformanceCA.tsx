@@ -18,6 +18,7 @@ import {
   Trophy, Flame, Percent, Search, Plus, Trash2, Receipt,
   AlertTriangle, ExternalLink, PiggyBank, Download,
   ArrowUpRight, Banknote, Home, Info, Lock, Moon, Sun, RefreshCw,
+  Shield, CalendarDays,
 } from 'lucide-react';
 
 const MONTH_NAMES = [
@@ -446,26 +447,63 @@ export default function PerformanceCA() {
   const collectedGrowth = growthPct(totals.encaisse, prevTotals.encaisse);
   const commissionGrowth = growthPct(totals.commission, prevTotals.commission);
 
-  // Courbe d'évolution du CA : cumul jour par jour des dossiers signés ce
-  // mois-ci par les commerciaux visibles — remplace le graphique de démo par
-  // les vraies signatures du mois sélectionné.
+  // Courbes réelles jour par jour du mois sélectionné (aucune donnée
+  // inventée) : cumul du CA probable signé, du CA effectivement encaissé et
+  // de la commission générée — utilisées pour le grand graphique et les
+  // mini-sparklines des cartes KPI.
   const visibleUserIds = useMemo(() => new Set(visibleRows.map((r) => r.user.id)), [visibleRows]);
-  const chartPoints = useMemo(() => {
+  const dailySeries = useMemo(() => {
     const [y, m] = mois.split('-').map(Number);
     const lastDay = new Date(y, m, 0).getDate();
-    const byDay = new Array(lastDay + 1).fill(0);
+    const probableByDay = new Array(lastDay + 1).fill(0);
+    const encaisseByDay = new Array(lastDay + 1).fill(0);
+    const commissionByDay = new Array(lastDay + 1).fill(0);
+
     for (const p of prospects) {
       if (!p.date_signature || p.date_signature.slice(0, 7) !== mois) continue;
       if (p.signed_by_user_id == null || !visibleUserIds.has(p.signed_by_user_id)) continue;
       const day = Number(p.date_signature.slice(8, 10));
-      if (day >= 1 && day <= lastDay) byDay[day] += Number(p.montant_potentiel) || 0;
+      if (day >= 1 && day <= lastDay) probableByDay[day] += Number(p.montant_potentiel) || 0;
     }
-    let cumul = 0;
-    const points: { day: number; cumul: number }[] = [];
-    for (let d = 1; d <= lastDay; d++) { cumul += byDay[d]; points.push({ day: d, cumul }); }
-    return points;
-  }, [prospects, mois, visibleUserIds]);
+
+    const tauxByUser = new Map(commerciaux.map((u) => [u.id, Number(u.taux_commission) || 0]));
+    for (const pmt of paiements) {
+      if (pmt.date_paiement.slice(0, 7) !== mois) continue;
+      const p = prospects.find((pp) => pp.id === pmt.prospect_id);
+      if (!p || p.signed_by_user_id == null || !visibleUserIds.has(p.signed_by_user_id)) continue;
+      const day = Number(pmt.date_paiement.slice(8, 10));
+      if (day < 1 || day > lastDay) continue;
+      const amt = Number(pmt.montant) || 0;
+      encaisseByDay[day] += amt;
+      commissionByDay[day] += amt * ((tauxByUser.get(p.signed_by_user_id) || 0) / 100);
+    }
+
+    const probable: { day: number; cumul: number }[] = [];
+    const encaisse: { day: number; cumul: number }[] = [];
+    const commission: { day: number; cumul: number }[] = [];
+    let cp = 0, ce = 0, cc = 0;
+    for (let d = 1; d <= lastDay; d++) {
+      cp += probableByDay[d]; ce += encaisseByDay[d]; cc += commissionByDay[d];
+      probable.push({ day: d, cumul: cp });
+      encaisse.push({ day: d, cumul: ce });
+      commission.push({ day: d, cumul: cc });
+    }
+    return { probable, encaisse, commission };
+  }, [prospects, paiements, mois, visibleUserIds, commerciaux]);
+  const chartPoints = dailySeries.probable;
   const chartMax = Math.max(totals.objectifCa, ...chartPoints.map((p) => p.cumul), 1) * 1.08;
+
+  // Horodatage réel de dernière mise à jour des données (dernier prospect ou
+  // règlement modifié) — jamais une date figée en dur.
+  const lastUpdatedAt = useMemo(() => {
+    let max = '';
+    for (const p of prospects) if (p.updated_at && p.updated_at > max) max = p.updated_at;
+    for (const pmt of paiements) if (pmt.created_at && pmt.created_at > max) max = pmt.created_at;
+    return max;
+  }, [prospects, paiements]);
+  const lastUpdatedLabel = lastUpdatedAt
+    ? new Date(lastUpdatedAt).toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+    : null;
 
   if (errorP) return <ErrorState message="Erreur de chargement des données." />;
 
@@ -499,7 +537,7 @@ export default function PerformanceCA() {
             onClick={() => setTab('apercu')}
             className={`flex h-11 items-center gap-2 rounded-xl px-4 text-sm font-semibold transition hover:-translate-y-0.5 ${
               tab === 'apercu'
-                ? 'bg-gradient-to-r from-violet-600 to-purple-600 text-white shadow-lg shadow-violet-600/20'
+                ? 'border-2 border-violet-500 bg-violet-500/10 text-violet-300 shadow-[0_0_20px_rgba(139,92,246,.2)]'
                 : isDark ? 'border border-white/10 bg-white/[0.035] hover:bg-white/[0.07]' : 'border border-slate-200 bg-white hover:bg-slate-50'
             }`}
           >
@@ -509,7 +547,7 @@ export default function PerformanceCA() {
             onClick={() => setTab('paiements')}
             className={`flex h-11 items-center gap-2 rounded-xl px-4 text-sm font-semibold transition hover:-translate-y-0.5 ${
               tab === 'paiements'
-                ? 'bg-gradient-to-r from-violet-600 to-purple-600 text-white shadow-lg shadow-violet-600/20'
+                ? 'border-2 border-violet-500 bg-violet-500/10 text-violet-300 shadow-[0_0_20px_rgba(139,92,246,.2)]'
                 : isDark ? 'border border-white/10 bg-white/[0.035] hover:bg-white/[0.07]' : 'border border-slate-200 bg-white hover:bg-slate-50'
             }`}
           >
@@ -526,9 +564,10 @@ export default function PerformanceCA() {
             {theme === 'dark' ? <Sun className="h-5 w-5 text-amber-400" /> : <Moon className="h-5 w-5 text-violet-600" />}
           </button>
           {tab === 'apercu' && (
-            <div className="flex gap-2">
+            <div className={`flex h-11 items-center gap-1.5 rounded-xl border pl-3 pr-1.5 ${isDark ? 'border-white/10 bg-white/[0.035]' : 'border-slate-200 bg-white'}`}>
+              <CalendarDays className="h-4 w-4 shrink-0 opacity-60" />
               <Select value={String(selectedMonthIdx)} onValueChange={setMonthPart}>
-                <SelectTrigger className={`h-11 w-36 rounded-xl ${isDark ? 'border-white/10 bg-white/[0.035] text-white' : ''}`}><SelectValue /></SelectTrigger>
+                <SelectTrigger className={`h-8 w-[110px] rounded-lg border-0 shadow-none px-2 ${isDark ? 'text-white' : ''}`}><SelectValue /></SelectTrigger>
                 <SelectContent>
                   {MONTH_NAMES.map((m, i) => (
                     <SelectItem key={m} value={String(i)}>{m}</SelectItem>
@@ -536,7 +575,7 @@ export default function PerformanceCA() {
                 </SelectContent>
               </Select>
               <Select value={selectedYear} onValueChange={setYearPart}>
-                <SelectTrigger className={`h-11 w-24 rounded-xl ${isDark ? 'border-white/10 bg-white/[0.035] text-white' : ''}`}><SelectValue /></SelectTrigger>
+                <SelectTrigger className={`h-8 w-[72px] rounded-lg border-0 shadow-none px-2 ${isDark ? 'text-white' : ''}`}><SelectValue /></SelectTrigger>
                 <SelectContent>
                   {yearsOptions.map((y) => (
                     <SelectItem key={y} value={String(y)}>{y}</SelectItem>
@@ -765,14 +804,15 @@ export default function PerformanceCA() {
             />
             <div className="relative grid gap-4 p-5 md:p-6 xl:grid-cols-[220px_1fr_330px]">
               {/* niveau */}
-              <div className={`flex min-h-[220px] flex-col items-center justify-center rounded-3xl border p-6 text-center ${isDark ? 'border-violet-400/20 bg-black/20' : 'border-violet-100 bg-violet-50/60'}`}>
-                <span className="text-xs font-bold uppercase tracking-[0.16em] text-violet-500">Niveau actuel</span>
-                <div className="mt-3 text-[82px] font-black leading-none bg-gradient-to-b from-white via-violet-300 to-violet-700 bg-clip-text text-transparent drop-shadow-[0_0_28px_rgba(139,92,246,.35)]">
+              <div className={`relative flex min-h-[220px] flex-col items-center justify-center overflow-hidden rounded-3xl border p-6 text-center ${isDark ? 'border-violet-400/20 bg-black/20' : 'border-violet-100 bg-violet-50/60'}`}>
+                <Shield className="pointer-events-none absolute h-40 w-40 text-violet-500/10" strokeWidth={1} />
+                <span className="relative text-xs font-bold uppercase tracking-[0.16em] text-violet-500">Niveau actuel</span>
+                <div className="relative mt-3 text-[82px] font-black leading-none bg-gradient-to-b from-white via-violet-300 to-violet-700 bg-clip-text text-transparent drop-shadow-[0_0_28px_rgba(139,92,246,.35)]">
                   {String(currentLevel.level).padStart(2, '0')}
                 </div>
-                <div className="mt-5 flex items-center gap-1">
+                <div className="relative mt-5 flex items-center gap-1">
                   {[0, 1, 2].map((star) => (
-                    <Trophy key={star} className={`h-5 w-5 ${star < Math.min(3, Math.ceil((currentLevel.level / LEVELS.length) * 3)) ? 'text-amber-400' : 'text-slate-500/40'}`} />
+                    <Trophy key={star} className={`h-5 w-5 ${star < Math.floor(levelProgress / 34) ? 'text-amber-400' : 'text-slate-500/40'}`} />
                   ))}
                 </div>
               </div>
@@ -887,23 +927,23 @@ export default function PerformanceCA() {
 
           {/* KPI */}
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-            <KpiCard dark={isDark} icon={<ArrowUpRight className="h-5 w-5" />} title="CA PROBABLE" value={eur(totals.probable)} subtitle="Cumulé ce mois" growth={probableGrowth} accent="violet" />
-            <KpiCard dark={isDark} icon={<Wallet className="h-5 w-5" />} title="CA ENCAISSÉ" value={eur(totals.encaisse)} subtitle="Cumulé ce mois" growth={collectedGrowth} accent="blue" />
+            <KpiCard dark={isDark} icon={<ArrowUpRight className="h-5 w-5" />} title="CA PROBABLE" value={eur(totals.probable)} subtitle="Cumulé ce mois" growth={probableGrowth} accent="violet" sparkline={dailySeries.probable} />
+            <KpiCard dark={isDark} icon={<Wallet className="h-5 w-5" />} title="CA ENCAISSÉ" value={eur(totals.encaisse)} subtitle="Cumulé ce mois" growth={collectedGrowth} accent="blue" sparkline={dailySeries.encaisse} />
             <KpiCard dark={isDark} icon={<Target className="h-5 w-5" />} title="OBJECTIF" value={eur(totals.objectifCa)} subtitle="Objectif du mois" progress={targetProgress} accent="amber" />
-            <KpiCard dark={isDark} icon={<Banknote className="h-5 w-5" />} title="COMMISSION PAYÉE" value={eur(totals.commission)} subtitle="Ce mois" growth={commissionGrowth} accent="green" />
+            <KpiCard dark={isDark} icon={<Banknote className="h-5 w-5" />} title="COMMISSION PAYÉE" value={eur(totals.commission)} subtitle="Ce mois" growth={commissionGrowth} accent="green" sparkline={dailySeries.commission} />
           </div>
 
           {/* BAS DE PAGE */}
           <div className="grid gap-4 xl:grid-cols-[1.35fr_.9fr]">
             <div className={`rounded-[24px] border p-5 ${isDark ? 'border-white/10 bg-[#091225]' : 'border-slate-200 bg-white shadow-sm'}`}>
               <div className="mb-6">
-                <h2 className="font-bold">ÉVOLUTION DU CA — {MONTH_NAMES[selectedMonthIdx].toUpperCase()}</h2>
+                <h2 className="font-bold">ÉVOLUTION DU CA PROBABLE</h2>
                 <div className={`mt-2 flex gap-4 text-xs ${textMuted2}`}>
-                  <span className="flex items-center gap-2"><span className="h-[2px] w-5 bg-violet-500" /> CA cumulé (signatures)</span>
+                  <span className="flex items-center gap-2"><span className="h-[2px] w-5 bg-violet-500" /> CA probable</span>
                   <span className="flex items-center gap-2"><span className="h-[2px] w-5 border-t border-dashed border-slate-400" /> Objectif</span>
                 </div>
               </div>
-              <EvolutionChart points={chartPoints} max={chartMax} objectif={totals.objectifCa} dark={isDark} />
+              <EvolutionChart points={chartPoints} max={chartMax} objectif={totals.objectifCa} dark={isDark} levels={LEVELS} />
             </div>
             <div className={`rounded-[24px] border p-5 ${isDark ? 'border-white/10 bg-[#091225]' : 'border-slate-200 bg-white shadow-sm'}`}>
               <h2 className="font-bold">RÉCAPITULATIF DU MOIS</h2>
@@ -914,7 +954,8 @@ export default function PerformanceCA() {
                 <SummaryRow dark={isDark} label="Commission payée" value={totals.commission} total={totals.objectifCa || 1} percentage={null} color="bg-emerald-500" />
               </div>
               <div className={`mt-10 flex items-center gap-2 text-xs ${textMuted2}`}>
-                <RefreshCw className="h-3.5 w-3.5" /> Données synchronisées en direct
+                <RefreshCw className="h-3.5 w-3.5" />
+                {lastUpdatedLabel ? <>Données mises à jour le {lastUpdatedLabel}</> : 'Données synchronisées en direct'}
               </div>
             </div>
           </div>
@@ -1090,7 +1131,7 @@ export default function PerformanceCA() {
 }
 
 function KpiCard({
-  dark, icon, title, value, subtitle, growth, progress, accent,
+  dark, icon, title, value, subtitle, growth, progress, sparkline, accent,
 }: {
   dark: boolean;
   icon: ReactNode;
@@ -1099,13 +1140,14 @@ function KpiCard({
   subtitle: string;
   growth?: number | null;
   progress?: number;
+  sparkline?: { day: number; cumul: number }[];
   accent: 'violet' | 'blue' | 'amber' | 'green';
 }) {
   const styles = {
-    violet: { icon: 'bg-violet-500/15 text-violet-500', bar: 'bg-violet-500' },
-    blue: { icon: 'bg-blue-500/15 text-blue-500', bar: 'bg-blue-500' },
-    amber: { icon: 'bg-amber-400/15 text-amber-500', bar: 'bg-amber-400' },
-    green: { icon: 'bg-emerald-500/15 text-emerald-500', bar: 'bg-emerald-500' },
+    violet: { icon: 'bg-violet-500/15 text-violet-500', bar: 'bg-violet-500', stroke: '#8b5cf6' },
+    blue: { icon: 'bg-blue-500/15 text-blue-500', bar: 'bg-blue-500', stroke: '#3b82f6' },
+    amber: { icon: 'bg-amber-400/15 text-amber-500', bar: 'bg-amber-400', stroke: '#f59e0b' },
+    green: { icon: 'bg-emerald-500/15 text-emerald-500', bar: 'bg-emerald-500', stroke: '#22c55e' },
   }[accent];
   return (
     <div className={`rounded-[22px] border p-5 ${dark ? 'border-white/10 bg-[#091225] text-white' : 'border-slate-200 bg-white shadow-sm text-slate-800'}`}>
@@ -1131,7 +1173,33 @@ function KpiCard({
           <div className={`h-full rounded-full ${styles.bar}`} style={{ width: `${progress}%` }} />
         </div>
       )}
+      {progress === undefined && sparkline && sparkline.length > 1 && (
+        <MiniSparkline points={sparkline} stroke={styles.stroke} />
+      )}
     </div>
+  );
+}
+
+// Mini-courbe réelle (cumul jour par jour) affichée sous chaque KPI — dérivée
+// des mêmes séries que le grand graphique, jamais une forme décorative fixe.
+function MiniSparkline({ points, stroke }: { points: { day: number; cumul: number }[]; stroke: string }) {
+  const max = Math.max(...points.map((p) => p.cumul), 1);
+  const toX = (i: number) => (i / Math.max(points.length - 1, 1)) * 280;
+  const toY = (val: number) => 50 - Math.min(val / max, 1) * 46;
+  const linePath = points.map((p, i) => `${i === 0 ? 'M' : 'L'}${toX(i)} ${toY(p.cumul)}`).join(' ');
+  const areaPath = `${linePath} L${toX(points.length - 1)} 55 L0 55 Z`;
+  const gradId = `spark-${stroke.replace('#', '')}`;
+  return (
+    <svg viewBox="0 0 280 55" className="mt-5 h-[55px] w-full overflow-visible" preserveAspectRatio="none">
+      <defs>
+        <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor={stroke} stopOpacity="0.35" />
+          <stop offset="100%" stopColor={stroke} stopOpacity="0" />
+        </linearGradient>
+      </defs>
+      <path d={areaPath} fill={`url(#${gradId})`} />
+      <path d={linePath} fill="none" stroke={stroke} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
   );
 }
 
@@ -1161,7 +1229,7 @@ function SummaryRow({
 // Courbe d'évolution réelle (cumul jour par jour du CA signé sur le mois
 // sélectionné) + ligne pointillée de l'objectif — remplace le graphique de
 // démonstration à données fixes.
-function EvolutionChart({ points, max, objectif, dark }: { points: { day: number; cumul: number }[]; max: number; objectif: number; dark: boolean }) {
+function EvolutionChart({ points, max, objectif, dark, levels }: { points: { day: number; cumul: number }[]; max: number; objectif: number; dark: boolean; levels?: { level: number; amount: number }[] }) {
   const lastDay = points.length || 1;
   const toX = (day: number) => ((day - 1) / Math.max(lastDay - 1, 1)) * 900;
   const toY = (val: number) => 270 - Math.min(val / max, 1) * 270;
@@ -1170,6 +1238,15 @@ function EvolutionChart({ points, max, objectif, dark }: { points: { day: number
   const objY = toY(objectif);
   const ticks = [1, 0.75, 0.5, 0.25, 0].map((f) => Math.round(max * f));
   const xLabels = [1, 5, 10, 15, 20, 25, lastDay].filter((d, i, arr) => arr.indexOf(d) === i && d <= lastDay);
+  // Marqueurs de niveaux : le jour où le cumul réel a franchi chaque palier
+  // ce mois-ci (première fois où cumul >= palier) — dérivé de la courbe
+  // réelle, pas d'une position décorative.
+  const levelMarkers = (levels || [])
+    .map((lvl) => {
+      const hit = points.find((p) => p.cumul >= lvl.amount);
+      return hit ? { level: lvl.level, day: hit.day, cumul: hit.cumul } : null;
+    })
+    .filter((m): m is { level: number; day: number; cumul: number } => m !== null);
 
   return (
     <div className="relative h-[330px]">
@@ -1193,6 +1270,14 @@ function EvolutionChart({ points, max, objectif, dark }: { points: { day: number
         {objectif > 0 && (
           <path d={`M0 ${objY} L900 ${objY}`} fill="none" stroke="#94a3b8" strokeWidth="2" strokeDasharray="9 9" opacity="0.7" />
         )}
+        {levelMarkers.map((m) => (
+          <g key={m.level}>
+            <circle cx={toX(m.day)} cy={toY(m.cumul)} r="9" fill={dark ? '#111827' : '#ffffff'} stroke="#8b5cf6" strokeWidth="3" />
+            <text x={toX(m.day)} y={toY(m.cumul) - 16} fill={dark ? '#ddd6fe' : '#6d28d9'} fontSize="11" textAnchor="middle" fontWeight="700">
+              NIV. {m.level}
+            </text>
+          </g>
+        ))}
       </svg>
       <div className={`absolute bottom-0 left-[70px] right-0 flex justify-between text-[11px] ${dark ? 'text-white/35' : 'text-slate-400'}`}>
         {xLabels.map((d) => <span key={d}>{String(d).padStart(2, '0')}</span>)}

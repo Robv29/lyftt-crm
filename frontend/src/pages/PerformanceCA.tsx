@@ -18,7 +18,7 @@ import {
   Trophy, Flame, Percent, Search, Plus, Trash2, Receipt,
   AlertTriangle, ExternalLink, PiggyBank, Download,
   ArrowUpRight, Banknote, Home, Info, Lock, Moon, Sun, RefreshCw,
-  Shield, CalendarDays,
+  CalendarDays,
 } from 'lucide-react';
 
 const MONTH_NAMES = [
@@ -794,89 +794,93 @@ export default function PerformanceCA() {
       ) : (
         <>
           {/* HERO GAMIFIÉ */}
-          <div className={`relative overflow-hidden rounded-[28px] border ${isDark ? 'border-white/10 bg-[#091225]' : 'border-slate-200 bg-white shadow-sm'}`}>
+          <div
+            className={`relative overflow-hidden rounded-[28px] border min-h-[360px] md:min-h-[400px] flex flex-col justify-center ${
+              isDark ? 'border-violet-500/20 bg-[#070c1a] text-white' : 'border-slate-200 bg-white shadow-sm text-slate-900'
+            }`}
+          >
+            {/* Montagne + chemin lumineux : visible, aucun voile opaque par-dessus */}
+            <MountainScene dark={isDark} />
             <div
               className={`pointer-events-none absolute inset-0 ${
                 isDark
-                  ? 'bg-[radial-gradient(circle_at_72%_15%,rgba(124,58,237,.28),transparent_32%),radial-gradient(circle_at_42%_90%,rgba(59,130,246,.12),transparent_35%)]'
-                  : 'bg-[radial-gradient(circle_at_72%_15%,rgba(124,58,237,.10),transparent_32%),radial-gradient(circle_at_42%_90%,rgba(59,130,246,.08),transparent_35%)]'
+                  ? 'bg-[radial-gradient(circle_at_75%_20%,rgba(124,58,237,.22),transparent_38%)]'
+                  : 'bg-[radial-gradient(circle_at_75%_20%,rgba(124,58,237,.08),transparent_38%)]'
               }`}
             />
-            <div className="relative grid gap-4 p-5 md:p-6 xl:grid-cols-[220px_1fr_330px]">
-              {/* niveau */}
-              <div className={`relative flex min-h-[220px] flex-col items-center justify-center overflow-hidden rounded-3xl border p-6 text-center ${isDark ? 'border-violet-400/20 bg-black/20' : 'border-violet-100 bg-violet-50/60'}`}>
-                <Shield className="pointer-events-none absolute h-40 w-40 text-violet-500/10" strokeWidth={1} />
-                <span className="relative text-xs font-bold uppercase tracking-[0.16em] text-violet-500">Niveau actuel</span>
-                <div className="relative mt-3 text-[82px] font-black leading-none bg-gradient-to-b from-white via-violet-300 to-violet-700 bg-clip-text text-transparent drop-shadow-[0_0_28px_rgba(139,92,246,.35)]">
-                  {String(currentLevel.level).padStart(2, '0')}
-                </div>
-                <div className="relative mt-5 flex items-center gap-1">
-                  {[0, 1, 2].map((star) => (
-                    <Trophy key={star} className={`h-5 w-5 ${star < Math.floor(levelProgress / 34) ? 'text-amber-400' : 'text-slate-500/40'}`} />
-                  ))}
-                </div>
-              </div>
+            <div className="relative grid gap-5 p-6 md:p-8 md:grid-cols-[190px_1fr] xl:grid-cols-[210px_1fr_300px] items-center">
+              {/* niveau — badge premium façon rang de jeu vidéo */}
+              <RankBadge level={currentLevel.level} stars={Math.floor(levelProgress / 34)} />
+
               {/* progression principale */}
-              <div className="flex min-h-[220px] flex-col justify-center px-1 md:px-5">
+              <div className="flex flex-col justify-center">
                 <div className="flex items-center gap-2">
-                  <span className={`text-sm font-semibold ${textMuted}`}>CA PROBABLE</span>
+                  <span className="text-sm font-semibold text-violet-300">CA PROBABLE</span>
                   <Info className="h-4 w-4 opacity-50" />
                 </div>
-                <div className="mt-2 flex flex-wrap items-end gap-4">
-                  <strong className="text-4xl font-black tracking-tight md:text-6xl">{eur(totals.probable)}</strong>
-                  <div className="mb-2 text-2xl font-black">{Math.round(levelProgress)}%</div>
+                <div className="mt-1 flex flex-wrap items-end gap-4">
+                  <strong className="text-5xl font-black tracking-tight md:text-7xl">{eur(totals.probable)}</strong>
+                  <div className="mb-2 text-2xl font-black text-violet-300">{Math.round(levelProgress)}%</div>
                 </div>
-                <div className={`mt-6 h-5 overflow-hidden rounded-full ${isDark ? 'bg-black/40' : 'bg-slate-200'}`}>
+                <div className={`mt-6 h-7 overflow-hidden rounded-full ring-1 ${isDark ? 'bg-black/50 ring-white/10' : 'bg-slate-200 ring-black/5'}`}>
                   <div
-                    className="relative h-full rounded-full bg-gradient-to-r from-violet-600 via-purple-500 to-fuchsia-400 shadow-[0_0_25px_rgba(168,85,247,.55)] transition-all duration-700"
-                    style={{ width: `${levelProgress}%` }}
+                    className="relative h-full rounded-full bg-gradient-to-r from-fuchsia-400 via-purple-500 to-violet-500 shadow-[0_0_30px_rgba(168,85,247,.75)] transition-all duration-700"
+                    style={{ width: `${Math.max(levelProgress, 4)}%` }}
                   >
-                    <div className="absolute right-0 top-1/2 h-7 w-7 -translate-y-1/2 translate-x-1/2 rounded-full bg-white blur-md" />
+                    <div className="absolute right-0 top-1/2 h-9 w-9 -translate-y-1/2 translate-x-1/2 rounded-full bg-white/90 blur-md" />
                   </div>
                 </div>
-                <div className="mt-5 flex justify-between gap-4 text-sm">
+                <div className="mt-4 flex justify-between gap-4 text-sm">
                   <div>
                     <div className="font-semibold">Niveau {currentLevel.level}</div>
-                    <div className={textMuted}>{eur(currentLevel.amount)}</div>
+                    <div className={isDark ? 'text-white/60' : 'text-slate-500'}>{eur(currentLevel.amount)}</div>
                   </div>
                   <div className="text-right">
                     <div className="font-semibold">Prochain niveau {nextLevel.level}</div>
-                    <div className={textMuted}>{eur(nextLevel.amount)}</div>
+                    <div className={isDark ? 'text-white/60' : 'text-slate-500'}>{eur(nextLevel.amount)}</div>
                   </div>
                 </div>
               </div>
-              {/* restant */}
-              <div className={`flex min-h-[220px] flex-col justify-center rounded-3xl border p-6 ${isDark ? 'border-white/10 bg-black/25' : 'border-slate-200 bg-white/80'}`}>
-                <span className={`text-sm font-semibold ${textMuted}`}>RESTANT À ATTEINDRE</span>
-                <strong className="mt-2 text-4xl font-black">{eur(remaining)}</strong>
-                <div className={`mt-4 text-base leading-7 ${textMuted}`}>
+
+              {/* restant — carte "verre" séparée mais intégrée au hero */}
+              <div
+                className={`flex flex-col justify-center rounded-2xl border p-5 backdrop-blur-md ${
+                  isDark ? 'border-white/15 bg-white/[0.06]' : 'border-slate-200 bg-white/80 shadow-sm'
+                }`}
+              >
+                <span className={`text-sm font-semibold ${isDark ? 'text-white/70' : 'text-slate-500'}`}>RESTANT À ATTEINDRE</span>
+                <strong className="mt-2 text-3xl font-black">{eur(remaining)}</strong>
+                <div className={`mt-3 text-sm leading-6 ${isDark ? 'text-white/70' : 'text-slate-600'}`}>
                   {remaining <= 0 && totals.objectifCa > 0 ? (
-                    <span className="flex items-center gap-2 font-semibold text-emerald-500"><Trophy className="w-5 h-5" /> Objectif atteint ce mois !</span>
+                    <span className="flex items-center gap-2 font-semibold text-emerald-400"><Trophy className="w-5 h-5" /> Objectif atteint ce mois !</span>
                   ) : totals.objectifCa === 0 ? (
                     <span>Aucun objectif défini pour ce mois.</span>
                   ) : isMoisCourant ? (
                     <>
-                      Il manque <strong className={isDark ? 'text-white' : 'text-slate-900'}>{eur(remaining)}</strong> — soit{' '}
-                      <strong className="text-amber-500">{eur(dailyNeeded)}/jour ouvré</strong> sur{' '}
-                      <strong className="text-amber-500">{joRestants} j. restants</strong>.
+                      Il manque <strong className="text-white">{eur(remaining)}</strong> — soit{' '}
+                      <strong className="text-amber-400">{eur(dailyNeeded)}/jour ouvré</strong> sur{' '}
+                      <strong className="text-amber-400">{joRestants} j. restants</strong>.
                     </>
                   ) : (
-                    <>Il manquait <strong className={isDark ? 'text-white' : 'text-slate-900'}>{eur(remaining)}</strong> pour atteindre l'objectif de {MONTH_NAMES[selectedMonthIdx]} {selectedYear}.</>
+                    <>Il manquait <strong className="text-white">{eur(remaining)}</strong> pour atteindre l'objectif de {MONTH_NAMES[selectedMonthIdx]} {selectedYear}.</>
                   )}
                 </div>
               </div>
             </div>
           </div>
 
-          {/* LEVEL TRACK */}
-          <div className={`rounded-[24px] border p-5 ${isDark ? 'border-white/10 bg-[#091225]' : 'border-slate-200 bg-white shadow-sm'}`}>
-            <h2 className="mb-6 text-sm font-bold uppercase tracking-wide">Progression des niveaux</h2>
-            <div className="relative overflow-x-auto pb-2">
-              <div className="min-w-[1050px]">
+          {/* LEVEL TRACK — compact */}
+          <div className={`rounded-[20px] border p-4 ${isDark ? 'border-white/10 bg-[#091225] text-white' : 'border-slate-200 bg-white shadow-sm text-slate-900'}`}>
+            <div className="mb-3 flex items-center justify-between">
+              <h2 className="text-xs font-bold uppercase tracking-wide">Progression des niveaux</h2>
+              <span className={`text-xs ${textMuted2}`}>{targetProgress}% de l'objectif</span>
+            </div>
+            <div className="relative overflow-x-auto pb-1">
+              <div className="min-w-[820px]">
                 <div className="relative flex items-start justify-between">
-                  <div className={`absolute left-4 right-4 top-[18px] h-[3px] ${isDark ? 'bg-white/10' : 'bg-slate-200'}`} />
+                  <div className={`absolute left-3 right-3 top-[14px] h-[2px] ${isDark ? 'bg-white/10' : 'bg-slate-200'}`} />
                   <div
-                    className="absolute left-4 top-[18px] h-[3px] bg-lime-500"
+                    className="absolute left-3 top-[14px] h-[2px] bg-lime-500"
                     style={{ width: `${Math.min((currentLevelIndex / (LEVELS.length - 1)) * 100, 100)}%` }}
                   />
                   {LEVELS.map((level, index) => {
@@ -884,44 +888,25 @@ export default function PerformanceCA() {
                     const current = index === currentLevelIndex;
                     const locked = index > currentLevelIndex;
                     return (
-                      <div key={level.level} className="relative z-10 flex w-[92px] flex-col items-center text-center">
+                      <div key={level.level} className="relative z-10 flex w-[72px] flex-col items-center text-center">
                         <div
-                          className={`flex h-10 w-10 items-center justify-center rounded-full border-2 font-bold ${
+                          className={`flex h-7 w-7 items-center justify-center rounded-full border-2 text-xs font-bold ${
                             completed
                               ? 'border-lime-400 bg-lime-500 text-white'
                               : current
-                              ? 'border-violet-400 bg-violet-600 text-white shadow-[0_0_24px_rgba(139,92,246,.7)]'
+                              ? 'border-violet-400 bg-violet-600 text-white shadow-[0_0_16px_rgba(139,92,246,.7)]'
                               : isDark ? 'border-white/20 bg-[#101827] text-white/40' : 'border-slate-300 bg-slate-50 text-slate-400'
                           }`}
                         >
-                          {completed ? <Check className="h-5 w-5" /> : locked ? <Lock className="h-4 w-4" /> : level.level}
+                          {completed ? <Check className="h-3.5 w-3.5" /> : locked ? <Lock className="h-3 w-3" /> : level.level}
                         </div>
-                        <div className={`mt-3 text-xs font-bold ${current ? 'text-violet-500' : ''}`}>NIVEAU {level.level}</div>
-                        <div className={`mt-1 text-xs ${textMuted2}`}>{eur(level.amount)}</div>
+                        <div className={`mt-1.5 text-[10px] font-bold ${current ? 'text-violet-400' : ''}`}>NIV. {level.level}</div>
+                        <div className={`text-[10px] ${textMuted2}`}>{eur(level.amount)}</div>
                       </div>
                     );
                   })}
                 </div>
               </div>
-            </div>
-            <div className={`mt-6 grid grid-cols-2 divide-x md:grid-cols-4 ${isDark ? 'divide-white/10' : 'divide-slate-200'}`}>
-              {[25, 50, 75, 100].map((value) => (
-                <div key={value} className="flex items-center justify-center gap-3 px-3 py-2">
-                  <div
-                    className={`flex h-10 w-10 items-center justify-center rounded-xl ${
-                      targetProgress >= value
-                        ? value === 75 ? 'bg-violet-600/20 text-violet-500' : 'bg-lime-500/15 text-lime-500'
-                        : isDark ? 'bg-white/5 text-white/30' : 'bg-slate-100 text-slate-400'
-                    }`}
-                  >
-                    {targetProgress >= value ? <Check className="h-5 w-5" /> : <Lock className="h-4 w-4" />}
-                  </div>
-                  <div>
-                    <div className="font-bold">{value}%</div>
-                    <div className={`text-xs ${textMuted2}`}>du niveau</div>
-                  </div>
-                </div>
-              ))}
             </div>
           </div>
 
@@ -935,7 +920,7 @@ export default function PerformanceCA() {
 
           {/* BAS DE PAGE */}
           <div className="grid gap-4 xl:grid-cols-[1.35fr_.9fr]">
-            <div className={`rounded-[24px] border p-5 ${isDark ? 'border-white/10 bg-[#091225]' : 'border-slate-200 bg-white shadow-sm'}`}>
+            <div className={`rounded-[24px] border p-5 ${isDark ? 'border-white/10 bg-[#091225] text-white' : 'border-slate-200 bg-white shadow-sm text-slate-900'}`}>
               <div className="mb-6">
                 <h2 className="font-bold">ÉVOLUTION DU CA PROBABLE</h2>
                 <div className={`mt-2 flex gap-4 text-xs ${textMuted2}`}>
@@ -945,7 +930,7 @@ export default function PerformanceCA() {
               </div>
               <EvolutionChart points={chartPoints} max={chartMax} objectif={totals.objectifCa} dark={isDark} levels={LEVELS} />
             </div>
-            <div className={`rounded-[24px] border p-5 ${isDark ? 'border-white/10 bg-[#091225]' : 'border-slate-200 bg-white shadow-sm'}`}>
+            <div className={`rounded-[24px] border p-5 ${isDark ? 'border-white/10 bg-[#091225] text-white' : 'border-slate-200 bg-white shadow-sm text-slate-900'}`}>
               <h2 className="font-bold">RÉCAPITULATIF DU MOIS</h2>
               <div className="mt-8 space-y-7">
                 <SummaryRow dark={isDark} label="CA probable" value={totals.probable} total={totals.objectifCa || 1} percentage={targetProgress} color="bg-violet-500" />
@@ -1126,6 +1111,88 @@ export default function PerformanceCA() {
           </div>
         </>
       )}
+    </div>
+  );
+}
+
+// Décor de fond du hero : chaîne de montagnes en couches + chemin lumineux
+// ascendant vers un sommet marqué d'un fanion — renforce "je monte vers le
+// prochain sommet" sans overlay opaque au-dessus du texte.
+function MountainScene({ dark }: { dark: boolean }) {
+  return (
+    <svg
+      className="pointer-events-none absolute inset-0 h-full w-full"
+      viewBox="0 0 1200 400"
+      preserveAspectRatio="xMidYMax slice"
+      aria-hidden="true"
+    >
+      <defs>
+        <linearGradient id="mtnBack" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor={dark ? '#4c1d95' : '#a5b4fc'} stopOpacity={dark ? 0.4 : 0.55} />
+          <stop offset="100%" stopColor={dark ? '#1e1b4b' : '#e0e7ff'} stopOpacity="0" />
+        </linearGradient>
+        <linearGradient id="mtnFront" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor={dark ? '#6d28d9' : '#818cf8'} stopOpacity={dark ? 0.5 : 0.45} />
+          <stop offset="100%" stopColor={dark ? '#0b1220' : '#eef2ff'} stopOpacity="0" />
+        </linearGradient>
+        <linearGradient id="pathGlow" x1="0" y1="1" x2="1" y2="0">
+          <stop offset="0%" stopColor="#f472b6" />
+          <stop offset="100%" stopColor="#c4b5fd" />
+        </linearGradient>
+      </defs>
+      <path d="M0,320 L120,205 L230,270 L340,155 L460,260 L600,125 L740,240 L880,165 L1020,250 L1200,185 L1200,400 L0,400 Z" fill="url(#mtnBack)" />
+      <path d="M0,400 L0,300 L150,195 L300,280 L470,145 L650,260 L820,175 L980,270 L1200,195 L1200,400 Z" fill="url(#mtnFront)" />
+      <path d="M880,400 L1000,150 L1080,260 L1150,190 L1200,255 L1200,400 Z" fill={dark ? '#7c3aed' : '#8b5cf6'} opacity={dark ? 0.4 : 0.3} />
+      <path
+        d="M50,375 C210,345 250,305 330,275 S460,195 555,235 S695,155 795,195 S945,125 995,152"
+        fill="none"
+        stroke="url(#pathGlow)"
+        strokeWidth="3"
+        strokeDasharray="2 11"
+        strokeLinecap="round"
+        opacity="0.9"
+      />
+      <g transform="translate(992,142)">
+        <line x1="0" y1="0" x2="0" y2="-28" stroke={dark ? '#f5f3ff' : '#4c1d95'} strokeWidth="2.5" />
+        <path d="M0,-28 L20,-21 L0,-14 Z" fill="#f472b6" />
+        <circle cx="0" cy="-14" r="4" fill="#f472b6" opacity="0.6" />
+      </g>
+    </svg>
+  );
+}
+
+// Badge de niveau façon rang de jeu vidéo premium (écusson dégradé + gros
+// chiffre + étoiles), en overlay au-dessus de la montagne.
+function RankBadge({ level, stars }: { level: number; stars: number }) {
+  return (
+    <div className="relative mx-auto flex h-[168px] w-[152px] shrink-0 items-center justify-center md:h-[190px] md:w-[172px]">
+      <svg viewBox="0 0 200 220" className="absolute inset-0 h-full w-full drop-shadow-[0_0_32px_rgba(139,92,246,.55)]">
+        <defs>
+          <linearGradient id="rankGrad" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="#ddd6fe" />
+            <stop offset="50%" stopColor="#8b5cf6" />
+            <stop offset="100%" stopColor="#4c1d95" />
+          </linearGradient>
+        </defs>
+        <path
+          d="M100 6 L188 42 L188 112 C188 166 150 202 100 214 C50 202 12 166 12 112 L12 42 Z"
+          fill="url(#rankGrad)"
+          stroke="#f5f3ff"
+          strokeOpacity="0.55"
+          strokeWidth="2.5"
+        />
+      </svg>
+      <div className="relative flex flex-col items-center justify-center pt-1 text-center">
+        <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-violet-100">Niveau actuel</span>
+        <span className="text-6xl font-black leading-none text-white drop-shadow-[0_2px_8px_rgba(0,0,0,.4)] md:text-7xl">
+          {String(level).padStart(2, '0')}
+        </span>
+        <div className="mt-2 flex items-center gap-1">
+          {[0, 1, 2].map((s) => (
+            <Trophy key={s} className={`h-4 w-4 ${s < stars ? 'text-amber-300' : 'text-white/25'}`} />
+          ))}
+        </div>
+      </div>
     </div>
   );
 }

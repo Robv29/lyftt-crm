@@ -157,10 +157,9 @@ export default function PerformanceCA() {
 
   const loading = loadingP || loadingU || loadingO || loadingPmt;
   const isMoisCourant = mois === moisCourant;
-  // Le thème sombre du nouveau design ne s'applique qu'à l'onglet "Aperçu du
-  // mois" (celui redessiné) ; l'onglet "Suivi paiements clients" garde son
-  // habillage clair actuel pour ne pas retoucher son fonctionnement.
-  const isDark = theme === 'dark' && tab === 'apercu';
+  // Les deux vues appartiennent au même module : le thème reste donc cohérent
+  // quand on bascule de l'aperçu au suivi des paiements.
+  const isDark = theme === 'dark';
 
   // Sélecteurs mois / année séparés (plus fiables que l'input date natif,
   // notamment pour naviguer rapidement d'une année à l'autre).
@@ -235,9 +234,12 @@ export default function PerformanceCA() {
 
       const objectifRow = objectifs.find((o) => o.user_role_id === u.id && o.mois.slice(0, 7) === moisStr);
       const objectifCa = objectifRow?.objectif_ca ?? 0;
-      const pct = objectifCa > 0 ? Math.round((realise / objectifCa) * 100) : null;
+      // L'objectif et le classement sont pilotés par le CA probable. Le
+      // réalisé (probable + confirmé + encaissé) reste une lecture comptable
+      // utile, mais ne doit pas gonfler artificiellement l'avancement.
+      const pct = objectifCa > 0 ? Math.round((probable / objectifCa) * 100) : null;
 
-      const ecart = objectifCa - realise;
+      const ecart = objectifCa - probable;
       const jo = joursOuvresRestants();
       const parJourNecessaire = moisStr === moisCourant && ecart > 0 && jo > 0 ? ecart / jo : 0;
 
@@ -366,12 +368,16 @@ export default function PerformanceCA() {
   };
 
   // --- Suivi paiements clients : tous les dossiers signés, tous mois confondus ---
+  const paiementScopeUserId = isAdmin ? null : (userRole?.id ?? null);
+  const effectiveCommercialFilter = isAdmin ? commercialFilter : String(paiementScopeUserId ?? '');
+
   const clientsSignes = useMemo(() => {
     const q = search.trim().toLowerCase();
     return prospects
       .filter((p) => WON_STAGES.has(p.statut_avancement))
+      .filter((p) => isAdmin || p.signed_by_user_id === paiementScopeUserId)
       .filter((p) => !q || p.nom_societe?.toLowerCase().includes(q))
-      .filter((p) => commercialFilter === 'tous' || String(p.signed_by_user_id) === commercialFilter)
+      .filter((p) => effectiveCommercialFilter === 'tous' || String(p.signed_by_user_id) === effectiveCommercialFilter)
       .map((p) => {
         const max = Number(p.montant_potentiel) || 0;
         const paye = paiementsByProspect.get(p.id) || 0;
@@ -393,23 +399,28 @@ export default function PerformanceCA() {
         if (a.statutRank !== b.statutRank) return a.statutRank - b.statutRank;
         return a.prospect.nom_societe.localeCompare(b.prospect.nom_societe, 'fr');
       });
-  }, [prospects, paiementsByProspect, paiements, commerciaux, search, commercialFilter, statutFilter]);
+  }, [prospects, paiementsByProspect, paiements, commerciaux, search, effectiveCommercialFilter, statutFilter, isAdmin, paiementScopeUserId]);
 
   // Reste à encaisser sur TOUS les clients signés (pas seulement ceux filtrés
   // par la recherche/commercial) — vision globale de ce qu'il reste à percevoir.
   const resteAEncaisserTotal = useMemo(() => {
     return prospects
       .filter((p) => WON_STAGES.has(p.statut_avancement))
+      .filter((p) => isAdmin || p.signed_by_user_id === paiementScopeUserId)
       .reduce((sum, p) => {
         const max = Number(p.montant_potentiel) || 0;
         const paye = Math.min(paiementsByProspect.get(p.id) || 0, max);
         return sum + Math.max(0, max - paye);
       }, 0);
-  }, [prospects, paiementsByProspect]);
+  }, [prospects, paiementsByProspect, isAdmin, paiementScopeUserId]);
 
   const clientsSansCaMax = useMemo(
-    () => prospects.filter((p) => WON_STAGES.has(p.statut_avancement) && !(Number(p.montant_potentiel) > 0)).length,
-    [prospects]
+    () => prospects.filter((p) =>
+      WON_STAGES.has(p.statut_avancement)
+      && (isAdmin || p.signed_by_user_id === paiementScopeUserId)
+      && !(Number(p.montant_potentiel) > 0)
+    ).length,
+    [prospects, isAdmin, paiementScopeUserId]
   );
 
   // Export Excel de la liste actuellement affichée (respecte la recherche,
@@ -697,17 +708,19 @@ export default function PerformanceCA() {
                 className="pl-9 rounded-xl"
               />
             </div>
-            <Select value={commercialFilter} onValueChange={setCommercialFilter}>
-              <SelectTrigger className="w-full sm:w-56 rounded-xl">
-                <SelectValue placeholder="Tous les commerciaux" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="tous">Tous les commerciaux</SelectItem>
-                {commerciaux.map((u) => (
-                  <SelectItem key={u.id} value={String(u.id)}>{u.first_name} {u.last_name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            {isAdmin && (
+              <Select value={commercialFilter} onValueChange={setCommercialFilter}>
+                <SelectTrigger className="w-full sm:w-56 rounded-xl">
+                  <SelectValue placeholder="Tous les commerciaux" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="tous">Tous les commerciaux</SelectItem>
+                  {commerciaux.map((u) => (
+                    <SelectItem key={u.id} value={String(u.id)}>{u.first_name} {u.last_name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
             <Select value={statutFilter} onValueChange={setStatutFilter}>
               <SelectTrigger className="w-full sm:w-56 rounded-xl">
                 <SelectValue placeholder="Tous les statuts" />
@@ -869,7 +882,11 @@ export default function PerformanceCA() {
             {/* Montagne + chemin lumineux : visible, aucun voile opaque par-dessus */}
             <MountainScene
               dark={isDark}
-              progress={viewMode === 'global' ? performance.progressPercent : (performance.currentLevel ? ((performance.currentLevel.level - 1) / 9) * 100 : 0)}
+              progress={
+                viewMode === 'global'
+                  ? performance.progressPercent
+                  : clamp((performance.probable / LEVELS[LEVELS.length - 1].amount) * 100, 0, 100)
+              }
             />
             <div
               className={`pointer-events-none absolute inset-0 ${
@@ -967,12 +984,12 @@ export default function PerformanceCA() {
                     <span>Aucun objectif défini pour ce mois.</span>
                   ) : isMoisCourant ? (
                     <>
-                      Il manque <strong className="text-white">{eur(performance.remaining)}</strong> — soit{' '}
+                      Il manque <strong className={isDark ? 'text-white' : 'text-slate-950'}>{eur(performance.remaining)}</strong> — soit{' '}
                       <strong className="text-amber-400">{eur(performance.dailyNeeded)}/jour ouvré</strong> sur{' '}
                       <strong className="text-amber-400">{joRestants} j. restants</strong>.
                     </>
                   ) : (
-                    <>Il manquait <strong className="text-white">{eur(performance.remaining)}</strong> pour atteindre l'objectif de {MONTH_NAMES[selectedMonthIdx]} {selectedYear}.</>
+                    <>Il manquait <strong className={isDark ? 'text-white' : 'text-slate-950'}>{eur(performance.remaining)}</strong> pour atteindre l'objectif de {MONTH_NAMES[selectedMonthIdx]} {selectedYear}.</>
                   )}
                 </div>
               </div>

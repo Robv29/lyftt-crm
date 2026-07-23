@@ -15,10 +15,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { toast } from 'sonner';
 import {
   Target, Wallet, CheckCircle2, Pencil, Check, X,
-  Trophy, Flame, Percent, Search, Plus, Trash2, Receipt,
+  Trophy, Flame, Search, Plus, Trash2, Receipt,
   AlertTriangle, ExternalLink, PiggyBank, Download,
   ArrowUpRight, Banknote, Home, Info, Lock, Moon, Sun, RefreshCw,
-  CalendarDays,
+  CalendarDays, Users, Zap,
 } from 'lucide-react';
 
 const MONTH_NAMES = [
@@ -45,6 +45,8 @@ function paiementStatutRank(max: number, paye: number): number {
 const eur = (n: number) =>
   n.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 });
 
+const clamp = (value: number, min: number, max: number) => Math.min(Math.max(value, min), max);
+
 // 'YYYY-MM' -> 'YYYY-MM-01' (format attendu par la colonne objectifs_ca.mois)
 const moisToDate = (mois: string) => `${mois}-01`;
 
@@ -68,7 +70,8 @@ function joursOuvresRestants(): number {
 
 // Paliers de la jauge de gamification "Niveau" (CA probable cumulé du mois).
 // Échelle fixe et commune à toute l'équipe, indépendante de l'objectif
-// individuel de chacun.
+// individuel de chacun. Uniquement affichée en vue "un commercial" — jamais
+// en vue "Tous les commerciaux" (un niveau individuel n'a pas de sens agrégé).
 type GameLevel = { level: number; amount: number };
 const LEVELS: GameLevel[] = [
   { level: 1, amount: 2000 },
@@ -98,6 +101,21 @@ function growthPct(cur: number, prev: number): number | null {
   return Math.round(((cur - prev) / prev) * 100);
 }
 
+type RowAgg = { probable: number; confirme: number; encaisse: number; realise: number; objectifCa: number; commission: number };
+function aggregateRows(rowsArr: RowAgg[]): RowAgg {
+  return rowsArr.reduce(
+    (acc, r) => ({
+      probable: acc.probable + r.probable,
+      confirme: acc.confirme + r.confirme,
+      encaisse: acc.encaisse + r.encaisse,
+      realise: acc.realise + r.realise,
+      objectifCa: acc.objectifCa + r.objectifCa,
+      commission: acc.commission + r.commission,
+    }),
+    { probable: 0, confirme: 0, encaisse: 0, realise: 0, objectifCa: 0, commission: 0 }
+  );
+}
+
 export default function PerformanceCA() {
   const { isAdmin, userRole } = useAuth();
   const { data: prospects = [], isLoading: loadingP, error: errorP } = useProspects();
@@ -113,10 +131,14 @@ export default function PerformanceCA() {
   const now = new Date();
   const moisCourant = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
   // Etat de la page persistant (localStorage) : on garde l'onglet, le mois, le
-  // thème et les filtres d'une visite à l'autre plutôt que de repartir de zéro.
+  // thème, la vue (globale/commercial) et les filtres d'une visite à l'autre.
   const [tab, setTab] = usePersistentState<'apercu' | 'paiements'>('lyftt.performanceCa.tab', 'apercu');
   const [mois, setMois] = usePersistentState<string>('lyftt.performanceCa.mois', moisCourant);
   const [theme, setTheme] = usePersistentState<'dark' | 'light'>('lyftt.performanceCa.theme', 'dark');
+  // Vue Aperçu : 'tous' = équipe complète (admin uniquement) ; sinon l'id du
+  // commercial affiché. Un commercial non-admin n'a jamais accès au sélecteur
+  // et ne voit toujours que ses propres données.
+  const [heroCommercialId, setHeroCommercialId] = usePersistentState<string>('lyftt.performanceCa.heroCommercialId', 'tous');
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editValue, setEditValue] = useState('');
   const [editingTauxId, setEditingTauxId] = useState<number | null>(null);
@@ -231,44 +253,85 @@ export default function PerformanceCA() {
   }, [commerciaux, prospects, objectifs, paiements, paiementsByProspect, moisCourant]);
 
   const rows = useMemo(() => buildRowsForMois(mois), [buildRowsForMois, mois]);
-  const visibleRows = isAdmin ? rows : rows.filter((r) => r.user.id === userRole?.id);
-
-  const totals = useMemo(() => visibleRows.reduce(
-    (acc, r) => ({
-      probable: acc.probable + r.probable,
-      confirme: acc.confirme + r.confirme,
-      encaisse: acc.encaisse + r.encaisse,
-      realise: acc.realise + r.realise,
-      objectifCa: acc.objectifCa + r.objectifCa,
-      commission: acc.commission + r.commission,
-    }),
-    { probable: 0, confirme: 0, encaisse: 0, realise: 0, objectifCa: 0, commission: 0 }
-  ), [visibleRows]);
-
-  // Mois précédent : uniquement pour les badges d'évolution des 4 KPI de la
-  // page (aucune autre section ne s'en sert) — jamais de chiffre inventé.
   const prevMoisStr = useMemo(() => shiftMonth(mois, -1), [mois]);
   const prevRows = useMemo(() => buildRowsForMois(prevMoisStr), [buildRowsForMois, prevMoisStr]);
-  const prevVisibleRows = isAdmin ? prevRows : prevRows.filter((r) => r.user.id === userRole?.id);
-  const prevTotals = useMemo(() => prevVisibleRows.reduce(
-    (acc, r) => ({
-      probable: acc.probable + r.probable,
-      encaisse: acc.encaisse + r.encaisse,
-      commission: acc.commission + r.commission,
-    }),
-    { probable: 0, encaisse: 0, commission: 0 }
-  ), [prevVisibleRows]);
 
-  // Classement : par % d'objectif atteint (ceux sans objectif défini passent
-  // après, triés par CA réalisé) — visible à tous, c'est le côté gamification.
+  // --- Vue Aperçu : globale (équipe) ou centrée sur un commercial ---------
+  // Admin : "Tous les commerciaux" = vue globale, ou un id précis = vue
+  // individuelle avec niveau/rang. Commercial non-admin : toujours sa propre
+  // vue individuelle, jamais de sélecteur, jamais les données d'un collègue.
+  const viewMode: 'global' | 'commercial' = isAdmin && heroCommercialId === 'tous' ? 'global' : 'commercial';
+  const selectedUserId = isAdmin ? (heroCommercialId === 'tous' ? null : Number(heroCommercialId)) : (userRole?.id ?? null);
+  const selectedRow = useMemo(
+    () => (selectedUserId != null ? rows.find((r) => r.user.id === selectedUserId) ?? null : null),
+    [rows, selectedUserId]
+  );
+  const prevSelectedRow = useMemo(
+    () => (selectedUserId != null ? prevRows.find((r) => r.user.id === selectedUserId) ?? null : null),
+    [prevRows, selectedUserId]
+  );
+  const teamTotals = useMemo(() => aggregateRows(rows), [rows]);
+  const prevTeamTotals = useMemo(() => aggregateRows(prevRows), [prevRows]);
+  const heroCommercialName = viewMode === 'commercial' && selectedRow
+    ? `${selectedRow.user.first_name || ''} ${selectedRow.user.last_name || ''}`.trim()
+    : undefined;
+
+  const joRestants = joursOuvresRestants();
+
+  const performance = useMemo(() => {
+    const base: RowAgg = viewMode === 'global' ? teamTotals : (selectedRow ?? { probable: 0, confirme: 0, encaisse: 0, realise: 0, objectifCa: 0, commission: 0 });
+    const prevBase: RowAgg = viewMode === 'global' ? prevTeamTotals : (prevSelectedRow ?? { probable: 0, confirme: 0, encaisse: 0, realise: 0, objectifCa: 0, commission: 0 });
+    const progressPercent = base.objectifCa > 0 ? clamp((base.probable / base.objectifCa) * 100, 0, 100) : 0;
+    const remaining = Math.max(base.objectifCa - base.probable, 0);
+    const dailyNeeded = isMoisCourant && joRestants > 0 ? Math.ceil(remaining / joRestants) : remaining;
+
+    let currentLevel: GameLevel | null = null;
+    let nextLevel: GameLevel | null = null;
+    let levelProgress: number | null = null;
+    let remainingToNextLevel: number | null = null;
+    if (viewMode === 'commercial') {
+      let idx = 0;
+      LEVELS.forEach((lvl, i) => { if (base.probable >= lvl.amount) idx = i; });
+      currentLevel = LEVELS[idx];
+      nextLevel = LEVELS[idx + 1] ?? LEVELS[LEVELS.length - 1];
+      levelProgress = nextLevel.amount === currentLevel.amount
+        ? 100
+        : clamp(((base.probable - currentLevel.amount) / (nextLevel.amount - currentLevel.amount)) * 100, 0, 100);
+      remainingToNextLevel = Math.max(nextLevel.amount - base.probable, 0);
+    }
+
+    return {
+      ...base,
+      progressPercent,
+      remaining,
+      dailyNeeded,
+      probableGrowth: growthPct(base.probable, prevBase.probable),
+      encaisseGrowth: growthPct(base.encaisse, prevBase.encaisse),
+      commissionGrowth: growthPct(base.commission, prevBase.commission),
+      currentLevel, nextLevel, levelProgress, remainingToNextLevel,
+    };
+  }, [viewMode, teamTotals, prevTeamTotals, selectedRow, prevSelectedRow, isMoisCourant, joRestants]);
+
+  // Classement : par CA probable / objectif en %, jamais par CA brut — visible
+  // à tous (y compris les chiffres des collègues), c'est le levier d'émulation
+  // d'équipe. Toujours l'équipe complète, indépendamment de la vue Aperçu.
   const classement = useMemo(() => {
-    return [...rows].sort((a, b) => {
-      if (a.pct !== null && b.pct !== null) return b.pct - a.pct;
-      if (a.pct !== null) return -1;
-      if (b.pct !== null) return 1;
-      return b.realise - a.realise;
-    });
+    return rows
+      .map((r) => ({ ...r, objectivePercentProbable: r.objectifCa > 0 ? (r.probable / r.objectifCa) * 100 : null }))
+      .sort((a, b) => {
+        if (a.objectivePercentProbable !== null && b.objectivePercentProbable !== null) return b.objectivePercentProbable - a.objectivePercentProbable;
+        if (a.objectivePercentProbable !== null) return -1;
+        if (b.objectivePercentProbable !== null) return 1;
+        return b.probable - a.probable;
+      });
   }, [rows]);
+
+  // Rattrapage : toute l'équipe en vue globale, uniquement la personne
+  // affichée en vue individuelle (admin sur un commercial précis, ou un
+  // commercial sur lui-même).
+  const rattrapageRows = viewMode === 'global'
+    ? rows.filter((r) => r.objectifCa > 0)
+    : (selectedRow && selectedRow.objectifCa > 0 ? [selectedRow] : []);
 
   const startEdit = (rowUserId: number, objectifId: number | undefined, current: number) => {
     setEditingId(rowUserId);
@@ -422,55 +485,46 @@ export default function PerformanceCA() {
     }
   };
 
-  // --- Jauge de gamification "Niveau", basée sur le CA probable réel du mois sélectionné ---
-  const currentLevelIndex = useMemo(() => {
-    let index = 0;
-    LEVELS.forEach((item, i) => { if (totals.probable >= item.amount) index = i; });
-    return index;
-  }, [totals.probable]);
-  const currentLevel = LEVELS[currentLevelIndex];
-  const nextLevel = LEVELS[currentLevelIndex + 1] ?? LEVELS[LEVELS.length - 1];
-  const previousThreshold = currentLevelIndex > 0 ? LEVELS[currentLevelIndex - 1].amount : 0;
-  const levelProgress = Math.min(
-    Math.max(((totals.probable - previousThreshold) / (nextLevel.amount - previousThreshold || 1)) * 100, 0),
-    100
-  );
+  // Courbes réelles jour par jour du mois sélectionné pour la vue Aperçu
+  // affichée (équipe complète, ou un seul commercial) — aucune donnée
+  // inventée. Le CA confirmé est daté par son passage réel "Envoyé à
+  // Mathilde" (date_envoi_mathilde) quand elle tombe dans le mois affiché,
+  // sinon par la date de signature.
+  const chartUserIds = useMemo(() => {
+    if (viewMode === 'global') return new Set(commerciaux.map((u) => u.id));
+    return new Set(selectedUserId != null ? [selectedUserId] : []);
+  }, [viewMode, commerciaux, selectedUserId]);
 
-  const targetProgress = totals.objectifCa > 0 ? Math.min(Math.round((totals.probable / totals.objectifCa) * 100), 100) : 0;
-  const collectedProgress = totals.objectifCa > 0 ? Math.min(Math.round((totals.encaisse / totals.objectifCa) * 100), 100) : 0;
-
-  const remaining = Math.max(totals.objectifCa - totals.probable, 0);
-  const joRestants = joursOuvresRestants();
-  const dailyNeeded = isMoisCourant && joRestants > 0 ? Math.ceil(remaining / joRestants) : remaining;
-
-  const probableGrowth = growthPct(totals.probable, prevTotals.probable);
-  const collectedGrowth = growthPct(totals.encaisse, prevTotals.encaisse);
-  const commissionGrowth = growthPct(totals.commission, prevTotals.commission);
-
-  // Courbes réelles jour par jour du mois sélectionné (aucune donnée
-  // inventée) : cumul du CA probable signé, du CA effectivement encaissé et
-  // de la commission générée — utilisées pour le grand graphique et les
-  // mini-sparklines des cartes KPI.
-  const visibleUserIds = useMemo(() => new Set(visibleRows.map((r) => r.user.id)), [visibleRows]);
   const dailySeries = useMemo(() => {
     const [y, m] = mois.split('-').map(Number);
     const lastDay = new Date(y, m, 0).getDate();
     const probableByDay = new Array(lastDay + 1).fill(0);
+    const confirmeByDay = new Array(lastDay + 1).fill(0);
     const encaisseByDay = new Array(lastDay + 1).fill(0);
     const commissionByDay = new Array(lastDay + 1).fill(0);
 
     for (const p of prospects) {
       if (!p.date_signature || p.date_signature.slice(0, 7) !== mois) continue;
-      if (p.signed_by_user_id == null || !visibleUserIds.has(p.signed_by_user_id)) continue;
-      const day = Number(p.date_signature.slice(8, 10));
-      if (day >= 1 && day <= lastDay) probableByDay[day] += Number(p.montant_potentiel) || 0;
+      if (p.signed_by_user_id == null || !chartUserIds.has(p.signed_by_user_id)) continue;
+      const max = Number(p.montant_potentiel) || 0;
+      const paye = Math.min(paiementsByProspect.get(p.id) || 0, max);
+      const restant = max - paye;
+      if (restant <= 0) continue;
+      if (p.statut_avancement === 'Envoyé à Mathilde') {
+        const evtDate = p.date_envoi_mathilde && p.date_envoi_mathilde.slice(0, 7) === mois ? p.date_envoi_mathilde : p.date_signature;
+        const day = Number(evtDate.slice(8, 10));
+        if (day >= 1 && day <= lastDay) confirmeByDay[day] += restant;
+      } else if (PROBABLE_STAGES.has(p.statut_avancement)) {
+        const day = Number(p.date_signature.slice(8, 10));
+        if (day >= 1 && day <= lastDay) probableByDay[day] += restant;
+      }
     }
 
     const tauxByUser = new Map(commerciaux.map((u) => [u.id, Number(u.taux_commission) || 0]));
     for (const pmt of paiements) {
       if (pmt.date_paiement.slice(0, 7) !== mois) continue;
       const p = prospects.find((pp) => pp.id === pmt.prospect_id);
-      if (!p || p.signed_by_user_id == null || !visibleUserIds.has(p.signed_by_user_id)) continue;
+      if (!p || p.signed_by_user_id == null || !chartUserIds.has(p.signed_by_user_id)) continue;
       const day = Number(pmt.date_paiement.slice(8, 10));
       if (day < 1 || day > lastDay) continue;
       const amt = Number(pmt.montant) || 0;
@@ -479,19 +533,19 @@ export default function PerformanceCA() {
     }
 
     const probable: { day: number; cumul: number }[] = [];
+    const confirme: { day: number; cumul: number }[] = [];
     const encaisse: { day: number; cumul: number }[] = [];
     const commission: { day: number; cumul: number }[] = [];
-    let cp = 0, ce = 0, cc = 0;
+    let cp = 0, cc2 = 0, ce = 0, cco = 0;
     for (let d = 1; d <= lastDay; d++) {
-      cp += probableByDay[d]; ce += encaisseByDay[d]; cc += commissionByDay[d];
+      cp += probableByDay[d]; cc2 += confirmeByDay[d]; ce += encaisseByDay[d]; cco += commissionByDay[d];
       probable.push({ day: d, cumul: cp });
+      confirme.push({ day: d, cumul: cc2 });
       encaisse.push({ day: d, cumul: ce });
-      commission.push({ day: d, cumul: cc });
+      commission.push({ day: d, cumul: cco });
     }
-    return { probable, encaisse, commission };
-  }, [prospects, paiements, mois, visibleUserIds, commerciaux]);
-  const chartPoints = dailySeries.probable;
-  const chartMax = Math.max(totals.objectifCa, ...chartPoints.map((p) => p.cumul), 1) * 1.08;
+    return { probable, confirme, encaisse, commission };
+  }, [prospects, paiements, mois, chartUserIds, commerciaux, paiementsByProspect]);
 
   // Horodatage réel de dernière mise à jour des données (dernier prospect ou
   // règlement modifié) — jamais une date figée en dur.
@@ -508,8 +562,8 @@ export default function PerformanceCA() {
   if (errorP) return <ErrorState message="Erreur de chargement des données." />;
 
   const cardShell = isDark
-    ? 'border-white/10 bg-[#091225] text-white'
-    : 'border-slate-200 bg-white shadow-sm text-slate-800';
+    ? 'border-white/10 bg-[#080d1a] text-white'
+    : 'border-slate-200 bg-white shadow-sm text-slate-900';
   const textMuted = isDark ? 'text-white/55' : 'text-slate-500';
   const textMuted2 = isDark ? 'text-white/40' : 'text-slate-400';
 
@@ -553,6 +607,19 @@ export default function PerformanceCA() {
           >
             <Receipt className="h-4 w-4" /> Suivi paiements clients
           </button>
+          {isAdmin && tab === 'apercu' && (
+            <Select value={heroCommercialId} onValueChange={setHeroCommercialId}>
+              <SelectTrigger className={`h-11 w-[180px] rounded-xl ${isDark ? 'border-white/10 bg-white/[0.035] text-white' : 'border-slate-200 bg-white'}`}>
+                <SelectValue placeholder="Tous les commerciaux" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="tous">Tous les commerciaux</SelectItem>
+                {commerciaux.map((u) => (
+                  <SelectItem key={u.id} value={String(u.id)}>{u.first_name} {u.last_name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
           <button
             onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
             aria-label="Changer le thème"
@@ -800,315 +867,286 @@ export default function PerformanceCA() {
             }`}
           >
             {/* Montagne + chemin lumineux : visible, aucun voile opaque par-dessus */}
-            <MountainScene dark={isDark} />
+            <MountainScene
+              dark={isDark}
+              progress={viewMode === 'global' ? performance.progressPercent : (performance.currentLevel ? ((performance.currentLevel.level - 1) / 9) * 100 : 0)}
+            />
             <div
               className={`pointer-events-none absolute inset-0 ${
                 isDark
-                  ? 'bg-[radial-gradient(circle_at_75%_20%,rgba(124,58,237,.22),transparent_38%)]'
-                  : 'bg-[radial-gradient(circle_at_75%_20%,rgba(124,58,237,.08),transparent_38%)]'
+                  ? 'bg-[radial-gradient(circle_at_75%_20%,rgba(124,58,237,.18),transparent_38%)]'
+                  : 'bg-[radial-gradient(circle_at_75%_20%,rgba(124,58,237,.06),transparent_38%)]'
               }`}
             />
             <div className="relative grid gap-5 p-6 md:p-8 md:grid-cols-[190px_1fr] xl:grid-cols-[210px_1fr_300px] items-center">
-              {/* niveau — badge premium façon rang de jeu vidéo */}
-              <RankBadge level={currentLevel.level} stars={Math.floor(levelProgress / 34)} />
+              {viewMode === 'commercial' && performance.currentLevel ? (
+                <RankCard level={performance.currentLevel.level} name={heroCommercialName} stars={Math.floor((performance.levelProgress ?? 0) / 34)} />
+              ) : (
+                <TeamBadge progress={performance.progressPercent} />
+              )}
 
               {/* progression principale */}
               <div className="flex flex-col justify-center">
                 <div className="flex items-center gap-2">
-                  <span className="text-sm font-semibold text-violet-300">CA PROBABLE</span>
+                  <span className="text-sm font-semibold text-violet-300">
+                    {viewMode === 'global' ? 'CA PROBABLE ÉQUIPE' : 'CA PROBABLE'}
+                  </span>
                   <Info className="h-4 w-4 opacity-50" />
                 </div>
                 <div className="mt-1 flex flex-wrap items-end gap-4">
-                  <strong className="text-5xl font-black tracking-tight md:text-7xl">{eur(totals.probable)}</strong>
-                  <div className="mb-2 text-2xl font-black text-violet-300">{Math.round(levelProgress)}%</div>
+                  <strong className="text-5xl font-black tracking-tight md:text-7xl">{eur(performance.probable)}</strong>
                 </div>
-                <div className={`mt-6 h-7 overflow-hidden rounded-full ring-1 ${isDark ? 'bg-black/50 ring-white/10' : 'bg-slate-200 ring-black/5'}`}>
-                  <div
-                    className="relative h-full rounded-full bg-gradient-to-r from-fuchsia-400 via-purple-500 to-violet-500 shadow-[0_0_30px_rgba(168,85,247,.75)] transition-all duration-700"
-                    style={{ width: `${Math.max(levelProgress, 4)}%` }}
-                  >
-                    <div className="absolute right-0 top-1/2 h-9 w-9 -translate-y-1/2 translate-x-1/2 rounded-full bg-white/90 blur-md" />
-                  </div>
-                </div>
-                <div className="mt-4 flex justify-between gap-4 text-sm">
-                  <div>
-                    <div className="font-semibold">Niveau {currentLevel.level}</div>
-                    <div className={isDark ? 'text-white/60' : 'text-slate-500'}>{eur(currentLevel.amount)}</div>
-                  </div>
-                  <div className="text-right">
-                    <div className="font-semibold">Prochain niveau {nextLevel.level}</div>
-                    <div className={isDark ? 'text-white/60' : 'text-slate-500'}>{eur(nextLevel.amount)}</div>
-                  </div>
-                </div>
+
+                {viewMode === 'commercial' && performance.currentLevel && performance.nextLevel ? (
+                  <>
+                    <div className="mt-6 flex items-center gap-5">
+                      <div className={`h-7 flex-1 overflow-hidden rounded-full ring-1 ${isDark ? 'bg-black/50 ring-white/10' : 'bg-slate-200 ring-black/5'}`}>
+                        <div
+                          className="relative h-full rounded-full bg-gradient-to-r from-fuchsia-400 via-purple-500 to-violet-500 shadow-[0_0_30px_rgba(168,85,247,.75)] transition-all duration-700"
+                          style={{ width: `${Math.max(performance.levelProgress ?? 0, 4)}%` }}
+                        >
+                          <div className="absolute right-0 top-1/2 h-9 w-9 -translate-y-1/2 translate-x-1/2 rounded-full bg-white/90 blur-md" />
+                        </div>
+                      </div>
+                      <div className="text-3xl font-black text-violet-300">{Math.round(performance.levelProgress ?? 0)}%</div>
+                    </div>
+                    <div className="mt-4 flex justify-between gap-4 text-sm">
+                      <div>
+                        <div className={isDark ? 'text-white/60' : 'text-slate-500'}>Niveau {performance.currentLevel.level}</div>
+                        <div className="mt-0.5 font-semibold">{eur(performance.currentLevel.amount)}</div>
+                      </div>
+                      <div className="text-right">
+                        <div className={isDark ? 'text-white/60' : 'text-slate-500'}>Niveau {performance.nextLevel.level}</div>
+                        <div className="mt-0.5 font-semibold">{eur(performance.nextLevel.amount)}</div>
+                      </div>
+                    </div>
+                    {performance.currentLevel.level < performance.nextLevel.level ? (
+                      <div className={`mt-5 inline-flex w-fit items-center gap-2 rounded-xl border px-4 py-2.5 text-sm ${isDark ? 'border-violet-500/20 bg-violet-500/[0.08]' : 'border-violet-100 bg-violet-50'}`}>
+                        <Zap className="h-4 w-4 text-violet-500" />
+                        Encore <strong>{eur(performance.remainingToNextLevel ?? 0)}</strong> pour débloquer le niveau {performance.nextLevel.level}
+                      </div>
+                    ) : (
+                      <div className={`mt-5 inline-flex w-fit items-center gap-2 rounded-xl border px-4 py-2.5 text-sm ${isDark ? 'border-lime-500/20 bg-lime-500/[0.08] text-lime-300' : 'border-lime-200 bg-lime-50 text-lime-700'}`}>
+                        <Trophy className="h-4 w-4" /> Niveau maximum atteint !
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <>
+                    <div className="mt-6 flex items-center gap-5">
+                      <div className={`h-7 flex-1 overflow-hidden rounded-full ring-1 ${isDark ? 'bg-black/50 ring-white/10' : 'bg-slate-200 ring-black/5'}`}>
+                        <div
+                          className="h-full rounded-full bg-gradient-to-r from-[#5A9BA3] via-[#6AABB4] to-violet-500 shadow-[0_0_25px_rgba(106,171,180,.55)] transition-all duration-700"
+                          style={{ width: `${Math.max(performance.progressPercent, 4)}%` }}
+                        />
+                      </div>
+                      <div className="text-3xl font-black text-[#6AABB4]">{Math.round(performance.progressPercent)}%</div>
+                    </div>
+                    <div className="mt-4 flex justify-between text-sm">
+                      <div>
+                        <div className={isDark ? 'text-white/60' : 'text-slate-500'}>CA probable équipe</div>
+                        <div className="mt-0.5 font-semibold">{eur(performance.probable)}</div>
+                      </div>
+                      <div className="text-right">
+                        <div className={isDark ? 'text-white/60' : 'text-slate-500'}>Objectif équipe</div>
+                        <div className="mt-0.5 font-semibold">{eur(performance.objectifCa)}</div>
+                      </div>
+                    </div>
+                  </>
+                )}
               </div>
 
               {/* restant — carte "verre" séparée mais intégrée au hero */}
-              <div
-                className={`flex flex-col justify-center rounded-2xl border p-5 backdrop-blur-md ${
-                  isDark ? 'border-white/15 bg-white/[0.06]' : 'border-slate-200 bg-white/80 shadow-sm'
-                }`}
-              >
+              <div className={`flex flex-col justify-center rounded-2xl border p-5 backdrop-blur-md ${isDark ? 'border-white/15 bg-white/[0.06]' : 'border-slate-200 bg-white/85 shadow-sm'}`}>
                 <span className={`text-sm font-semibold ${isDark ? 'text-white/70' : 'text-slate-500'}`}>RESTANT À ATTEINDRE</span>
-                <strong className="mt-2 text-3xl font-black">{eur(remaining)}</strong>
+                <strong className="mt-2 text-3xl font-black">{eur(performance.remaining)}</strong>
                 <div className={`mt-3 text-sm leading-6 ${isDark ? 'text-white/70' : 'text-slate-600'}`}>
-                  {remaining <= 0 && totals.objectifCa > 0 ? (
+                  {performance.remaining <= 0 && performance.objectifCa > 0 ? (
                     <span className="flex items-center gap-2 font-semibold text-emerald-400"><Trophy className="w-5 h-5" /> Objectif atteint ce mois !</span>
-                  ) : totals.objectifCa === 0 ? (
+                  ) : performance.objectifCa === 0 ? (
                     <span>Aucun objectif défini pour ce mois.</span>
                   ) : isMoisCourant ? (
                     <>
-                      Il manque <strong className="text-white">{eur(remaining)}</strong> — soit{' '}
-                      <strong className="text-amber-400">{eur(dailyNeeded)}/jour ouvré</strong> sur{' '}
+                      Il manque <strong className="text-white">{eur(performance.remaining)}</strong> — soit{' '}
+                      <strong className="text-amber-400">{eur(performance.dailyNeeded)}/jour ouvré</strong> sur{' '}
                       <strong className="text-amber-400">{joRestants} j. restants</strong>.
                     </>
                   ) : (
-                    <>Il manquait <strong className="text-white">{eur(remaining)}</strong> pour atteindre l'objectif de {MONTH_NAMES[selectedMonthIdx]} {selectedYear}.</>
+                    <>Il manquait <strong className="text-white">{eur(performance.remaining)}</strong> pour atteindre l'objectif de {MONTH_NAMES[selectedMonthIdx]} {selectedYear}.</>
                   )}
                 </div>
               </div>
             </div>
           </div>
 
-          {/* LEVEL TRACK — compact */}
-          <div className={`rounded-[20px] border p-4 ${isDark ? 'border-white/10 bg-[#091225] text-white' : 'border-slate-200 bg-white shadow-sm text-slate-900'}`}>
-            <div className="mb-3 flex items-center justify-between">
-              <h2 className="text-xs font-bold uppercase tracking-wide">Progression des niveaux</h2>
-              <span className={`text-xs ${textMuted2}`}>{targetProgress}% de l'objectif</span>
-            </div>
-            <div className="relative overflow-x-auto pb-1">
-              <div className="min-w-[820px]">
-                <div className="relative flex items-start justify-between">
-                  <div className={`absolute left-3 right-3 top-[14px] h-[2px] ${isDark ? 'bg-white/10' : 'bg-slate-200'}`} />
-                  <div
-                    className="absolute left-3 top-[14px] h-[2px] bg-lime-500"
-                    style={{ width: `${Math.min((currentLevelIndex / (LEVELS.length - 1)) * 100, 100)}%` }}
-                  />
-                  {LEVELS.map((level, index) => {
-                    const completed = index < currentLevelIndex;
-                    const current = index === currentLevelIndex;
-                    const locked = index > currentLevelIndex;
-                    return (
-                      <div key={level.level} className="relative z-10 flex w-[72px] flex-col items-center text-center">
-                        <div
-                          className={`flex h-7 w-7 items-center justify-center rounded-full border-2 text-xs font-bold ${
-                            completed
-                              ? 'border-lime-400 bg-lime-500 text-white'
-                              : current
-                              ? 'border-violet-400 bg-violet-600 text-white shadow-[0_0_16px_rgba(139,92,246,.7)]'
-                              : isDark ? 'border-white/20 bg-[#101827] text-white/40' : 'border-slate-300 bg-slate-50 text-slate-400'
-                          }`}
-                        >
-                          {completed ? <Check className="h-3.5 w-3.5" /> : locked ? <Lock className="h-3 w-3" /> : level.level}
-                        </div>
-                        <div className={`mt-1.5 text-[10px] font-bold ${current ? 'text-violet-400' : ''}`}>NIV. {level.level}</div>
-                        <div className={`text-[10px] ${textMuted2}`}>{eur(level.amount)}</div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            </div>
-          </div>
+          {/* PROGRESSION — compacte, individuelle (10 niveaux) ou équipe (25/50/75/100%) */}
+          {viewMode === 'commercial' && performance.currentLevel ? (
+            <LevelProgression dark={isDark} currentLevel={performance.currentLevel} />
+          ) : (
+            <TeamProgression dark={isDark} progress={performance.progressPercent} />
+          )}
 
-          {/* KPI */}
+          {/* KPI — toujours ces 4-là */}
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-            <KpiCard dark={isDark} icon={<ArrowUpRight className="h-5 w-5" />} title="CA PROBABLE" value={eur(totals.probable)} subtitle="Cumulé ce mois" growth={probableGrowth} accent="violet" sparkline={dailySeries.probable} />
-            <KpiCard dark={isDark} icon={<Wallet className="h-5 w-5" />} title="CA ENCAISSÉ" value={eur(totals.encaisse)} subtitle="Cumulé ce mois" growth={collectedGrowth} accent="blue" sparkline={dailySeries.encaisse} />
-            <KpiCard dark={isDark} icon={<Target className="h-5 w-5" />} title="OBJECTIF" value={eur(totals.objectifCa)} subtitle="Objectif du mois" progress={targetProgress} accent="amber" />
-            <KpiCard dark={isDark} icon={<Banknote className="h-5 w-5" />} title="COMMISSION PAYÉE" value={eur(totals.commission)} subtitle="Ce mois" growth={commissionGrowth} accent="green" sparkline={dailySeries.commission} />
+            <KpiCard
+              dark={isDark} title="CA PROBABLE" value={eur(performance.probable)} subtitle="Cumulé du mois"
+              growth={performance.probableGrowth} accent="violet"
+              progress={performance.objectifCa > 0 ? clamp((performance.probable / performance.objectifCa) * 100, 0, 100) : 0}
+              icon={<ArrowUpRight className="h-5 w-5" />}
+            />
+            <KpiCard
+              dark={isDark} title="CA ENCAISSÉ" value={eur(performance.encaisse)} subtitle="Règlements reçus"
+              growth={performance.encaisseGrowth} accent="blue"
+              progress={performance.objectifCa > 0 ? clamp((performance.encaisse / performance.objectifCa) * 100, 0, 100) : 0}
+              icon={<Wallet className="h-5 w-5" />}
+            />
+            <KpiCard
+              dark={isDark} title="OBJECTIF" value={eur(performance.objectifCa)} subtitle="Objectif du mois"
+              accent="amber" progress={100} icon={<Target className="h-5 w-5" />}
+            />
+            <KpiCard
+              dark={isDark} title="COMMISSION PAYÉE" value={eur(performance.commission)} subtitle="Règlements encaissés ce mois"
+              growth={performance.commissionGrowth} accent="green" icon={<Banknote className="h-5 w-5" />}
+            />
           </div>
 
-          {/* BAS DE PAGE */}
-          <div className="grid gap-4 xl:grid-cols-[1.35fr_.9fr]">
-            <div className={`rounded-[24px] border p-5 ${isDark ? 'border-white/10 bg-[#091225] text-white' : 'border-slate-200 bg-white shadow-sm text-slate-900'}`}>
-              <div className="mb-6">
-                <h2 className="font-bold">ÉVOLUTION DU CA PROBABLE</h2>
-                <div className={`mt-2 flex gap-4 text-xs ${textMuted2}`}>
-                  <span className="flex items-center gap-2"><span className="h-[2px] w-5 bg-violet-500" /> CA probable</span>
-                  <span className="flex items-center gap-2"><span className="h-[2px] w-5 border-t border-dashed border-slate-400" /> Objectif</span>
-                </div>
-              </div>
-              <EvolutionChart points={chartPoints} max={chartMax} objectif={totals.objectifCa} dark={isDark} levels={LEVELS} />
-            </div>
-            <div className={`rounded-[24px] border p-5 ${isDark ? 'border-white/10 bg-[#091225] text-white' : 'border-slate-200 bg-white shadow-sm text-slate-900'}`}>
-              <h2 className="font-bold">RÉCAPITULATIF DU MOIS</h2>
-              <div className="mt-8 space-y-7">
-                <SummaryRow dark={isDark} label="CA probable" value={totals.probable} total={totals.objectifCa || 1} percentage={targetProgress} color="bg-violet-500" />
-                <SummaryRow dark={isDark} label="CA encaissé" value={totals.encaisse} total={totals.objectifCa || 1} percentage={collectedProgress} color="bg-blue-500" />
-                <SummaryRow dark={isDark} label="Objectif" value={totals.objectifCa} total={totals.objectifCa || 1} percentage={100} color="bg-amber-400" />
-                <SummaryRow dark={isDark} label="Commission payée" value={totals.commission} total={totals.objectifCa || 1} percentage={null} color="bg-emerald-500" />
-              </div>
-              <div className={`mt-10 flex items-center gap-2 text-xs ${textMuted2}`}>
-                <RefreshCw className="h-3.5 w-3.5" />
-                {lastUpdatedLabel ? <>Données mises à jour le {lastUpdatedLabel}</> : 'Données synchronisées en direct'}
-              </div>
-            </div>
+          {/* Graphique réel + récapitulatif (CA confirmé toujours visible ici, jamais fusionné) */}
+          <div className="grid gap-4 xl:grid-cols-[1.25fr_.75fr]">
+            <RevenueChart dark={isDark} series={dailySeries} objectif={performance.objectifCa} />
+            <MonthlySummary
+              dark={isDark}
+              probable={performance.probable}
+              confirme={performance.confirme}
+              encaisse={performance.encaisse}
+              objectif={performance.objectifCa}
+              commission={performance.commission}
+              lastUpdatedLabel={lastUpdatedLabel}
+            />
           </div>
 
-          {/* Rattrapage — uniquement pertinent sur le mois en cours */}
+          {/* Rattrapage — uniquement sur le mois en cours */}
           {isMoisCourant && (
-            <div className={`rounded-[24px] border ${cardShell}`}>
-              <div className="p-5 pb-0">
-                <h2 className="text-lg font-bold flex items-center gap-2"><Flame className="w-5 h-5 text-orange-500" /> Rattrapage — mois en cours</h2>
-              </div>
-              <div className="p-5 space-y-2">
-                {visibleRows.filter((r) => r.objectifCa > 0).length === 0 ? (
+            <section className={`rounded-[24px] border p-5 ${cardShell}`}>
+              <h2 className="text-sm font-black uppercase tracking-wide flex items-center gap-2"><Flame className="w-4 h-4 text-orange-500" /> Rattrapage du mois</h2>
+              <div className="mt-4 grid gap-3 lg:grid-cols-2 xl:grid-cols-4">
+                {rattrapageRows.length === 0 ? (
                   <p className={`text-sm ${textMuted2}`}>Aucun objectif défini ce mois-ci.</p>
                 ) : (
-                  visibleRows.filter((r) => r.objectifCa > 0).map((r) => (
-                    <div key={r.user.id} className={`flex items-center justify-between p-3 rounded-xl ${isDark ? 'bg-white/[0.04]' : 'bg-slate-50'}`}>
-                      <span className="text-sm font-medium">{r.user.first_name} {r.user.last_name}</span>
+                  rattrapageRows.map((r) => (
+                    <div key={r.user.id} className={`rounded-2xl border p-4 ${isDark ? 'border-white/[0.07] bg-white/[0.025]' : 'border-slate-200 bg-slate-50'}`}>
+                      <div className="font-bold">{r.user.first_name} {r.user.last_name}</div>
                       {r.ecart <= 0 ? (
-                        <span className="text-sm font-semibold text-emerald-500 flex items-center gap-1"><Trophy className="w-4 h-4" /> Objectif atteint</span>
+                        <div className="mt-3 text-sm font-semibold text-emerald-500 flex items-center gap-1"><Trophy className="w-4 h-4" /> Objectif atteint</div>
                       ) : (
-                        <span className="text-sm text-orange-500">
-                          Il manque <span className="font-semibold">{eur(r.ecart)}</span>
-                          {joursOuvresRestants() > 0 && (
-                            <> — soit <span className="font-semibold">{eur(r.parJourNecessaire)}</span>/jour ouvré sur {joursOuvresRestants()} j. restants</>
-                          )}
-                        </span>
+                        <>
+                          <div className={`mt-3 text-sm ${textMuted}`}>Reste <strong>{eur(r.ecart)}</strong></div>
+                          {joRestants > 0 && <div className="mt-1 text-xl font-black text-amber-500">{eur(r.parJourNecessaire)}/jour</div>}
+                        </>
                       )}
                     </div>
                   ))
                 )}
               </div>
-            </div>
+            </section>
           )}
 
-          {/* Classement — gamification, visible à tous */}
-          <div className={`rounded-[24px] border ${cardShell}`}>
-            <div className="p-5 pb-0">
-              <h2 className="text-lg font-bold flex items-center gap-2"><Trophy className="w-5 h-5 text-amber-500" /> Classement du mois</h2>
-            </div>
-            <div className="p-5 space-y-1.5">
+          {/* Classement — trié par CA probable / objectif, toujours toute l'équipe */}
+          <section className={`rounded-[24px] border p-5 ${cardShell}`}>
+            <h2 className="text-sm font-black uppercase tracking-wide flex items-center gap-2"><Trophy className="w-4 h-4 text-amber-500" /> Classement</h2>
+            <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
               {classement.map((r, idx) => (
-                <div key={r.user.id} className={`flex items-center justify-between p-2.5 rounded-xl ${r.user.id === userRole?.id ? 'bg-violet-500/10' : isDark ? 'bg-white/[0.04]' : 'bg-slate-50'}`}>
-                  <div className="flex items-center gap-3">
-                    <span className={`w-6 text-center text-sm font-bold ${textMuted2}`}>
-                      {idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : idx + 1}
-                    </span>
-                    <span className="text-sm font-medium">{r.user.first_name} {r.user.last_name}</span>
+                <div key={r.user.id} className={`rounded-2xl border p-4 ${r.user.id === userRole?.id ? 'border-violet-400/30 bg-violet-500/10' : isDark ? 'border-white/[0.07] bg-white/[0.025]' : 'border-slate-200 bg-slate-50'}`}>
+                  <div className="flex items-center justify-between">
+                    <div className="font-bold">{idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : `${idx + 1}.`} {r.user.first_name} {r.user.last_name}</div>
+                    <strong className="text-violet-400">{r.objectivePercentProbable === null ? '—' : `${Math.round(r.objectivePercentProbable)}%`}</strong>
                   </div>
-                  <div className="flex items-center gap-3 text-sm">
-                    <span className={textMuted}>{eur(r.realise)}</span>
-                    {r.pct !== null && (
-                      <span className={`font-semibold ${r.pct >= 100 ? 'text-emerald-500' : r.pct >= 60 ? 'text-amber-500' : 'text-red-500'}`}>{r.pct}%</span>
-                    )}
-                  </div>
+                  <div className={`mt-2 text-xs ${textMuted2}`}>{eur(r.probable)} / {eur(r.objectifCa)}</div>
                 </div>
               ))}
             </div>
-          </div>
+          </section>
 
-          {/* Tableau par commercial */}
-          <div className={`rounded-[24px] border ${cardShell}`}>
-            <div className="p-5 pb-0">
-              <h2 className="text-lg font-bold">Détail par commercial</h2>
-            </div>
-            <div className="p-5 overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className={`text-left border-b ${isDark ? 'text-white/40 border-white/10' : 'text-slate-400 border-slate-100'}`}>
-                    <th className="py-2 pr-4 font-medium">Commercial</th>
-                    <th className="py-2 pr-4 font-medium text-right">CA probable</th>
-                    <th className="py-2 pr-4 font-medium text-right">CA confirmé</th>
-                    <th className="py-2 pr-4 font-medium text-right">CA encaissé</th>
-                    <th className="py-2 pr-4 font-medium text-right">Réalisé</th>
-                    <th className="py-2 pr-4 font-medium text-right">Objectif</th>
-                    <th className="py-2 pr-4 font-medium text-right">% atteint</th>
-                    <th className="py-2 pr-4 font-medium text-right">Taux comm.</th>
-                    <th className="py-2 pr-4 font-medium text-right">Commission (paie)</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {visibleRows.map((r) => (
-                    <tr key={r.user.id} className={`border-b last:border-0 ${isDark ? 'border-white/5' : 'border-slate-50'}`}>
-                      <td className="py-3 pr-4 font-medium">
-                        {r.user.first_name} {r.user.last_name}
-                        <span className={`text-xs ml-1.5 ${textMuted2}`}>({r.dealsCount} dossier{r.dealsCount > 1 ? 's' : ''})</span>
-                      </td>
-                      <td className="py-3 pr-4 text-right text-amber-500">{eur(r.probable)}</td>
-                      <td className="py-3 pr-4 text-right text-sky-500">{eur(r.confirme)}</td>
-                      <td className="py-3 pr-4 text-right text-emerald-500 font-semibold">{eur(r.encaisse)}</td>
-                      <td className="py-3 pr-4 text-right font-semibold">{eur(r.realise)}</td>
-                      <td className="py-3 pr-4 text-right">
-                        {editingId === r.user.id ? (
-                          <div className="flex items-center justify-end gap-1">
-                            <Input
-                              autoFocus
-                              type="number"
-                              value={editValue}
-                              onChange={(e) => setEditValue(e.target.value)}
-                              className="w-24 h-8 rounded-lg text-right"
-                            />
-                            <Button size="icon" variant="ghost" className="w-7 h-7" onClick={() => saveObjectif(r)}>
-                              <Check className="w-4 h-4 text-emerald-600" />
-                            </Button>
-                            <Button size="icon" variant="ghost" className="w-7 h-7" onClick={() => setEditingId(null)}>
-                              <X className="w-4 h-4 text-slate-400" />
-                            </Button>
-                          </div>
-                        ) : (
-                          <div className="flex items-center justify-end gap-1.5">
-                            <span className={textMuted}>{r.objectifCa ? eur(r.objectifCa) : '-'}</span>
-                            {isAdmin && (
+          {/* Détail par commercial — admin uniquement, toujours l'équipe complète */}
+          {isAdmin && (
+            <section className={`overflow-hidden rounded-[24px] border ${cardShell}`}>
+              <div className="px-5 py-4">
+                <h2 className="text-sm font-black uppercase tracking-wide">Détail par commercial</h2>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[1000px] text-sm">
+                  <thead className={isDark ? 'bg-white/[0.035]' : 'bg-slate-50'}>
+                    <tr className={`text-left ${isDark ? 'text-white/40' : 'text-slate-400'}`}>
+                      <th className="px-5 py-3 font-medium">Commercial</th>
+                      <th className="px-5 py-3 font-medium text-right">CA probable</th>
+                      <th className="px-5 py-3 font-medium text-right">CA confirmé</th>
+                      <th className="px-5 py-3 font-medium text-right">CA encaissé</th>
+                      <th className="px-5 py-3 font-medium text-right">Objectif</th>
+                      <th className="px-5 py-3 font-medium text-right">% atteint</th>
+                      <th className="px-5 py-3 font-medium text-right">Taux comm.</th>
+                      <th className="px-5 py-3 font-medium text-right">Commission (paie)</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {rows.map((r) => (
+                      <tr key={r.user.id} className={`border-t ${isDark ? 'border-white/[0.06]' : 'border-slate-100'}`}>
+                        <td className="px-5 py-4 font-medium">
+                          {r.user.first_name} {r.user.last_name}
+                          <span className={`text-xs ml-1.5 ${textMuted2}`}>({r.dealsCount} dossier{r.dealsCount > 1 ? 's' : ''})</span>
+                        </td>
+                        <td className="px-5 py-4 text-right text-amber-500">{eur(r.probable)}</td>
+                        <td className="px-5 py-4 text-right text-[#6AABB4]">{eur(r.confirme)}</td>
+                        <td className="px-5 py-4 text-right text-emerald-500 font-semibold">{eur(r.encaisse)}</td>
+                        <td className="px-5 py-4 text-right">
+                          {editingId === r.user.id ? (
+                            <div className="flex items-center justify-end gap-1">
+                              <Input autoFocus type="number" value={editValue} onChange={(e) => setEditValue(e.target.value)} className="w-24 h-8 rounded-lg text-right" />
+                              <Button size="icon" variant="ghost" className="w-7 h-7" onClick={() => saveObjectif(r)}><Check className="w-4 h-4 text-emerald-600" /></Button>
+                              <Button size="icon" variant="ghost" className="w-7 h-7" onClick={() => setEditingId(null)}><X className="w-4 h-4 text-slate-400" /></Button>
+                            </div>
+                          ) : (
+                            <div className="flex items-center justify-end gap-1.5">
+                              <span className={textMuted}>{r.objectifCa ? eur(r.objectifCa) : '-'}</span>
                               <button onClick={() => startEdit(r.user.id, r.objectifId, r.objectifCa)} className={isDark ? 'text-white/30 hover:text-white' : 'text-slate-300 hover:text-slate-600'}>
                                 <Pencil className="w-3.5 h-3.5" />
                               </button>
-                            )}
-                          </div>
-                        )}
-                      </td>
-                      <td className="py-3 pr-4 text-right">
-                        {r.pct === null ? (
-                          <span className={textMuted2}>-</span>
-                        ) : (
-                          <span className={`font-semibold ${r.pct >= 100 ? 'text-emerald-500' : r.pct >= 60 ? 'text-amber-500' : 'text-red-500'}`}>
-                            {r.pct}%
-                          </span>
-                        )}
-                      </td>
-                      <td className="py-3 pr-4 text-right">
-                        {editingTauxId === r.user.id ? (
-                          <div className="flex items-center justify-end gap-1">
-                            <Input
-                              autoFocus
-                              type="number"
-                              value={editTauxValue}
-                              onChange={(e) => setEditTauxValue(e.target.value)}
-                              className="w-16 h-8 rounded-lg text-right"
-                            />
-                            <Button size="icon" variant="ghost" className="w-7 h-7" onClick={() => saveTaux(r)}>
-                              <Check className="w-4 h-4 text-emerald-600" />
-                            </Button>
-                            <Button size="icon" variant="ghost" className="w-7 h-7" onClick={() => setEditingTauxId(null)}>
-                              <X className="w-4 h-4 text-slate-400" />
-                            </Button>
-                          </div>
-                        ) : (
-                          <div className="flex items-center justify-end gap-1.5">
-                            <span className={textMuted}>{r.taux ? `${r.taux}%` : '-'}</span>
-                            {isAdmin && (
+                            </div>
+                          )}
+                        </td>
+                        <td className="px-5 py-4 text-right">
+                          {r.pct === null ? <span className={textMuted2}>-</span> : (
+                            <span className={`font-semibold ${r.pct >= 100 ? 'text-emerald-500' : r.pct >= 60 ? 'text-amber-500' : 'text-red-500'}`}>{r.pct}%</span>
+                          )}
+                        </td>
+                        <td className="px-5 py-4 text-right">
+                          {editingTauxId === r.user.id ? (
+                            <div className="flex items-center justify-end gap-1">
+                              <Input autoFocus type="number" value={editTauxValue} onChange={(e) => setEditTauxValue(e.target.value)} className="w-16 h-8 rounded-lg text-right" />
+                              <Button size="icon" variant="ghost" className="w-7 h-7" onClick={() => saveTaux(r)}><Check className="w-4 h-4 text-emerald-600" /></Button>
+                              <Button size="icon" variant="ghost" className="w-7 h-7" onClick={() => setEditingTauxId(null)}><X className="w-4 h-4 text-slate-400" /></Button>
+                            </div>
+                          ) : (
+                            <div className="flex items-center justify-end gap-1.5">
+                              <span className={textMuted}>{r.taux ? `${r.taux}%` : '-'}</span>
                               <button onClick={() => { setEditingTauxId(r.user.id); setEditTauxValue(r.taux ? String(r.taux) : ''); }} className={isDark ? 'text-white/30 hover:text-white' : 'text-slate-300 hover:text-slate-600'}>
                                 <Pencil className="w-3.5 h-3.5" />
                               </button>
-                            )}
-                          </div>
-                        )}
-                      </td>
-                      <td className="py-3 pr-4 text-right font-semibold text-purple-500">{eur(r.commission)}</td>
-                    </tr>
-                  ))}
-                  {visibleRows.length === 0 && (
-                    <tr><td colSpan={9} className={`py-8 text-center ${textMuted2}`}>Aucune donnée pour ce mois.</td></tr>
-                  )}
-                </tbody>
-              </table>
-              <p className={`text-xs mt-3 ${textMuted2}`}>
-                La commission est calculée sur les règlements reçus <strong>ce mois-ci</strong> (voir l'onglet "Suivi paiements clients"), indépendamment du mois de signature du dossier.
-              </p>
-            </div>
-          </div>
+                            </div>
+                          )}
+                        </td>
+                        <td className="px-5 py-4 text-right font-semibold text-purple-500">{eur(r.commission)}</td>
+                      </tr>
+                    ))}
+                    {rows.length === 0 && (
+                      <tr><td colSpan={8} className={`py-8 text-center ${textMuted2}`}>Aucune donnée pour ce mois.</td></tr>
+                    )}
+                  </tbody>
+                </table>
+                <p className={`px-5 pb-4 pt-3 text-xs ${textMuted2}`}>
+                  La commission est calculée sur les règlements reçus <strong>ce mois-ci</strong> (voir l'onglet "Suivi paiements clients"), indépendamment du mois de signature du dossier.
+                </p>
+              </div>
+            </section>
+          )}
         </>
       )}
     </div>
@@ -1116,89 +1154,160 @@ export default function PerformanceCA() {
 }
 
 // Décor de fond du hero : chaîne de montagnes en couches + chemin lumineux
-// ascendant vers un sommet marqué d'un fanion — renforce "je monte vers le
-// prochain sommet" sans overlay opaque au-dessus du texte.
-function MountainScene({ dark }: { dark: boolean }) {
+// ascendant vers un sommet marqué d'un fanion, avec un repère qui monte selon
+// la progression réelle — jamais masqué par un overlay opaque.
+function MountainScene({ dark, progress }: { dark: boolean; progress: number }) {
+  const markerY = 450 - clamp(progress, 0, 100) * 3.3;
   return (
-    <svg
-      className="pointer-events-none absolute inset-0 h-full w-full"
-      viewBox="0 0 1200 400"
-      preserveAspectRatio="xMidYMax slice"
-      aria-hidden="true"
-    >
-      <defs>
-        <linearGradient id="mtnBack" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor={dark ? '#4c1d95' : '#a5b4fc'} stopOpacity={dark ? 0.4 : 0.55} />
-          <stop offset="100%" stopColor={dark ? '#1e1b4b' : '#e0e7ff'} stopOpacity="0" />
-        </linearGradient>
-        <linearGradient id="mtnFront" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor={dark ? '#6d28d9' : '#818cf8'} stopOpacity={dark ? 0.5 : 0.45} />
-          <stop offset="100%" stopColor={dark ? '#0b1220' : '#eef2ff'} stopOpacity="0" />
-        </linearGradient>
-        <linearGradient id="pathGlow" x1="0" y1="1" x2="1" y2="0">
-          <stop offset="0%" stopColor="#f472b6" />
-          <stop offset="100%" stopColor="#c4b5fd" />
-        </linearGradient>
-      </defs>
-      <path d="M0,320 L120,205 L230,270 L340,155 L460,260 L600,125 L740,240 L880,165 L1020,250 L1200,185 L1200,400 L0,400 Z" fill="url(#mtnBack)" />
-      <path d="M0,400 L0,300 L150,195 L300,280 L470,145 L650,260 L820,175 L980,270 L1200,195 L1200,400 Z" fill="url(#mtnFront)" />
-      <path d="M880,400 L1000,150 L1080,260 L1150,190 L1200,255 L1200,400 Z" fill={dark ? '#7c3aed' : '#8b5cf6'} opacity={dark ? 0.4 : 0.3} />
-      <path
-        d="M50,375 C210,345 250,305 330,275 S460,195 555,235 S695,155 795,195 S945,125 995,152"
-        fill="none"
-        stroke="url(#pathGlow)"
-        strokeWidth="3"
-        strokeDasharray="2 11"
-        strokeLinecap="round"
-        opacity="0.9"
-      />
-      <g transform="translate(992,142)">
-        <line x1="0" y1="0" x2="0" y2="-28" stroke={dark ? '#f5f3ff' : '#4c1d95'} strokeWidth="2.5" />
-        <path d="M0,-28 L20,-21 L0,-14 Z" fill="#f472b6" />
-        <circle cx="0" cy="-14" r="4" fill="#f472b6" opacity="0.6" />
-      </g>
-    </svg>
+    <div className="pointer-events-none absolute inset-0 overflow-hidden">
+      <svg viewBox="0 0 1600 500" preserveAspectRatio="xMidYMax slice" className="absolute bottom-0 right-[-6%] h-full w-[75%]">
+        <defs>
+          <linearGradient id="mountainMain" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%" stopColor={dark ? '#253B70' : '#DCE8FF'} />
+            <stop offset="55%" stopColor={dark ? '#17274D' : '#B8CDF5'} />
+            <stop offset="100%" stopColor={dark ? '#0E1B36' : '#8FADE3'} />
+          </linearGradient>
+          <linearGradient id="pathGradient" x1="0" y1="1" x2="1" y2="0">
+            <stop offset="0%" stopColor="#6D28D9" />
+            <stop offset="60%" stopColor="#C084FC" />
+            <stop offset="100%" stopColor="#FFFFFF" />
+          </linearGradient>
+          <filter id="pathGlow">
+            <feGaussianBlur stdDeviation="7" result="blur" />
+            <feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge>
+          </filter>
+        </defs>
+        <path
+          d="M0 500 L160 350 L260 420 L430 260 L560 390 L720 235 L850 395 L1010 255 L1160 405 L1320 300 L1600 500 Z"
+          fill={dark ? '#0A1429' : '#E2EAF8'} opacity=".8"
+        />
+        <path
+          d="M430 500 L640 390 L770 330 L880 235 L985 45 L1090 218 L1200 310 L1320 385 L1530 500 Z"
+          fill="url(#mountainMain)"
+        />
+        <path d="M985 45 L925 150 L970 130 L1000 170 L1020 125 L1090 218 Z" fill={dark ? '#AFC8FF' : '#FFFFFF'} opacity=".88" />
+        <path
+          d="M760 500 C790 440 920 465 925 395 C930 335 855 350 900 300 C945 250 1040 280 1005 220 C980 175 945 165 985 85"
+          stroke="url(#pathGradient)" strokeWidth="8" fill="none" strokeLinecap="round" filter="url(#pathGlow)"
+        />
+        <line x1="985" y1="42" x2="985" y2="4" stroke="#FFFFFF" strokeWidth="3" />
+        <path d="M987 5 L1040 22 L987 39 Z" fill="#8B5CF6" />
+        <circle cx="910" cy={markerY} r="11" fill="#FFFFFF" stroke="#8B5CF6" strokeWidth="5" filter="url(#pathGlow)" />
+      </svg>
+      <div className={`absolute inset-0 ${dark ? 'bg-gradient-to-r from-[#07101f] via-[#07101f]/50 to-transparent' : 'bg-gradient-to-r from-white via-white/45 to-transparent'}`} />
+    </div>
   );
 }
 
-// Badge de niveau façon rang de jeu vidéo premium (écusson dégradé + gros
-// chiffre + étoiles), en overlay au-dessus de la montagne.
-function RankBadge({ level, stars }: { level: number; stars: number }) {
+// Vue "Tous les commerciaux" (admin) : pas de niveau individuel, uniquement
+// la progression collective vers l'objectif de l'équipe.
+function TeamBadge({ progress }: { progress: number }) {
   return (
-    <div className="relative mx-auto flex h-[168px] w-[152px] shrink-0 items-center justify-center md:h-[190px] md:w-[172px]">
-      <svg viewBox="0 0 200 220" className="absolute inset-0 h-full w-full drop-shadow-[0_0_32px_rgba(139,92,246,.55)]">
-        <defs>
-          <linearGradient id="rankGrad" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="#ddd6fe" />
-            <stop offset="50%" stopColor="#8b5cf6" />
-            <stop offset="100%" stopColor="#4c1d95" />
-          </linearGradient>
-        </defs>
-        <path
-          d="M100 6 L188 42 L188 112 C188 166 150 202 100 214 C50 202 12 166 12 112 L12 42 Z"
-          fill="url(#rankGrad)"
-          stroke="#f5f3ff"
-          strokeOpacity="0.55"
-          strokeWidth="2.5"
-        />
-      </svg>
-      <div className="relative flex flex-col items-center justify-center pt-1 text-center">
-        <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-violet-100">Niveau actuel</span>
-        <span className="text-6xl font-black leading-none text-white drop-shadow-[0_2px_8px_rgba(0,0,0,.4)] md:text-7xl">
-          {String(level).padStart(2, '0')}
-        </span>
-        <div className="mt-2 flex items-center gap-1">
-          {[0, 1, 2].map((s) => (
-            <Trophy key={s} className={`h-4 w-4 ${s < stars ? 'text-amber-300' : 'text-white/25'}`} />
-          ))}
-        </div>
+    <div className="flex items-center justify-center">
+      <div className="flex h-[200px] w-[172px] flex-col items-center justify-center rounded-[34px] border border-[#6AABB4]/30 bg-white/10 text-center backdrop-blur-md md:h-[220px] md:w-[188px]">
+        <Users className="h-6 w-6 text-[#6AABB4]" />
+        <div className="mt-3 text-[10px] font-black uppercase tracking-[0.2em] text-[#6AABB4]">Performance équipe</div>
+        <div className="mt-2 text-[60px] font-black leading-none tracking-tight text-white md:text-[68px]">{Math.round(progress)}%</div>
+        <div className="mt-3 text-xs text-white/70">de l'objectif collectif</div>
       </div>
     </div>
   );
 }
 
+// Vue "un commercial" : badge de rang façon jeu vidéo premium, gros niveau,
+// diamants de progression réels (dérivés de levelProgress).
+function RankCard({ level, name, stars }: { level: number; name?: string; stars: number }) {
+  return (
+    <div className="flex items-center justify-center">
+      <div className="relative flex h-[200px] w-[172px] flex-col items-center justify-center overflow-hidden rounded-[34px] border border-violet-400/30 bg-white/10 backdrop-blur-md md:h-[220px] md:w-[188px]">
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_40%,rgba(124,58,237,.35),transparent_55%)]" />
+        <Trophy className="relative z-10 h-6 w-6 text-amber-400" />
+        <div className="relative z-10 mt-2 text-[10px] font-black uppercase tracking-[0.22em] text-violet-300">Niveau actuel</div>
+        <div className="relative z-10 mt-1 bg-gradient-to-b from-white via-violet-200 to-violet-500 bg-clip-text text-[76px] font-black leading-none tracking-tight text-transparent drop-shadow-[0_2px_10px_rgba(0,0,0,.4)] md:text-[84px]">
+          {String(level).padStart(2, '0')}
+        </div>
+        <div className="relative z-10 mt-3 flex gap-2">
+          {[0, 1, 2].map((s) => (
+            <span key={s} className={`h-2.5 w-2.5 rotate-45 rounded-[2px] ${s < stars ? 'bg-amber-400' : 'bg-white/20'}`} />
+          ))}
+        </div>
+        {name && <div className="relative z-10 mt-3 text-xs text-white/70">{name}</div>}
+      </div>
+    </div>
+  );
+}
+
+// Frise des 10 niveaux — compacte (utilisée uniquement en vue individuelle).
+function LevelProgression({ dark, currentLevel }: { dark: boolean; currentLevel: GameLevel }) {
+  const currentIndex = LEVELS.findIndex((l) => l.level === currentLevel.level);
+  return (
+    <section className={`rounded-[20px] border p-4 ${dark ? 'border-white/10 bg-[#080d1a] text-white' : 'border-slate-200 bg-white shadow-sm text-slate-900'}`}>
+      <h2 className="mb-3 text-xs font-bold uppercase tracking-wide">Progression des niveaux</h2>
+      <div className="relative overflow-x-auto pb-1">
+        <div className="min-w-[820px]">
+          <div className="relative flex items-start justify-between">
+            <div className={`absolute left-3 right-3 top-[14px] h-[2px] ${dark ? 'bg-white/10' : 'bg-slate-200'}`} />
+            <div className="absolute left-3 top-[14px] h-[2px] bg-lime-500" style={{ width: `${clamp((currentIndex / (LEVELS.length - 1)) * 100, 0, 100)}%` }} />
+            {LEVELS.map((level, index) => {
+              const done = index < currentIndex;
+              const current = index === currentIndex;
+              const locked = index > currentIndex;
+              return (
+                <div key={level.level} className="relative z-10 flex w-[72px] flex-col items-center text-center">
+                  <div
+                    className={`flex h-7 w-7 items-center justify-center rounded-full border-2 text-xs font-bold ${
+                      done ? 'border-lime-400 bg-lime-500 text-white'
+                        : current ? 'border-violet-400 bg-violet-600 text-white shadow-[0_0_16px_rgba(139,92,246,.7)]'
+                        : dark ? 'border-white/20 bg-[#101827] text-white/40' : 'border-slate-300 bg-slate-50 text-slate-400'
+                    }`}
+                  >
+                    {done ? <Check className="h-3.5 w-3.5" /> : locked ? <Lock className="h-3 w-3" /> : level.level}
+                  </div>
+                  <div className={`mt-1.5 text-[10px] font-bold ${current ? 'text-violet-400' : ''}`}>NIV. {level.level}</div>
+                  <div className={`text-[10px] ${dark ? 'text-white/40' : 'text-slate-400'}`}>{eur(level.amount)}</div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+// Progression collective (vue "Tous les commerciaux") — jalons 25/50/75/100%
+// de l'objectif d'équipe, en remplacement de la frise de niveaux individuelle.
+function TeamProgression({ dark, progress }: { dark: boolean; progress: number }) {
+  const milestones = [25, 50, 75, 100];
+  return (
+    <section className={`rounded-[20px] border p-4 ${dark ? 'border-white/10 bg-[#080d1a] text-white' : 'border-slate-200 bg-white shadow-sm text-slate-900'}`}>
+      <h2 className="mb-3 text-xs font-bold uppercase tracking-wide">Progression de l'équipe vers l'objectif</h2>
+      <div className="flex items-center gap-3">
+        {milestones.map((milestone, index) => {
+          const reached = progress >= milestone;
+          return (
+            <div key={milestone} className="flex flex-1 items-center gap-3">
+              <div className="flex flex-col items-center gap-1.5 shrink-0">
+                <div className={`flex h-8 w-8 items-center justify-center rounded-full border-2 font-bold text-xs ${
+                  reached ? 'border-[#6AABB4] bg-[#6AABB4] text-white' : dark ? 'border-white/15 bg-[#101827] text-white/40' : 'border-slate-300 bg-slate-50 text-slate-400'
+                }`}>
+                  {reached ? <Check className="h-4 w-4" /> : <Lock className="h-3 w-3" />}
+                </div>
+                <div className="text-[10px] font-bold">{milestone}%</div>
+              </div>
+              {index < milestones.length - 1 && (
+                <div className={`h-[2px] flex-1 rounded-full ${progress >= milestone ? 'bg-[#6AABB4]' : dark ? 'bg-white/10' : 'bg-slate-200'}`} />
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
 function KpiCard({
-  dark, icon, title, value, subtitle, growth, progress, sparkline, accent,
+  dark, icon, title, value, subtitle, growth, progress, accent,
 }: {
   dark: boolean;
   icon: ReactNode;
@@ -1207,17 +1316,16 @@ function KpiCard({
   subtitle: string;
   growth?: number | null;
   progress?: number;
-  sparkline?: { day: number; cumul: number }[];
   accent: 'violet' | 'blue' | 'amber' | 'green';
 }) {
   const styles = {
-    violet: { icon: 'bg-violet-500/15 text-violet-500', bar: 'bg-violet-500', stroke: '#8b5cf6' },
-    blue: { icon: 'bg-blue-500/15 text-blue-500', bar: 'bg-blue-500', stroke: '#3b82f6' },
-    amber: { icon: 'bg-amber-400/15 text-amber-500', bar: 'bg-amber-400', stroke: '#f59e0b' },
-    green: { icon: 'bg-emerald-500/15 text-emerald-500', bar: 'bg-emerald-500', stroke: '#22c55e' },
+    violet: { icon: 'bg-violet-500/15 text-violet-500', bar: 'bg-violet-500' },
+    blue: { icon: 'bg-blue-500/15 text-blue-500', bar: 'bg-blue-500' },
+    amber: { icon: 'bg-amber-400/15 text-amber-500', bar: 'bg-amber-400' },
+    green: { icon: 'bg-emerald-500/15 text-emerald-500', bar: 'bg-emerald-500' },
   }[accent];
   return (
-    <div className={`rounded-[22px] border p-5 ${dark ? 'border-white/10 bg-[#091225] text-white' : 'border-slate-200 bg-white shadow-sm text-slate-800'}`}>
+    <div className={`rounded-[22px] border p-5 ${dark ? 'border-white/10 bg-[#080d1a] text-white' : 'border-slate-200 bg-white shadow-sm text-slate-800'}`}>
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-center gap-3">
           <div className={`flex h-11 w-11 items-center justify-center rounded-xl ${styles.icon}`}>{icon}</div>
@@ -1237,117 +1345,111 @@ function KpiCard({
       <div className={`mt-1 text-xs ${dark ? 'text-white/45' : 'text-slate-500'}`}>{subtitle}</div>
       {progress !== undefined && (
         <div className={`mt-7 h-2 overflow-hidden rounded-full ${dark ? 'bg-white/10' : 'bg-slate-100'}`}>
-          <div className={`h-full rounded-full ${styles.bar}`} style={{ width: `${progress}%` }} />
+          <div className={`h-full rounded-full ${styles.bar}`} style={{ width: `${clamp(progress, 0, 100)}%` }} />
         </div>
       )}
-      {progress === undefined && sparkline && sparkline.length > 1 && (
-        <MiniSparkline points={sparkline} stroke={styles.stroke} />
-      )}
     </div>
   );
 }
 
-// Mini-courbe réelle (cumul jour par jour) affichée sous chaque KPI — dérivée
-// des mêmes séries que le grand graphique, jamais une forme décorative fixe.
-function MiniSparkline({ points, stroke }: { points: { day: number; cumul: number }[]; stroke: string }) {
-  const max = Math.max(...points.map((p) => p.cumul), 1);
-  const toX = (i: number) => (i / Math.max(points.length - 1, 1)) * 280;
-  const toY = (val: number) => 50 - Math.min(val / max, 1) * 46;
-  const linePath = points.map((p, i) => `${i === 0 ? 'M' : 'L'}${toX(i)} ${toY(p.cumul)}`).join(' ');
-  const areaPath = `${linePath} L${toX(points.length - 1)} 55 L0 55 Z`;
-  const gradId = `spark-${stroke.replace('#', '')}`;
+type DailyPoint = { day: number; cumul: number };
+
+// Graphique réel à 3 courbes (probable / confirmé / encaissé) + objectif en
+// pointillé — dérivé des vraies signatures, transmissions à Mathilde et
+// règlements du mois affiché (jamais un tracé fixe).
+function RevenueChart({ dark, series, objectif }: { dark: boolean; series: { probable: DailyPoint[]; confirme: DailyPoint[]; encaisse: DailyPoint[] }; objectif: number }) {
+  const lastDay = series.probable.length || 1;
+  const maxVal = Math.max(
+    objectif,
+    series.probable[lastDay - 1]?.cumul || 0,
+    series.confirme[lastDay - 1]?.cumul || 0,
+    series.encaisse[lastDay - 1]?.cumul || 0,
+    1
+  ) * 1.08;
+  const toX = (day: number) => ((day - 1) / Math.max(lastDay - 1, 1)) * 900;
+  const toY = (val: number) => 290 - Math.min(val / maxVal, 1) * 290;
+  const pathFor = (pts: DailyPoint[]) => pts.map((p, i) => `${i === 0 ? 'M' : 'L'}${toX(p.day)} ${toY(p.cumul)}`).join(' ');
+  const objY = toY(objectif);
+  const ticks = [1, 0.75, 0.5, 0.25, 0].map((f) => Math.round(maxVal * f));
+  const xLabels = [1, 5, 10, 15, 20, 25, lastDay].filter((d, i, arr) => arr.indexOf(d) === i && d <= lastDay);
+
   return (
-    <svg viewBox="0 0 280 55" className="mt-5 h-[55px] w-full overflow-visible" preserveAspectRatio="none">
-      <defs>
-        <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor={stroke} stopOpacity="0.35" />
-          <stop offset="100%" stopColor={stroke} stopOpacity="0" />
-        </linearGradient>
-      </defs>
-      <path d={areaPath} fill={`url(#${gradId})`} />
-      <path d={linePath} fill="none" stroke={stroke} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
+    <div className={`rounded-[24px] border p-5 md:p-6 ${dark ? 'border-white/10 bg-[#080d1a] text-white' : 'border-slate-200 bg-white shadow-sm text-slate-900'}`}>
+      <h3 className="text-sm font-black">ÉVOLUTION DU CA</h3>
+      <div className={`mt-2 flex flex-wrap gap-4 text-[11px] ${dark ? 'text-white/40' : 'text-slate-500'}`}>
+        <span className="flex items-center gap-1.5"><span className="h-[2px] w-4 bg-violet-500" /> CA probable</span>
+        <span className="flex items-center gap-1.5"><span className="h-[2px] w-4 bg-[#5A9BA3]" /> CA confirmé</span>
+        <span className="flex items-center gap-1.5"><span className="h-[2px] w-4 bg-blue-500" /> CA encaissé</span>
+        <span className="flex items-center gap-1.5"><span className="h-[2px] w-4 border-t border-dashed border-slate-400" /> Objectif</span>
+      </div>
+      <div className="relative mt-5 h-[300px]">
+        <div className="absolute inset-0 flex flex-col justify-between">
+          {ticks.map((value) => (
+            <div key={value} className="flex items-center gap-3">
+              <span className={`w-14 text-right text-[11px] ${dark ? 'text-white/35' : 'text-slate-400'}`}>{eur(value)}</span>
+              <div className={`h-px flex-1 ${dark ? 'bg-white/[0.06]' : 'bg-slate-100'}`} />
+            </div>
+          ))}
+        </div>
+        <svg className="absolute bottom-4 left-[64px] right-0 h-[270px] w-[calc(100%-64px)]" viewBox="0 0 900 290" preserveAspectRatio="none">
+          {series.probable.length > 0 && <path d={pathFor(series.probable)} fill="none" stroke="#8B5CF6" strokeWidth="3.5" strokeLinecap="round" />}
+          {series.confirme.length > 0 && <path d={pathFor(series.confirme)} fill="none" stroke="#5A9BA3" strokeWidth="3.5" strokeLinecap="round" />}
+          {series.encaisse.length > 0 && <path d={pathFor(series.encaisse)} fill="none" stroke="#3B82F6" strokeWidth="3.5" strokeLinecap="round" />}
+          {objectif > 0 && <path d={`M0 ${objY} L900 ${objY}`} fill="none" stroke="#94A3B8" strokeWidth="2" strokeDasharray="9 9" opacity="0.7" />}
+        </svg>
+        <div className={`absolute bottom-0 left-[64px] right-0 flex justify-between text-[11px] ${dark ? 'text-white/35' : 'text-slate-400'}`}>
+          {xLabels.map((d) => <span key={d}>{String(d).padStart(2, '0')}</span>)}
+        </div>
+      </div>
+    </div>
   );
 }
 
-function SummaryRow({
-  dark, label, value, total, percentage, color,
+// Récapitulatif du mois : les 3 CA (probable/confirmé/encaissé) + objectif +
+// commission, chacun avec sa vraie progression vs l'objectif.
+function MonthlySummary({
+  dark, probable, confirme, encaisse, objectif, commission, lastUpdatedLabel,
 }: {
   dark: boolean;
-  label: string;
-  value: number;
-  total: number;
-  percentage: number | null;
-  color: string;
+  probable: number;
+  confirme: number;
+  encaisse: number;
+  objectif: number;
+  commission: number;
+  lastUpdatedLabel: string | null;
 }) {
-  const width = percentage === null ? Math.min((value / total) * 100, 100) : percentage;
+  const rows = [
+    { label: 'CA probable', value: probable, percent: objectif > 0 ? (probable / objectif) * 100 : 0, color: 'bg-violet-500' },
+    { label: 'CA confirmé', value: confirme, percent: objectif > 0 ? (confirme / objectif) * 100 : 0, color: 'bg-[#5A9BA3]' },
+    { label: 'CA encaissé', value: encaisse, percent: objectif > 0 ? (encaisse / objectif) * 100 : 0, color: 'bg-blue-500' },
+    { label: 'Objectif', value: objectif, percent: 100, color: 'bg-amber-400' },
+    { label: 'Commission payée', value: commission, percent: null as number | null, color: 'bg-emerald-500' },
+  ];
   return (
-    <div className="grid grid-cols-[120px_1fr_90px_50px] items-center gap-3 text-sm">
-      <div className={dark ? 'text-white/70' : 'text-slate-600'}>{label}</div>
-      <div className={`h-3 overflow-hidden rounded-full ${dark ? 'bg-white/10' : 'bg-slate-100'}`}>
-        <div className={`h-full rounded-full ${color}`} style={{ width: `${width}%` }} />
+    <div className={`rounded-[24px] border p-5 md:p-6 ${dark ? 'border-white/10 bg-[#080d1a] text-white' : 'border-slate-200 bg-white shadow-sm text-slate-900'}`}>
+      <h3 className="text-sm font-black">RÉCAPITULATIF DU MOIS</h3>
+      <div className="mt-7 space-y-6">
+        {rows.map((row) => {
+          const width = row.percent === null ? Math.min((row.value / (objectif || 1)) * 100, 100) : clamp(row.percent, 0, 100);
+          return (
+            <div key={row.label}>
+              <div className="flex items-center justify-between gap-4 text-sm">
+                <span className={dark ? 'text-white/60' : 'text-slate-600'}>{row.label}</span>
+                <div className="flex gap-4">
+                  <strong>{eur(row.value)}</strong>
+                  <span className={`w-10 text-right ${dark ? 'text-white/40' : 'text-slate-500'}`}>{row.percent === null ? '—' : `${Math.round(row.percent)}%`}</span>
+                </div>
+              </div>
+              <div className={`mt-2 h-2 overflow-hidden rounded-full ${dark ? 'bg-white/[0.08]' : 'bg-slate-100'}`}>
+                <div className={`h-full rounded-full ${row.color}`} style={{ width: `${width}%` }} />
+              </div>
+            </div>
+          );
+        })}
       </div>
-      <div className="text-right font-medium">{eur(value)}</div>
-      <div className={`text-right ${dark ? 'text-white/60' : 'text-slate-500'}`}>{percentage === null ? '—' : `${percentage}%`}</div>
-    </div>
-  );
-}
-
-// Courbe d'évolution réelle (cumul jour par jour du CA signé sur le mois
-// sélectionné) + ligne pointillée de l'objectif — remplace le graphique de
-// démonstration à données fixes.
-function EvolutionChart({ points, max, objectif, dark, levels }: { points: { day: number; cumul: number }[]; max: number; objectif: number; dark: boolean; levels?: { level: number; amount: number }[] }) {
-  const lastDay = points.length || 1;
-  const toX = (day: number) => ((day - 1) / Math.max(lastDay - 1, 1)) * 900;
-  const toY = (val: number) => 270 - Math.min(val / max, 1) * 270;
-  const linePath = points.map((p, i) => `${i === 0 ? 'M' : 'L'}${toX(p.day)} ${toY(p.cumul)}`).join(' ');
-  const areaPath = `${linePath} L${toX(points[points.length - 1]?.day || 1)} 270 L${toX(1)} 270 Z`;
-  const objY = toY(objectif);
-  const ticks = [1, 0.75, 0.5, 0.25, 0].map((f) => Math.round(max * f));
-  const xLabels = [1, 5, 10, 15, 20, 25, lastDay].filter((d, i, arr) => arr.indexOf(d) === i && d <= lastDay);
-  // Marqueurs de niveaux : le jour où le cumul réel a franchi chaque palier
-  // ce mois-ci (première fois où cumul >= palier) — dérivé de la courbe
-  // réelle, pas d'une position décorative.
-  const levelMarkers = (levels || [])
-    .map((lvl) => {
-      const hit = points.find((p) => p.cumul >= lvl.amount);
-      return hit ? { level: lvl.level, day: hit.day, cumul: hit.cumul } : null;
-    })
-    .filter((m): m is { level: number; day: number; cumul: number } => m !== null);
-
-  return (
-    <div className="relative h-[330px]">
-      <div className="absolute inset-0 flex flex-col justify-between">
-        {ticks.map((value) => (
-          <div key={value} className="flex items-center gap-4">
-            <span className={`w-14 text-right text-[11px] ${dark ? 'text-white/35' : 'text-slate-400'}`}>{eur(value)}</span>
-            <div className={`h-px flex-1 ${dark ? 'bg-white/[0.07]' : 'bg-slate-100'}`} />
-          </div>
-        ))}
-      </div>
-      <svg className="absolute bottom-4 left-[70px] right-0 h-[270px] w-[calc(100%-70px)]" viewBox="0 0 900 270" preserveAspectRatio="none">
-        <defs>
-          <linearGradient id="chartFill" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="#8b5cf6" stopOpacity="0.35" />
-            <stop offset="100%" stopColor="#8b5cf6" stopOpacity="0" />
-          </linearGradient>
-        </defs>
-        {points.length > 0 && <path d={areaPath} fill="url(#chartFill)" />}
-        {points.length > 0 && <path d={linePath} fill="none" stroke="#8b5cf6" strokeWidth="4" strokeLinecap="round" />}
-        {objectif > 0 && (
-          <path d={`M0 ${objY} L900 ${objY}`} fill="none" stroke="#94a3b8" strokeWidth="2" strokeDasharray="9 9" opacity="0.7" />
-        )}
-        {levelMarkers.map((m) => (
-          <g key={m.level}>
-            <circle cx={toX(m.day)} cy={toY(m.cumul)} r="9" fill={dark ? '#111827' : '#ffffff'} stroke="#8b5cf6" strokeWidth="3" />
-            <text x={toX(m.day)} y={toY(m.cumul) - 16} fill={dark ? '#ddd6fe' : '#6d28d9'} fontSize="11" textAnchor="middle" fontWeight="700">
-              NIV. {m.level}
-            </text>
-          </g>
-        ))}
-      </svg>
-      <div className={`absolute bottom-0 left-[70px] right-0 flex justify-between text-[11px] ${dark ? 'text-white/35' : 'text-slate-400'}`}>
-        {xLabels.map((d) => <span key={d}>{String(d).padStart(2, '0')}</span>)}
+      <div className={`mt-8 flex items-center gap-2 text-xs ${dark ? 'text-white/35' : 'text-slate-400'}`}>
+        <RefreshCw className="h-3.5 w-3.5" />
+        {lastUpdatedLabel ? <>Données mises à jour le {lastUpdatedLabel}</> : 'Données synchronisées en direct'}
       </div>
     </div>
   );

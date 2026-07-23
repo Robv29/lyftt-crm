@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useCallback, useMemo, useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { usePersistentState } from '../hooks/use-persistent-state';
@@ -8,15 +8,16 @@ import {
 } from '../hooks/use-prospects';
 import { client } from '../lib/api';
 import ErrorState from '../components/ErrorState';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
 import {
-  TrendingUp, Target, Wallet, CheckCircle2, Pencil, Check, X,
+  Target, Wallet, CheckCircle2, Pencil, Check, X,
   Trophy, Flame, Percent, Search, Plus, Trash2, Receipt,
   AlertTriangle, ExternalLink, PiggyBank, Download,
+  ArrowUpRight, Banknote, Home, Info, Lock, Moon, Sun, RefreshCw,
 } from 'lucide-react';
 
 const MONTH_NAMES = [
@@ -64,6 +65,38 @@ function joursOuvresRestants(): number {
   return count;
 }
 
+// Paliers de la jauge de gamification "Niveau" (CA probable cumulé du mois).
+// Échelle fixe et commune à toute l'équipe, indépendante de l'objectif
+// individuel de chacun.
+type GameLevel = { level: number; amount: number };
+const LEVELS: GameLevel[] = [
+  { level: 1, amount: 2000 },
+  { level: 2, amount: 4000 },
+  { level: 3, amount: 6000 },
+  { level: 4, amount: 8000 },
+  { level: 5, amount: 10000 },
+  { level: 6, amount: 12000 },
+  { level: 7, amount: 15000 },
+  { level: 8, amount: 18000 },
+  { level: 9, amount: 21000 },
+  { level: 10, amount: 25000 },
+];
+
+// 'YYYY-MM' -> 'YYYY-MM' du mois précédent (pour un vrai comparatif d'un mois
+// sur l'autre sur les KPI, sans jamais inventer de chiffre).
+function shiftMonth(mois: string, delta: number): string {
+  const [y, m] = mois.split('-').map(Number);
+  const d = new Date(y, m - 1 + delta, 1);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+}
+
+// Évolution en % vs le mois précédent. Retourne null si le mois précédent est
+// à 0 (comparaison non pertinente) plutôt que d'afficher un faux pourcentage.
+function growthPct(cur: number, prev: number): number | null {
+  if (prev <= 0) return null;
+  return Math.round(((cur - prev) / prev) * 100);
+}
+
 export default function PerformanceCA() {
   const { isAdmin, userRole } = useAuth();
   const { data: prospects = [], isLoading: loadingP, error: errorP } = useProspects();
@@ -78,10 +111,11 @@ export default function PerformanceCA() {
 
   const now = new Date();
   const moisCourant = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-  // Etat de la page persistant (localStorage) : on garde l'onglet, le mois et
-  // les filtres d'une visite à l'autre plutôt que de repartir de zéro.
+  // Etat de la page persistant (localStorage) : on garde l'onglet, le mois, le
+  // thème et les filtres d'une visite à l'autre plutôt que de repartir de zéro.
   const [tab, setTab] = usePersistentState<'apercu' | 'paiements'>('lyftt.performanceCa.tab', 'apercu');
   const [mois, setMois] = usePersistentState<string>('lyftt.performanceCa.mois', moisCourant);
+  const [theme, setTheme] = usePersistentState<'dark' | 'light'>('lyftt.performanceCa.theme', 'dark');
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editValue, setEditValue] = useState('');
   const [editingTauxId, setEditingTauxId] = useState<number | null>(null);
@@ -100,6 +134,10 @@ export default function PerformanceCA() {
 
   const loading = loadingP || loadingU || loadingO || loadingPmt;
   const isMoisCourant = mois === moisCourant;
+  // Le thème sombre du nouveau design ne s'applique qu'à l'onglet "Aperçu du
+  // mois" (celui redessiné) ; l'onglet "Suivi paiements clients" garde son
+  // habillage clair actuel pour ne pas retoucher son fonctionnement.
+  const isDark = theme === 'dark' && tab === 'apercu';
 
   // Sélecteurs mois / année séparés (plus fiables que l'input date natif,
   // notamment pour naviguer rapidement d'une année à l'autre).
@@ -133,7 +171,10 @@ export default function PerformanceCA() {
     return map;
   }, [paiements]);
 
-  const rows = useMemo(() => {
+  // Calcule probable/confirmé/encaissé/objectif/commission pour un mois donné
+  // ('YYYY-MM'), par commercial. Factorisé pour pouvoir aussi calculer le mois
+  // précédent (comparatif réel des KPI) sans dupliquer la logique.
+  const buildRowsForMois = useCallback((moisStr: string) => {
     return commerciaux.map((u) => {
       // Un dossier est rattaché au mois de sa signature (date_signature) pour
       // le probable/confirmé/encaissé "de ce mois" — c'est l'argent généré ce
@@ -141,7 +182,7 @@ export default function PerformanceCA() {
       const deals = prospects.filter((p) => {
         if (p.signed_by_user_id !== u.id) return false;
         if (!p.date_signature) return false;
-        return p.date_signature.slice(0, 7) === mois;
+        return p.date_signature.slice(0, 7) === moisStr;
       });
 
       let probable = 0, confirme = 0, encaisse = 0;
@@ -162,20 +203,20 @@ export default function PerformanceCA() {
       // chaque règlement génère sa part de commission dès qu'il est encaissé.
       const taux = Number(u.taux_commission) || 0;
       const paiementsDuMoisPourCeCommercial = paiements.filter((pmt) => {
-        if (pmt.date_paiement.slice(0, 7) !== mois) return false;
+        if (pmt.date_paiement.slice(0, 7) !== moisStr) return false;
         const p = prospects.find((pp) => pp.id === pmt.prospect_id);
         return p?.signed_by_user_id === u.id;
       });
       const assietteCommission = paiementsDuMoisPourCeCommercial.reduce((s, pmt) => s + Number(pmt.montant), 0);
       const commission = assietteCommission * (taux / 100);
 
-      const objectifRow = objectifs.find((o) => o.user_role_id === u.id && o.mois.slice(0, 7) === mois);
+      const objectifRow = objectifs.find((o) => o.user_role_id === u.id && o.mois.slice(0, 7) === moisStr);
       const objectifCa = objectifRow?.objectif_ca ?? 0;
       const pct = objectifCa > 0 ? Math.round((realise / objectifCa) * 100) : null;
 
       const ecart = objectifCa - realise;
       const jo = joursOuvresRestants();
-      const parJourNecessaire = isMoisCourant && ecart > 0 && jo > 0 ? ecart / jo : 0;
+      const parJourNecessaire = moisStr === moisCourant && ecart > 0 && jo > 0 ? ecart / jo : 0;
 
       return {
         user: u,
@@ -186,8 +227,9 @@ export default function PerformanceCA() {
         ecart, parJourNecessaire,
       };
     });
-  }, [commerciaux, prospects, objectifs, paiements, paiementsByProspect, mois, isMoisCourant]);
+  }, [commerciaux, prospects, objectifs, paiements, paiementsByProspect, moisCourant]);
 
+  const rows = useMemo(() => buildRowsForMois(mois), [buildRowsForMois, mois]);
   const visibleRows = isAdmin ? rows : rows.filter((r) => r.user.id === userRole?.id);
 
   const totals = useMemo(() => visibleRows.reduce(
@@ -201,6 +243,20 @@ export default function PerformanceCA() {
     }),
     { probable: 0, confirme: 0, encaisse: 0, realise: 0, objectifCa: 0, commission: 0 }
   ), [visibleRows]);
+
+  // Mois précédent : uniquement pour les badges d'évolution des 4 KPI de la
+  // page (aucune autre section ne s'en sert) — jamais de chiffre inventé.
+  const prevMoisStr = useMemo(() => shiftMonth(mois, -1), [mois]);
+  const prevRows = useMemo(() => buildRowsForMois(prevMoisStr), [buildRowsForMois, prevMoisStr]);
+  const prevVisibleRows = isAdmin ? prevRows : prevRows.filter((r) => r.user.id === userRole?.id);
+  const prevTotals = useMemo(() => prevVisibleRows.reduce(
+    (acc, r) => ({
+      probable: acc.probable + r.probable,
+      encaisse: acc.encaisse + r.encaisse,
+      commission: acc.commission + r.commission,
+    }),
+    { probable: 0, encaisse: 0, commission: 0 }
+  ), [prevVisibleRows]);
 
   // Classement : par % d'objectif atteint (ceux sans objectif défini passent
   // après, triés par CA réalisé) — visible à tous, c'est le côté gamification.
@@ -365,58 +421,132 @@ export default function PerformanceCA() {
     }
   };
 
+  // --- Jauge de gamification "Niveau", basée sur le CA probable réel du mois sélectionné ---
+  const currentLevelIndex = useMemo(() => {
+    let index = 0;
+    LEVELS.forEach((item, i) => { if (totals.probable >= item.amount) index = i; });
+    return index;
+  }, [totals.probable]);
+  const currentLevel = LEVELS[currentLevelIndex];
+  const nextLevel = LEVELS[currentLevelIndex + 1] ?? LEVELS[LEVELS.length - 1];
+  const previousThreshold = currentLevelIndex > 0 ? LEVELS[currentLevelIndex - 1].amount : 0;
+  const levelProgress = Math.min(
+    Math.max(((totals.probable - previousThreshold) / (nextLevel.amount - previousThreshold || 1)) * 100, 0),
+    100
+  );
+
+  const targetProgress = totals.objectifCa > 0 ? Math.min(Math.round((totals.probable / totals.objectifCa) * 100), 100) : 0;
+  const collectedProgress = totals.objectifCa > 0 ? Math.min(Math.round((totals.encaisse / totals.objectifCa) * 100), 100) : 0;
+
+  const remaining = Math.max(totals.objectifCa - totals.probable, 0);
+  const joRestants = joursOuvresRestants();
+  const dailyNeeded = isMoisCourant && joRestants > 0 ? Math.ceil(remaining / joRestants) : remaining;
+
+  const probableGrowth = growthPct(totals.probable, prevTotals.probable);
+  const collectedGrowth = growthPct(totals.encaisse, prevTotals.encaisse);
+  const commissionGrowth = growthPct(totals.commission, prevTotals.commission);
+
+  // Courbe d'évolution du CA : cumul jour par jour des dossiers signés ce
+  // mois-ci par les commerciaux visibles — remplace le graphique de démo par
+  // les vraies signatures du mois sélectionné.
+  const visibleUserIds = useMemo(() => new Set(visibleRows.map((r) => r.user.id)), [visibleRows]);
+  const chartPoints = useMemo(() => {
+    const [y, m] = mois.split('-').map(Number);
+    const lastDay = new Date(y, m, 0).getDate();
+    const byDay = new Array(lastDay + 1).fill(0);
+    for (const p of prospects) {
+      if (!p.date_signature || p.date_signature.slice(0, 7) !== mois) continue;
+      if (p.signed_by_user_id == null || !visibleUserIds.has(p.signed_by_user_id)) continue;
+      const day = Number(p.date_signature.slice(8, 10));
+      if (day >= 1 && day <= lastDay) byDay[day] += Number(p.montant_potentiel) || 0;
+    }
+    let cumul = 0;
+    const points: { day: number; cumul: number }[] = [];
+    for (let d = 1; d <= lastDay; d++) { cumul += byDay[d]; points.push({ day: d, cumul }); }
+    return points;
+  }, [prospects, mois, visibleUserIds]);
+  const chartMax = Math.max(totals.objectifCa, ...chartPoints.map((p) => p.cumul), 1) * 1.08;
+
   if (errorP) return <ErrorState message="Erreur de chargement des données." />;
 
-  return (
-    <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
-            <TrendingUp className="w-6 h-6 text-[#5A9BA3]" /> Performance CA
-          </h1>
-          <p className="text-sm text-slate-500 mt-1">
-            CA probable (dossiers gagnés), confirmé (transmis à Mathilde) et encaissé, par commercial.
-          </p>
-        </div>
-        {tab === 'apercu' && (
-          <div className="flex gap-2">
-            <Select value={String(selectedMonthIdx)} onValueChange={setMonthPart}>
-              <SelectTrigger className="w-36 rounded-xl"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                {MONTH_NAMES.map((m, i) => (
-                  <SelectItem key={m} value={String(i)}>{m}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Select value={selectedYear} onValueChange={setYearPart}>
-              <SelectTrigger className="w-24 rounded-xl"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                {yearsOptions.map((y) => (
-                  <SelectItem key={y} value={String(y)}>{y}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-        )}
-      </div>
+  const cardShell = isDark
+    ? 'border-white/10 bg-[#091225] text-white'
+    : 'border-slate-200 bg-white shadow-sm text-slate-800';
+  const textMuted = isDark ? 'text-white/55' : 'text-slate-500';
+  const textMuted2 = isDark ? 'text-white/40' : 'text-slate-400';
 
-      {/* Onglets */}
-      <div className="flex gap-2">
-        <Button
-          variant={tab === 'apercu' ? 'default' : 'outline'}
-          onClick={() => setTab('apercu')}
-          className={`rounded-xl ${tab === 'apercu' ? 'bg-gradient-to-r from-[#5A9BA3] to-[#6AABB4] text-white' : ''}`}
-        >
-          Aperçu du mois
-        </Button>
-        <Button
-          variant={tab === 'paiements' ? 'default' : 'outline'}
-          onClick={() => setTab('paiements')}
-          className={`rounded-xl gap-1.5 ${tab === 'paiements' ? 'bg-gradient-to-r from-[#5A9BA3] to-[#6AABB4] text-white' : ''}`}
-        >
-          <Receipt className="w-4 h-4" /> Suivi paiements clients
-        </Button>
-      </div>
+  return (
+    <div className="space-y-4">
+      {/* HEADER */}
+      <header
+        className={`rounded-[24px] border p-5 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between transition-colors ${
+          isDark ? 'border-white/10 bg-[#050b18] text-white' : 'border-slate-200 bg-white shadow-sm text-slate-900'
+        }`}
+      >
+        <div className="flex items-center gap-3">
+          <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border ${isDark ? 'border-white/10 bg-white/[0.04]' : 'border-slate-200 bg-slate-50'}`}>
+            <Target className="h-5 w-5 text-violet-500" />
+          </div>
+          <div>
+            <h1 className="text-xl font-black tracking-tight md:text-2xl">PERFORMANCE CA</h1>
+            <p className={`mt-0.5 text-sm ${textMuted}`}>
+              CA probable (dossiers gagnés), confirmé (transmis à Mathilde) et encaissé, par commercial.
+            </p>
+          </div>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            onClick={() => setTab('apercu')}
+            className={`flex h-11 items-center gap-2 rounded-xl px-4 text-sm font-semibold transition hover:-translate-y-0.5 ${
+              tab === 'apercu'
+                ? 'bg-gradient-to-r from-violet-600 to-purple-600 text-white shadow-lg shadow-violet-600/20'
+                : isDark ? 'border border-white/10 bg-white/[0.035] hover:bg-white/[0.07]' : 'border border-slate-200 bg-white hover:bg-slate-50'
+            }`}
+          >
+            <Home className="h-4 w-4" /> Aperçu du mois
+          </button>
+          <button
+            onClick={() => setTab('paiements')}
+            className={`flex h-11 items-center gap-2 rounded-xl px-4 text-sm font-semibold transition hover:-translate-y-0.5 ${
+              tab === 'paiements'
+                ? 'bg-gradient-to-r from-violet-600 to-purple-600 text-white shadow-lg shadow-violet-600/20'
+                : isDark ? 'border border-white/10 bg-white/[0.035] hover:bg-white/[0.07]' : 'border border-slate-200 bg-white hover:bg-slate-50'
+            }`}
+          >
+            <Receipt className="h-4 w-4" /> Suivi paiements clients
+          </button>
+          <button
+            onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+            aria-label="Changer le thème"
+            title={tab === 'paiements' ? "S'applique à l'onglet Aperçu du mois" : 'Changer le thème'}
+            className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border transition hover:-translate-y-0.5 ${
+              isDark ? 'border-white/10 bg-white/[0.035]' : 'border-slate-200 bg-white shadow-sm'
+            }`}
+          >
+            {theme === 'dark' ? <Sun className="h-5 w-5 text-amber-400" /> : <Moon className="h-5 w-5 text-violet-600" />}
+          </button>
+          {tab === 'apercu' && (
+            <div className="flex gap-2">
+              <Select value={String(selectedMonthIdx)} onValueChange={setMonthPart}>
+                <SelectTrigger className={`h-11 w-36 rounded-xl ${isDark ? 'border-white/10 bg-white/[0.035] text-white' : ''}`}><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {MONTH_NAMES.map((m, i) => (
+                    <SelectItem key={m} value={String(i)}>{m}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Select value={selectedYear} onValueChange={setYearPart}>
+                <SelectTrigger className={`h-11 w-24 rounded-xl ${isDark ? 'border-white/10 bg-white/[0.035] text-white' : ''}`}><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {yearsOptions.map((y) => (
+                    <SelectItem key={y} value={String(y)}>{y}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+        </div>
+      </header>
 
       {loading ? (
         <div className="text-sm text-slate-400 py-12 text-center">Chargement...</div>
@@ -624,44 +754,188 @@ export default function PerformanceCA() {
         </>
       ) : (
         <>
-          {/* Totaux globaux */}
-          <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
-            {[
-              { label: 'CA probable', value: totals.probable, icon: TrendingUp, color: 'text-amber-600 bg-amber-50' },
-              { label: 'CA confirmé', value: totals.confirme, icon: CheckCircle2, color: 'text-sky-600 bg-sky-50' },
-              { label: 'CA encaissé', value: totals.encaisse, icon: Wallet, color: 'text-emerald-600 bg-emerald-50' },
-              { label: 'Objectif total', value: totals.objectifCa, icon: Target, color: 'text-slate-600 bg-slate-100' },
-              { label: 'Commissions (paie)', value: totals.commission, icon: Percent, color: 'text-purple-600 bg-purple-50' },
-            ].map((k) => (
-              <Card key={k.label} className="border-0 shadow-sm rounded-2xl">
-                <CardContent className="p-4 flex items-center gap-3">
-                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${k.color}`}>
-                    <k.icon className="w-5 h-5" />
+          {/* HERO GAMIFIÉ */}
+          <div className={`relative overflow-hidden rounded-[28px] border ${isDark ? 'border-white/10 bg-[#091225]' : 'border-slate-200 bg-white shadow-sm'}`}>
+            <div
+              className={`pointer-events-none absolute inset-0 ${
+                isDark
+                  ? 'bg-[radial-gradient(circle_at_72%_15%,rgba(124,58,237,.28),transparent_32%),radial-gradient(circle_at_42%_90%,rgba(59,130,246,.12),transparent_35%)]'
+                  : 'bg-[radial-gradient(circle_at_72%_15%,rgba(124,58,237,.10),transparent_32%),radial-gradient(circle_at_42%_90%,rgba(59,130,246,.08),transparent_35%)]'
+              }`}
+            />
+            <div className="relative grid gap-4 p-5 md:p-6 xl:grid-cols-[220px_1fr_330px]">
+              {/* niveau */}
+              <div className={`flex min-h-[220px] flex-col items-center justify-center rounded-3xl border p-6 text-center ${isDark ? 'border-violet-400/20 bg-black/20' : 'border-violet-100 bg-violet-50/60'}`}>
+                <span className="text-xs font-bold uppercase tracking-[0.16em] text-violet-500">Niveau actuel</span>
+                <div className="mt-3 text-[82px] font-black leading-none bg-gradient-to-b from-white via-violet-300 to-violet-700 bg-clip-text text-transparent drop-shadow-[0_0_28px_rgba(139,92,246,.35)]">
+                  {String(currentLevel.level).padStart(2, '0')}
+                </div>
+                <div className="mt-5 flex items-center gap-1">
+                  {[0, 1, 2].map((star) => (
+                    <Trophy key={star} className={`h-5 w-5 ${star < Math.min(3, Math.ceil((currentLevel.level / LEVELS.length) * 3)) ? 'text-amber-400' : 'text-slate-500/40'}`} />
+                  ))}
+                </div>
+              </div>
+              {/* progression principale */}
+              <div className="flex min-h-[220px] flex-col justify-center px-1 md:px-5">
+                <div className="flex items-center gap-2">
+                  <span className={`text-sm font-semibold ${textMuted}`}>CA PROBABLE</span>
+                  <Info className="h-4 w-4 opacity-50" />
+                </div>
+                <div className="mt-2 flex flex-wrap items-end gap-4">
+                  <strong className="text-4xl font-black tracking-tight md:text-6xl">{eur(totals.probable)}</strong>
+                  <div className="mb-2 text-2xl font-black">{Math.round(levelProgress)}%</div>
+                </div>
+                <div className={`mt-6 h-5 overflow-hidden rounded-full ${isDark ? 'bg-black/40' : 'bg-slate-200'}`}>
+                  <div
+                    className="relative h-full rounded-full bg-gradient-to-r from-violet-600 via-purple-500 to-fuchsia-400 shadow-[0_0_25px_rgba(168,85,247,.55)] transition-all duration-700"
+                    style={{ width: `${levelProgress}%` }}
+                  >
+                    <div className="absolute right-0 top-1/2 h-7 w-7 -translate-y-1/2 translate-x-1/2 rounded-full bg-white blur-md" />
+                  </div>
+                </div>
+                <div className="mt-5 flex justify-between gap-4 text-sm">
+                  <div>
+                    <div className="font-semibold">Niveau {currentLevel.level}</div>
+                    <div className={textMuted}>{eur(currentLevel.amount)}</div>
+                  </div>
+                  <div className="text-right">
+                    <div className="font-semibold">Prochain niveau {nextLevel.level}</div>
+                    <div className={textMuted}>{eur(nextLevel.amount)}</div>
+                  </div>
+                </div>
+              </div>
+              {/* restant */}
+              <div className={`flex min-h-[220px] flex-col justify-center rounded-3xl border p-6 ${isDark ? 'border-white/10 bg-black/25' : 'border-slate-200 bg-white/80'}`}>
+                <span className={`text-sm font-semibold ${textMuted}`}>RESTANT À ATTEINDRE</span>
+                <strong className="mt-2 text-4xl font-black">{eur(remaining)}</strong>
+                <div className={`mt-4 text-base leading-7 ${textMuted}`}>
+                  {remaining <= 0 && totals.objectifCa > 0 ? (
+                    <span className="flex items-center gap-2 font-semibold text-emerald-500"><Trophy className="w-5 h-5" /> Objectif atteint ce mois !</span>
+                  ) : totals.objectifCa === 0 ? (
+                    <span>Aucun objectif défini pour ce mois.</span>
+                  ) : isMoisCourant ? (
+                    <>
+                      Il manque <strong className={isDark ? 'text-white' : 'text-slate-900'}>{eur(remaining)}</strong> — soit{' '}
+                      <strong className="text-amber-500">{eur(dailyNeeded)}/jour ouvré</strong> sur{' '}
+                      <strong className="text-amber-500">{joRestants} j. restants</strong>.
+                    </>
+                  ) : (
+                    <>Il manquait <strong className={isDark ? 'text-white' : 'text-slate-900'}>{eur(remaining)}</strong> pour atteindre l'objectif de {MONTH_NAMES[selectedMonthIdx]} {selectedYear}.</>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* LEVEL TRACK */}
+          <div className={`rounded-[24px] border p-5 ${isDark ? 'border-white/10 bg-[#091225]' : 'border-slate-200 bg-white shadow-sm'}`}>
+            <h2 className="mb-6 text-sm font-bold uppercase tracking-wide">Progression des niveaux</h2>
+            <div className="relative overflow-x-auto pb-2">
+              <div className="min-w-[1050px]">
+                <div className="relative flex items-start justify-between">
+                  <div className={`absolute left-4 right-4 top-[18px] h-[3px] ${isDark ? 'bg-white/10' : 'bg-slate-200'}`} />
+                  <div
+                    className="absolute left-4 top-[18px] h-[3px] bg-lime-500"
+                    style={{ width: `${Math.min((currentLevelIndex / (LEVELS.length - 1)) * 100, 100)}%` }}
+                  />
+                  {LEVELS.map((level, index) => {
+                    const completed = index < currentLevelIndex;
+                    const current = index === currentLevelIndex;
+                    const locked = index > currentLevelIndex;
+                    return (
+                      <div key={level.level} className="relative z-10 flex w-[92px] flex-col items-center text-center">
+                        <div
+                          className={`flex h-10 w-10 items-center justify-center rounded-full border-2 font-bold ${
+                            completed
+                              ? 'border-lime-400 bg-lime-500 text-white'
+                              : current
+                              ? 'border-violet-400 bg-violet-600 text-white shadow-[0_0_24px_rgba(139,92,246,.7)]'
+                              : isDark ? 'border-white/20 bg-[#101827] text-white/40' : 'border-slate-300 bg-slate-50 text-slate-400'
+                          }`}
+                        >
+                          {completed ? <Check className="h-5 w-5" /> : locked ? <Lock className="h-4 w-4" /> : level.level}
+                        </div>
+                        <div className={`mt-3 text-xs font-bold ${current ? 'text-violet-500' : ''}`}>NIVEAU {level.level}</div>
+                        <div className={`mt-1 text-xs ${textMuted2}`}>{eur(level.amount)}</div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+            <div className={`mt-6 grid grid-cols-2 divide-x md:grid-cols-4 ${isDark ? 'divide-white/10' : 'divide-slate-200'}`}>
+              {[25, 50, 75, 100].map((value) => (
+                <div key={value} className="flex items-center justify-center gap-3 px-3 py-2">
+                  <div
+                    className={`flex h-10 w-10 items-center justify-center rounded-xl ${
+                      targetProgress >= value
+                        ? value === 75 ? 'bg-violet-600/20 text-violet-500' : 'bg-lime-500/15 text-lime-500'
+                        : isDark ? 'bg-white/5 text-white/30' : 'bg-slate-100 text-slate-400'
+                    }`}
+                  >
+                    {targetProgress >= value ? <Check className="h-5 w-5" /> : <Lock className="h-4 w-4" />}
                   </div>
                   <div>
-                    <p className="text-xs text-slate-500">{k.label}</p>
-                    <p className="text-lg font-bold text-slate-800">{eur(k.value)}</p>
+                    <div className="font-bold">{value}%</div>
+                    <div className={`text-xs ${textMuted2}`}>du niveau</div>
                   </div>
-                </CardContent>
-              </Card>
-            ))}
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* KPI */}
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+            <KpiCard dark={isDark} icon={<ArrowUpRight className="h-5 w-5" />} title="CA PROBABLE" value={eur(totals.probable)} subtitle="Cumulé ce mois" growth={probableGrowth} accent="violet" />
+            <KpiCard dark={isDark} icon={<Wallet className="h-5 w-5" />} title="CA ENCAISSÉ" value={eur(totals.encaisse)} subtitle="Cumulé ce mois" growth={collectedGrowth} accent="blue" />
+            <KpiCard dark={isDark} icon={<Target className="h-5 w-5" />} title="OBJECTIF" value={eur(totals.objectifCa)} subtitle="Objectif du mois" progress={targetProgress} accent="amber" />
+            <KpiCard dark={isDark} icon={<Banknote className="h-5 w-5" />} title="COMMISSION PAYÉE" value={eur(totals.commission)} subtitle="Ce mois" growth={commissionGrowth} accent="green" />
+          </div>
+
+          {/* BAS DE PAGE */}
+          <div className="grid gap-4 xl:grid-cols-[1.35fr_.9fr]">
+            <div className={`rounded-[24px] border p-5 ${isDark ? 'border-white/10 bg-[#091225]' : 'border-slate-200 bg-white shadow-sm'}`}>
+              <div className="mb-6">
+                <h2 className="font-bold">ÉVOLUTION DU CA — {MONTH_NAMES[selectedMonthIdx].toUpperCase()}</h2>
+                <div className={`mt-2 flex gap-4 text-xs ${textMuted2}`}>
+                  <span className="flex items-center gap-2"><span className="h-[2px] w-5 bg-violet-500" /> CA cumulé (signatures)</span>
+                  <span className="flex items-center gap-2"><span className="h-[2px] w-5 border-t border-dashed border-slate-400" /> Objectif</span>
+                </div>
+              </div>
+              <EvolutionChart points={chartPoints} max={chartMax} objectif={totals.objectifCa} dark={isDark} />
+            </div>
+            <div className={`rounded-[24px] border p-5 ${isDark ? 'border-white/10 bg-[#091225]' : 'border-slate-200 bg-white shadow-sm'}`}>
+              <h2 className="font-bold">RÉCAPITULATIF DU MOIS</h2>
+              <div className="mt-8 space-y-7">
+                <SummaryRow dark={isDark} label="CA probable" value={totals.probable} total={totals.objectifCa || 1} percentage={targetProgress} color="bg-violet-500" />
+                <SummaryRow dark={isDark} label="CA encaissé" value={totals.encaisse} total={totals.objectifCa || 1} percentage={collectedProgress} color="bg-blue-500" />
+                <SummaryRow dark={isDark} label="Objectif" value={totals.objectifCa} total={totals.objectifCa || 1} percentage={100} color="bg-amber-400" />
+                <SummaryRow dark={isDark} label="Commission payée" value={totals.commission} total={totals.objectifCa || 1} percentage={null} color="bg-emerald-500" />
+              </div>
+              <div className={`mt-10 flex items-center gap-2 text-xs ${textMuted2}`}>
+                <RefreshCw className="h-3.5 w-3.5" /> Données synchronisées en direct
+              </div>
+            </div>
           </div>
 
           {/* Rattrapage — uniquement pertinent sur le mois en cours */}
           {isMoisCourant && (
-            <Card className="border-0 shadow-sm rounded-2xl">
-              <CardHeader><CardTitle className="text-lg flex items-center gap-2"><Flame className="w-5 h-5 text-orange-500" /> Rattrapage — mois en cours</CardTitle></CardHeader>
-              <CardContent className="space-y-2">
+            <div className={`rounded-[24px] border ${cardShell}`}>
+              <div className="p-5 pb-0">
+                <h2 className="text-lg font-bold flex items-center gap-2"><Flame className="w-5 h-5 text-orange-500" /> Rattrapage — mois en cours</h2>
+              </div>
+              <div className="p-5 space-y-2">
                 {visibleRows.filter((r) => r.objectifCa > 0).length === 0 ? (
-                  <p className="text-sm text-slate-400">Aucun objectif défini ce mois-ci.</p>
+                  <p className={`text-sm ${textMuted2}`}>Aucun objectif défini ce mois-ci.</p>
                 ) : (
                   visibleRows.filter((r) => r.objectifCa > 0).map((r) => (
-                    <div key={r.user.id} className="flex items-center justify-between p-3 rounded-xl bg-slate-50">
-                      <span className="text-sm font-medium text-slate-700">{r.user.first_name} {r.user.last_name}</span>
+                    <div key={r.user.id} className={`flex items-center justify-between p-3 rounded-xl ${isDark ? 'bg-white/[0.04]' : 'bg-slate-50'}`}>
+                      <span className="text-sm font-medium">{r.user.first_name} {r.user.last_name}</span>
                       {r.ecart <= 0 ? (
-                        <span className="text-sm font-semibold text-emerald-600 flex items-center gap-1"><Trophy className="w-4 h-4" /> Objectif atteint</span>
+                        <span className="text-sm font-semibold text-emerald-500 flex items-center gap-1"><Trophy className="w-4 h-4" /> Objectif atteint</span>
                       ) : (
-                        <span className="text-sm text-orange-600">
+                        <span className="text-sm text-orange-500">
                           Il manque <span className="font-semibold">{eur(r.ecart)}</span>
                           {joursOuvresRestants() > 0 && (
                             <> — soit <span className="font-semibold">{eur(r.parJourNecessaire)}</span>/jour ouvré sur {joursOuvresRestants()} j. restants</>
@@ -671,40 +945,44 @@ export default function PerformanceCA() {
                     </div>
                   ))
                 )}
-              </CardContent>
-            </Card>
+              </div>
+            </div>
           )}
 
           {/* Classement — gamification, visible à tous */}
-          <Card className="border-0 shadow-sm rounded-2xl">
-            <CardHeader><CardTitle className="text-lg flex items-center gap-2"><Trophy className="w-5 h-5 text-amber-500" /> Classement du mois</CardTitle></CardHeader>
-            <CardContent className="space-y-1.5">
+          <div className={`rounded-[24px] border ${cardShell}`}>
+            <div className="p-5 pb-0">
+              <h2 className="text-lg font-bold flex items-center gap-2"><Trophy className="w-5 h-5 text-amber-500" /> Classement du mois</h2>
+            </div>
+            <div className="p-5 space-y-1.5">
               {classement.map((r, idx) => (
-                <div key={r.user.id} className={`flex items-center justify-between p-2.5 rounded-xl ${r.user.id === userRole?.id ? 'bg-[#5A9BA3]/10' : 'bg-slate-50'}`}>
+                <div key={r.user.id} className={`flex items-center justify-between p-2.5 rounded-xl ${r.user.id === userRole?.id ? 'bg-violet-500/10' : isDark ? 'bg-white/[0.04]' : 'bg-slate-50'}`}>
                   <div className="flex items-center gap-3">
-                    <span className="w-6 text-center text-sm font-bold text-slate-400">
+                    <span className={`w-6 text-center text-sm font-bold ${textMuted2}`}>
                       {idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : idx + 1}
                     </span>
-                    <span className="text-sm font-medium text-slate-700">{r.user.first_name} {r.user.last_name}</span>
+                    <span className="text-sm font-medium">{r.user.first_name} {r.user.last_name}</span>
                   </div>
                   <div className="flex items-center gap-3 text-sm">
-                    <span className="text-slate-500">{eur(r.realise)}</span>
+                    <span className={textMuted}>{eur(r.realise)}</span>
                     {r.pct !== null && (
-                      <span className={`font-semibold ${r.pct >= 100 ? 'text-emerald-600' : r.pct >= 60 ? 'text-amber-600' : 'text-red-500'}`}>{r.pct}%</span>
+                      <span className={`font-semibold ${r.pct >= 100 ? 'text-emerald-500' : r.pct >= 60 ? 'text-amber-500' : 'text-red-500'}`}>{r.pct}%</span>
                     )}
                   </div>
                 </div>
               ))}
-            </CardContent>
-          </Card>
+            </div>
+          </div>
 
           {/* Tableau par commercial */}
-          <Card className="border-0 shadow-sm rounded-2xl">
-            <CardHeader><CardTitle className="text-lg">Détail par commercial</CardTitle></CardHeader>
-            <CardContent className="overflow-x-auto">
+          <div className={`rounded-[24px] border ${cardShell}`}>
+            <div className="p-5 pb-0">
+              <h2 className="text-lg font-bold">Détail par commercial</h2>
+            </div>
+            <div className="p-5 overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="text-left text-slate-400 border-b border-slate-100">
+                  <tr className={`text-left border-b ${isDark ? 'text-white/40 border-white/10' : 'text-slate-400 border-slate-100'}`}>
                     <th className="py-2 pr-4 font-medium">Commercial</th>
                     <th className="py-2 pr-4 font-medium text-right">CA probable</th>
                     <th className="py-2 pr-4 font-medium text-right">CA confirmé</th>
@@ -718,15 +996,15 @@ export default function PerformanceCA() {
                 </thead>
                 <tbody>
                   {visibleRows.map((r) => (
-                    <tr key={r.user.id} className="border-b border-slate-50 last:border-0">
-                      <td className="py-3 pr-4 font-medium text-slate-700">
+                    <tr key={r.user.id} className={`border-b last:border-0 ${isDark ? 'border-white/5' : 'border-slate-50'}`}>
+                      <td className="py-3 pr-4 font-medium">
                         {r.user.first_name} {r.user.last_name}
-                        <span className="text-xs text-slate-400 ml-1.5">({r.dealsCount} dossier{r.dealsCount > 1 ? 's' : ''})</span>
+                        <span className={`text-xs ml-1.5 ${textMuted2}`}>({r.dealsCount} dossier{r.dealsCount > 1 ? 's' : ''})</span>
                       </td>
-                      <td className="py-3 pr-4 text-right text-amber-600">{eur(r.probable)}</td>
-                      <td className="py-3 pr-4 text-right text-sky-600">{eur(r.confirme)}</td>
-                      <td className="py-3 pr-4 text-right text-emerald-600 font-semibold">{eur(r.encaisse)}</td>
-                      <td className="py-3 pr-4 text-right font-semibold text-slate-800">{eur(r.realise)}</td>
+                      <td className="py-3 pr-4 text-right text-amber-500">{eur(r.probable)}</td>
+                      <td className="py-3 pr-4 text-right text-sky-500">{eur(r.confirme)}</td>
+                      <td className="py-3 pr-4 text-right text-emerald-500 font-semibold">{eur(r.encaisse)}</td>
+                      <td className="py-3 pr-4 text-right font-semibold">{eur(r.realise)}</td>
                       <td className="py-3 pr-4 text-right">
                         {editingId === r.user.id ? (
                           <div className="flex items-center justify-end gap-1">
@@ -746,9 +1024,9 @@ export default function PerformanceCA() {
                           </div>
                         ) : (
                           <div className="flex items-center justify-end gap-1.5">
-                            <span className="text-slate-600">{r.objectifCa ? eur(r.objectifCa) : '-'}</span>
+                            <span className={textMuted}>{r.objectifCa ? eur(r.objectifCa) : '-'}</span>
                             {isAdmin && (
-                              <button onClick={() => startEdit(r.user.id, r.objectifId, r.objectifCa)} className="text-slate-300 hover:text-slate-600">
+                              <button onClick={() => startEdit(r.user.id, r.objectifId, r.objectifCa)} className={isDark ? 'text-white/30 hover:text-white' : 'text-slate-300 hover:text-slate-600'}>
                                 <Pencil className="w-3.5 h-3.5" />
                               </button>
                             )}
@@ -757,9 +1035,9 @@ export default function PerformanceCA() {
                       </td>
                       <td className="py-3 pr-4 text-right">
                         {r.pct === null ? (
-                          <span className="text-slate-300">-</span>
+                          <span className={textMuted2}>-</span>
                         ) : (
-                          <span className={`font-semibold ${r.pct >= 100 ? 'text-emerald-600' : r.pct >= 60 ? 'text-amber-600' : 'text-red-500'}`}>
+                          <span className={`font-semibold ${r.pct >= 100 ? 'text-emerald-500' : r.pct >= 60 ? 'text-amber-500' : 'text-red-500'}`}>
                             {r.pct}%
                           </span>
                         )}
@@ -783,30 +1061,142 @@ export default function PerformanceCA() {
                           </div>
                         ) : (
                           <div className="flex items-center justify-end gap-1.5">
-                            <span className="text-slate-600">{r.taux ? `${r.taux}%` : '-'}</span>
+                            <span className={textMuted}>{r.taux ? `${r.taux}%` : '-'}</span>
                             {isAdmin && (
-                              <button onClick={() => { setEditingTauxId(r.user.id); setEditTauxValue(r.taux ? String(r.taux) : ''); }} className="text-slate-300 hover:text-slate-600">
+                              <button onClick={() => { setEditingTauxId(r.user.id); setEditTauxValue(r.taux ? String(r.taux) : ''); }} className={isDark ? 'text-white/30 hover:text-white' : 'text-slate-300 hover:text-slate-600'}>
                                 <Pencil className="w-3.5 h-3.5" />
                               </button>
                             )}
                           </div>
                         )}
                       </td>
-                      <td className="py-3 pr-4 text-right font-semibold text-purple-600">{eur(r.commission)}</td>
+                      <td className="py-3 pr-4 text-right font-semibold text-purple-500">{eur(r.commission)}</td>
                     </tr>
                   ))}
                   {visibleRows.length === 0 && (
-                    <tr><td colSpan={9} className="py-8 text-center text-slate-400">Aucune donnée pour ce mois.</td></tr>
+                    <tr><td colSpan={9} className={`py-8 text-center ${textMuted2}`}>Aucune donnée pour ce mois.</td></tr>
                   )}
                 </tbody>
               </table>
-              <p className="text-xs text-slate-400 mt-3">
+              <p className={`text-xs mt-3 ${textMuted2}`}>
                 La commission est calculée sur les règlements reçus <strong>ce mois-ci</strong> (voir l'onglet "Suivi paiements clients"), indépendamment du mois de signature du dossier.
               </p>
-            </CardContent>
-          </Card>
+            </div>
+          </div>
         </>
       )}
+    </div>
+  );
+}
+
+function KpiCard({
+  dark, icon, title, value, subtitle, growth, progress, accent,
+}: {
+  dark: boolean;
+  icon: ReactNode;
+  title: string;
+  value: string;
+  subtitle: string;
+  growth?: number | null;
+  progress?: number;
+  accent: 'violet' | 'blue' | 'amber' | 'green';
+}) {
+  const styles = {
+    violet: { icon: 'bg-violet-500/15 text-violet-500', bar: 'bg-violet-500' },
+    blue: { icon: 'bg-blue-500/15 text-blue-500', bar: 'bg-blue-500' },
+    amber: { icon: 'bg-amber-400/15 text-amber-500', bar: 'bg-amber-400' },
+    green: { icon: 'bg-emerald-500/15 text-emerald-500', bar: 'bg-emerald-500' },
+  }[accent];
+  return (
+    <div className={`rounded-[22px] border p-5 ${dark ? 'border-white/10 bg-[#091225] text-white' : 'border-slate-200 bg-white shadow-sm text-slate-800'}`}>
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <div className={`flex h-11 w-11 items-center justify-center rounded-xl ${styles.icon}`}>{icon}</div>
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-bold">{title}</span>
+            <Info className="h-3.5 w-3.5 opacity-40" />
+          </div>
+        </div>
+        {growth !== undefined && growth !== null && (
+          <div className="text-right">
+            <div className={`text-sm font-bold ${growth >= 0 ? 'text-lime-500' : 'text-red-500'}`}>{growth >= 0 ? '+' : ''}{growth}%</div>
+            <div className={`mt-1 text-[10px] ${dark ? 'text-white/40' : 'text-slate-400'}`}>vs mois dernier</div>
+          </div>
+        )}
+      </div>
+      <div className="mt-4 text-3xl font-black">{value}</div>
+      <div className={`mt-1 text-xs ${dark ? 'text-white/45' : 'text-slate-500'}`}>{subtitle}</div>
+      {progress !== undefined && (
+        <div className={`mt-7 h-2 overflow-hidden rounded-full ${dark ? 'bg-white/10' : 'bg-slate-100'}`}>
+          <div className={`h-full rounded-full ${styles.bar}`} style={{ width: `${progress}%` }} />
+        </div>
+      )}
+    </div>
+  );
+}
+
+function SummaryRow({
+  dark, label, value, total, percentage, color,
+}: {
+  dark: boolean;
+  label: string;
+  value: number;
+  total: number;
+  percentage: number | null;
+  color: string;
+}) {
+  const width = percentage === null ? Math.min((value / total) * 100, 100) : percentage;
+  return (
+    <div className="grid grid-cols-[120px_1fr_90px_50px] items-center gap-3 text-sm">
+      <div className={dark ? 'text-white/70' : 'text-slate-600'}>{label}</div>
+      <div className={`h-3 overflow-hidden rounded-full ${dark ? 'bg-white/10' : 'bg-slate-100'}`}>
+        <div className={`h-full rounded-full ${color}`} style={{ width: `${width}%` }} />
+      </div>
+      <div className="text-right font-medium">{eur(value)}</div>
+      <div className={`text-right ${dark ? 'text-white/60' : 'text-slate-500'}`}>{percentage === null ? '—' : `${percentage}%`}</div>
+    </div>
+  );
+}
+
+// Courbe d'évolution réelle (cumul jour par jour du CA signé sur le mois
+// sélectionné) + ligne pointillée de l'objectif — remplace le graphique de
+// démonstration à données fixes.
+function EvolutionChart({ points, max, objectif, dark }: { points: { day: number; cumul: number }[]; max: number; objectif: number; dark: boolean }) {
+  const lastDay = points.length || 1;
+  const toX = (day: number) => ((day - 1) / Math.max(lastDay - 1, 1)) * 900;
+  const toY = (val: number) => 270 - Math.min(val / max, 1) * 270;
+  const linePath = points.map((p, i) => `${i === 0 ? 'M' : 'L'}${toX(p.day)} ${toY(p.cumul)}`).join(' ');
+  const areaPath = `${linePath} L${toX(points[points.length - 1]?.day || 1)} 270 L${toX(1)} 270 Z`;
+  const objY = toY(objectif);
+  const ticks = [1, 0.75, 0.5, 0.25, 0].map((f) => Math.round(max * f));
+  const xLabels = [1, 5, 10, 15, 20, 25, lastDay].filter((d, i, arr) => arr.indexOf(d) === i && d <= lastDay);
+
+  return (
+    <div className="relative h-[330px]">
+      <div className="absolute inset-0 flex flex-col justify-between">
+        {ticks.map((value) => (
+          <div key={value} className="flex items-center gap-4">
+            <span className={`w-14 text-right text-[11px] ${dark ? 'text-white/35' : 'text-slate-400'}`}>{eur(value)}</span>
+            <div className={`h-px flex-1 ${dark ? 'bg-white/[0.07]' : 'bg-slate-100'}`} />
+          </div>
+        ))}
+      </div>
+      <svg className="absolute bottom-4 left-[70px] right-0 h-[270px] w-[calc(100%-70px)]" viewBox="0 0 900 270" preserveAspectRatio="none">
+        <defs>
+          <linearGradient id="chartFill" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="#8b5cf6" stopOpacity="0.35" />
+            <stop offset="100%" stopColor="#8b5cf6" stopOpacity="0" />
+          </linearGradient>
+        </defs>
+        {points.length > 0 && <path d={areaPath} fill="url(#chartFill)" />}
+        {points.length > 0 && <path d={linePath} fill="none" stroke="#8b5cf6" strokeWidth="4" strokeLinecap="round" />}
+        {objectif > 0 && (
+          <path d={`M0 ${objY} L900 ${objY}`} fill="none" stroke="#94a3b8" strokeWidth="2" strokeDasharray="9 9" opacity="0.7" />
+        )}
+      </svg>
+      <div className={`absolute bottom-0 left-[70px] right-0 flex justify-between text-[11px] ${dark ? 'text-white/35' : 'text-slate-400'}`}>
+        {xLabels.map((d) => <span key={d}>{String(d).padStart(2, '0')}</span>)}
+      </div>
     </div>
   );
 }

@@ -18,7 +18,7 @@ import {
   Trophy, Flame, Search, Plus, Trash2, Receipt,
   AlertTriangle, ExternalLink, PiggyBank, Download,
   ArrowUpRight, Banknote, Home, Info, Lock, Moon, Sun, RefreshCw,
-  CalendarDays, Users, Zap,
+  CalendarDays, Users, Zap, MoreHorizontal, Crosshair, Star, ShieldCheck,
 } from 'lucide-react';
 
 const MONTH_NAMES = [
@@ -579,30 +579,36 @@ export default function PerformanceCA() {
   const textMuted2 = isDark ? 'text-white/40' : 'text-slate-400';
 
   return (
-    <div className="space-y-4">
+    <div
+      className={`-m-4 min-h-[calc(100vh-3.5rem)] space-y-3 p-4 transition-colors sm:-m-6 sm:p-5 lg:-m-8 lg:min-h-screen lg:p-6 ${
+        isDark
+          ? 'bg-[radial-gradient(circle_at_75%_0%,rgba(91,33,182,.12),transparent_28%),linear-gradient(135deg,#030713_0%,#06101f_55%,#030713_100%)] text-white'
+          : 'bg-[radial-gradient(circle_at_75%_0%,rgba(91,33,182,.08),transparent_28%),linear-gradient(135deg,#f8fafc_0%,#eef4f8_55%,#f8fafc_100%)] text-slate-950'
+      }`}
+    >
       {/* HEADER */}
       <header
-        className={`rounded-[24px] border p-5 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between transition-colors ${
-          isDark ? 'border-white/10 bg-[#050b18] text-white' : 'border-slate-200 bg-white shadow-sm text-slate-900'
+        className={`flex flex-col gap-4 border-b pb-4 transition-colors xl:flex-row xl:items-center xl:justify-between ${
+          isDark ? 'border-white/[0.08] text-white' : 'border-slate-200 text-slate-900'
         }`}
       >
         <div className="flex items-center gap-3">
-          <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border ${isDark ? 'border-white/10 bg-white/[0.04]' : 'border-slate-200 bg-slate-50'}`}>
-            <Target className="h-5 w-5 text-violet-500" />
+          <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full border ${isDark ? 'border-amber-300/20 bg-amber-300/[0.04]' : 'border-amber-300/40 bg-amber-50'}`}>
+            <Crosshair className="h-5 w-5 text-amber-400" />
           </div>
           <div>
-            <h1 className="text-xl font-black tracking-tight md:text-2xl">PERFORMANCE CA</h1>
+            <h1 className="text-xl font-black tracking-[-0.035em] md:text-[26px]">PERFORMANCE CA</h1>
             <p className={`mt-0.5 text-sm ${textMuted}`}>
-              CA probable (dossiers gagnés), confirmé (transmis à Mathilde) et encaissé, par commercial.
+              Atteignez vos objectifs et débloquez de nouveaux niveaux.
             </p>
           </div>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex w-full flex-wrap items-center gap-2 xl:w-auto xl:justify-end">
           <button
             onClick={() => setTab('apercu')}
-            className={`flex h-11 items-center gap-2 rounded-xl px-4 text-sm font-semibold transition hover:-translate-y-0.5 ${
+            className={`flex h-12 flex-1 items-center justify-center gap-2 rounded-xl px-4 text-xs font-bold uppercase tracking-wide transition hover:-translate-y-0.5 sm:flex-none ${
               tab === 'apercu'
-                ? 'border-2 border-violet-500 bg-violet-500/10 text-violet-300 shadow-[0_0_20px_rgba(139,92,246,.2)]'
+                ? 'border border-violet-400 bg-violet-500/10 text-violet-200 shadow-[0_0_22px_rgba(139,92,246,.28),inset_0_0_18px_rgba(139,92,246,.08)]'
                 : isDark ? 'border border-white/10 bg-white/[0.035] hover:bg-white/[0.07]' : 'border border-slate-200 bg-white hover:bg-slate-50'
             }`}
           >
@@ -610,9 +616,9 @@ export default function PerformanceCA() {
           </button>
           <button
             onClick={() => setTab('paiements')}
-            className={`flex h-11 items-center gap-2 rounded-xl px-4 text-sm font-semibold transition hover:-translate-y-0.5 ${
+            className={`flex h-12 flex-1 items-center justify-center gap-2 rounded-xl px-4 text-xs font-semibold uppercase tracking-wide transition hover:-translate-y-0.5 sm:flex-none ${
               tab === 'paiements'
-                ? 'border-2 border-violet-500 bg-violet-500/10 text-violet-300 shadow-[0_0_20px_rgba(139,92,246,.2)]'
+                ? 'border border-violet-400 bg-violet-500/10 text-violet-200 shadow-[0_0_22px_rgba(139,92,246,.28),inset_0_0_18px_rgba(139,92,246,.08)]'
                 : isDark ? 'border border-white/10 bg-white/[0.035] hover:bg-white/[0.07]' : 'border border-slate-200 bg-white hover:bg-slate-50'
             }`}
           >
@@ -620,7 +626,7 @@ export default function PerformanceCA() {
           </button>
           {isAdmin && tab === 'apercu' && (
             <Select value={heroCommercialId} onValueChange={setHeroCommercialId}>
-              <SelectTrigger className={`h-11 w-[180px] rounded-xl ${isDark ? 'border-white/10 bg-white/[0.035] text-white' : 'border-slate-200 bg-white'}`}>
+              <SelectTrigger className={`h-12 w-full rounded-xl text-xs sm:w-[190px] ${isDark ? 'border-white/10 bg-white/[0.035] text-white' : 'border-slate-200 bg-white'}`}>
                 <SelectValue placeholder="Tous les commerciaux" />
               </SelectTrigger>
               <SelectContent>
@@ -635,33 +641,21 @@ export default function PerformanceCA() {
             onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
             aria-label="Changer le thème"
             title={tab === 'paiements' ? "S'applique à l'onglet Aperçu du mois" : 'Changer le thème'}
-            className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border transition hover:-translate-y-0.5 ${
+            className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border transition hover:-translate-y-0.5 ${
               isDark ? 'border-white/10 bg-white/[0.035]' : 'border-slate-200 bg-white shadow-sm'
             }`}
           >
             {theme === 'dark' ? <Sun className="h-5 w-5 text-amber-400" /> : <Moon className="h-5 w-5 text-violet-600" />}
           </button>
-          {tab === 'apercu' && (
-            <div className={`flex h-11 items-center gap-1.5 rounded-xl border pl-3 pr-1.5 ${isDark ? 'border-white/10 bg-white/[0.035]' : 'border-slate-200 bg-white'}`}>
-              <CalendarDays className="h-4 w-4 shrink-0 opacity-60" />
-              <Select value={String(selectedMonthIdx)} onValueChange={setMonthPart}>
-                <SelectTrigger className={`h-8 w-[110px] rounded-lg border-0 shadow-none px-2 ${isDark ? 'text-white' : ''}`}><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {MONTH_NAMES.map((m, i) => (
-                    <SelectItem key={m} value={String(i)}>{m}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <Select value={selectedYear} onValueChange={setYearPart}>
-                <SelectTrigger className={`h-8 w-[72px] rounded-lg border-0 shadow-none px-2 ${isDark ? 'text-white' : ''}`}><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {yearsOptions.map((y) => (
-                    <SelectItem key={y} value={String(y)}>{y}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          )}
+          <button
+            type="button"
+            aria-label="Plus d'options"
+            className={`hidden h-12 w-12 shrink-0 items-center justify-center rounded-xl border transition hover:-translate-y-0.5 sm:flex ${
+              isDark ? 'border-white/10 bg-white/[0.035]' : 'border-slate-200 bg-white shadow-sm'
+            }`}
+          >
+            <MoreHorizontal className="h-5 w-5 opacity-70" />
+          </button>
         </div>
       </header>
 
@@ -875,11 +869,12 @@ export default function PerformanceCA() {
         <>
           {/* HERO GAMIFIÉ */}
           <div
-            className={`relative overflow-hidden rounded-[28px] border min-h-[360px] md:min-h-[400px] flex flex-col justify-center ${
-              isDark ? 'border-violet-500/20 bg-[#070c1a] text-white' : 'border-slate-200 bg-white shadow-sm text-slate-900'
+            className={`relative overflow-hidden rounded-[24px] border ${
+              isDark
+                ? 'border-white/[0.10] bg-[#050a17] text-white shadow-[0_24px_70px_rgba(0,0,0,.28)]'
+                : 'border-slate-200 bg-white text-slate-900 shadow-[0_20px_60px_rgba(15,23,42,.10)]'
             }`}
           >
-            {/* Montagne + chemin lumineux : visible, aucun voile opaque par-dessus */}
             <MountainScene
               dark={isDark}
               progress={
@@ -888,14 +883,37 @@ export default function PerformanceCA() {
                   : clamp((performance.probable / LEVELS[LEVELS.length - 1].amount) * 100, 0, 100)
               }
             />
+
+            {/* Le mois reste dans le hero comme sur la maquette de référence. */}
             <div
-              className={`pointer-events-none absolute inset-0 ${
-                isDark
-                  ? 'bg-[radial-gradient(circle_at_75%_20%,rgba(124,58,237,.18),transparent_38%)]'
-                  : 'bg-[radial-gradient(circle_at_75%_20%,rgba(124,58,237,.06),transparent_38%)]'
+              className={`absolute right-4 top-4 z-20 flex h-10 items-center gap-1 rounded-xl border pl-3 pr-1.5 backdrop-blur-xl sm:right-5 sm:top-4 ${
+                isDark ? 'border-white/15 bg-[#020611]/70' : 'border-slate-200 bg-white/85'
               }`}
-            />
-            <div className="relative grid gap-5 p-6 md:p-8 md:grid-cols-[190px_1fr] xl:grid-cols-[210px_1fr_300px] items-center">
+            >
+              <CalendarDays className="h-4 w-4 shrink-0 opacity-70" />
+              <Select value={String(selectedMonthIdx)} onValueChange={setMonthPart}>
+                <SelectTrigger className={`h-8 w-[104px] rounded-lg border-0 px-2 text-xs shadow-none ${isDark ? 'text-white' : ''}`}>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {MONTH_NAMES.map((m, i) => (
+                    <SelectItem key={m} value={String(i)}>{m}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Select value={selectedYear} onValueChange={setYearPart}>
+                <SelectTrigger className={`h-8 w-[68px] rounded-lg border-0 px-2 text-xs shadow-none ${isDark ? 'text-white' : ''}`}>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {yearsOptions.map((y) => (
+                    <SelectItem key={y} value={String(y)}>{y}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="relative z-10 grid min-h-[350px] grid-cols-1 items-center gap-6 px-5 pb-6 pt-[72px] sm:px-6 md:grid-cols-[180px_minmax(0,1fr)] md:px-7 md:pb-7 md:pt-16 xl:grid-cols-[220px_minmax(320px,580px)_minmax(260px,300px)] xl:justify-between xl:gap-8 xl:py-7">
               {viewMode === 'commercial' && performance.currentLevel ? (
                 <RankCard level={performance.currentLevel.level} name={heroCommercialName} stars={Math.floor((performance.levelProgress ?? 0) / 34)} />
               ) : (
@@ -903,42 +921,47 @@ export default function PerformanceCA() {
               )}
 
               {/* progression principale */}
-              <div className="flex flex-col justify-center">
+              <div className="flex min-w-0 flex-col justify-center">
                 <div className="flex items-center gap-2">
-                  <span className="text-sm font-semibold text-violet-300">
+                  <span className={`text-xs font-semibold uppercase tracking-[0.08em] ${isDark ? 'text-white/75' : 'text-slate-600'}`}>
                     {viewMode === 'global' ? 'CA PROBABLE ÉQUIPE' : 'CA PROBABLE'}
                   </span>
-                  <Info className="h-4 w-4 opacity-50" />
+                  <Info className="h-4 w-4 opacity-60" />
                 </div>
                 <div className="mt-1 flex flex-wrap items-end gap-4">
-                  <strong className="text-5xl font-black tracking-tight md:text-7xl">{eur(performance.probable)}</strong>
+                  <strong className="text-[44px] font-black leading-none tracking-[-0.045em] sm:text-[56px] xl:text-[62px]">
+                    {eur(performance.probable)}
+                  </strong>
                 </div>
 
                 {viewMode === 'commercial' && performance.currentLevel && performance.nextLevel ? (
                   <>
-                    <div className="mt-6 flex items-center gap-5">
-                      <div className={`h-7 flex-1 overflow-hidden rounded-full ring-1 ${isDark ? 'bg-black/50 ring-white/10' : 'bg-slate-200 ring-black/5'}`}>
+                    <div className="mt-6 flex items-center gap-4">
+                      <div className={`h-4 min-w-0 flex-1 overflow-hidden rounded-full ring-1 ${isDark ? 'bg-black/55 ring-white/25' : 'bg-slate-200 ring-black/5'}`}>
                         <div
-                          className="relative h-full rounded-full bg-gradient-to-r from-fuchsia-400 via-purple-500 to-violet-500 shadow-[0_0_30px_rgba(168,85,247,.75)] transition-all duration-700"
+                          className="relative h-full rounded-full bg-gradient-to-r from-violet-700 via-purple-500 to-fuchsia-300 shadow-[0_0_24px_rgba(192,132,252,.72)] transition-all duration-700"
                           style={{ width: `${Math.max(performance.levelProgress ?? 0, 4)}%` }}
                         >
-                          <div className="absolute right-0 top-1/2 h-9 w-9 -translate-y-1/2 translate-x-1/2 rounded-full bg-white/90 blur-md" />
+                          <div className="absolute right-0 top-1/2 h-7 w-7 -translate-y-1/2 translate-x-1/2 rounded-full bg-white/90 blur-md" />
                         </div>
                       </div>
-                      <div className="text-3xl font-black text-violet-300">{Math.round(performance.levelProgress ?? 0)}%</div>
+                      <div className="shrink-0 text-right">
+                        <div className="text-2xl font-black text-violet-200">{Math.round(performance.levelProgress ?? 0)}%</div>
+                        <div className={`text-[10px] ${isDark ? 'text-white/55' : 'text-slate-500'}`}>du niveau actuel</div>
+                      </div>
                     </div>
-                    <div className="mt-4 flex justify-between gap-4 text-sm">
+                    <div className="mt-4 flex justify-between gap-4 text-xs sm:text-sm">
                       <div>
-                        <div className={isDark ? 'text-white/60' : 'text-slate-500'}>Niveau {performance.currentLevel.level}</div>
-                        <div className="mt-0.5 font-semibold">{eur(performance.currentLevel.amount)}</div>
+                        <div className={`font-semibold uppercase ${isDark ? 'text-white/90' : 'text-slate-700'}`}>Niveau {performance.currentLevel.level}</div>
+                        <div className={`mt-1 ${isDark ? 'text-white/55' : 'text-slate-500'}`}>{eur(performance.currentLevel.amount)}</div>
                       </div>
                       <div className="text-right">
-                        <div className={isDark ? 'text-white/60' : 'text-slate-500'}>Niveau {performance.nextLevel.level}</div>
-                        <div className="mt-0.5 font-semibold">{eur(performance.nextLevel.amount)}</div>
+                        <div className={`font-semibold uppercase ${isDark ? 'text-white/90' : 'text-slate-700'}`}>Niveau {performance.nextLevel.level}</div>
+                        <div className={`mt-1 ${isDark ? 'text-white/55' : 'text-slate-500'}`}>{eur(performance.nextLevel.amount)}</div>
                       </div>
                     </div>
                     {performance.currentLevel.level < performance.nextLevel.level ? (
-                      <div className={`mt-5 inline-flex w-fit items-center gap-2 rounded-xl border px-4 py-2.5 text-sm ${isDark ? 'border-violet-500/20 bg-violet-500/[0.08]' : 'border-violet-100 bg-violet-50'}`}>
+                      <div className={`mt-5 hidden w-fit items-center gap-2 rounded-xl border px-3 py-2 text-xs sm:inline-flex ${isDark ? 'border-violet-400/20 bg-[#050816]/60 text-white/75' : 'border-violet-100 bg-white/75'}`}>
                         <Zap className="h-4 w-4 text-violet-500" />
                         Encore <strong>{eur(performance.remainingToNextLevel ?? 0)}</strong> pour débloquer le niveau {performance.nextLevel.level}
                       </div>
@@ -950,14 +973,14 @@ export default function PerformanceCA() {
                   </>
                 ) : (
                   <>
-                    <div className="mt-6 flex items-center gap-5">
-                      <div className={`h-7 flex-1 overflow-hidden rounded-full ring-1 ${isDark ? 'bg-black/50 ring-white/10' : 'bg-slate-200 ring-black/5'}`}>
+                    <div className="mt-6 flex items-center gap-4">
+                      <div className={`h-4 flex-1 overflow-hidden rounded-full ring-1 ${isDark ? 'bg-black/55 ring-white/25' : 'bg-slate-200 ring-black/5'}`}>
                         <div
                           className="h-full rounded-full bg-gradient-to-r from-[#5A9BA3] via-[#6AABB4] to-violet-500 shadow-[0_0_25px_rgba(106,171,180,.55)] transition-all duration-700"
                           style={{ width: `${Math.max(performance.progressPercent, 4)}%` }}
                         />
                       </div>
-                      <div className="text-3xl font-black text-[#6AABB4]">{Math.round(performance.progressPercent)}%</div>
+                      <div className="text-2xl font-black text-[#87d1dc]">{Math.round(performance.progressPercent)}%</div>
                     </div>
                     <div className="mt-4 flex justify-between text-sm">
                       <div>
@@ -973,24 +996,30 @@ export default function PerformanceCA() {
                 )}
               </div>
 
-              {/* restant — carte "verre" séparée mais intégrée au hero */}
-              <div className={`flex flex-col justify-center rounded-2xl border p-5 backdrop-blur-md ${isDark ? 'border-white/15 bg-white/[0.06]' : 'border-slate-200 bg-white/85 shadow-sm'}`}>
-                <span className={`text-sm font-semibold ${isDark ? 'text-white/70' : 'text-slate-500'}`}>RESTANT À ATTEINDRE</span>
-                <strong className="mt-2 text-3xl font-black">{eur(performance.remaining)}</strong>
-                <div className={`mt-3 text-sm leading-6 ${isDark ? 'text-white/70' : 'text-slate-600'}`}>
-                  {performance.remaining <= 0 && performance.objectifCa > 0 ? (
-                    <span className="flex items-center gap-2 font-semibold text-emerald-400"><Trophy className="w-5 h-5" /> Objectif atteint ce mois !</span>
-                  ) : performance.objectifCa === 0 ? (
-                    <span>Aucun objectif défini pour ce mois.</span>
-                  ) : isMoisCourant ? (
-                    <>
-                      Il manque <strong className={isDark ? 'text-white' : 'text-slate-950'}>{eur(performance.remaining)}</strong> — soit{' '}
-                      <strong className="text-amber-400">{eur(performance.dailyNeeded)}/jour ouvré</strong> sur{' '}
-                      <strong className="text-amber-400">{joRestants} j. restants</strong>.
-                    </>
-                  ) : (
-                    <>Il manquait <strong className={isDark ? 'text-white' : 'text-slate-950'}>{eur(performance.remaining)}</strong> pour atteindre l'objectif de {MONTH_NAMES[selectedMonthIdx]} {selectedYear}.</>
-                  )}
+              {/* restant — 3e zone du hero, empilée sous les deux autres sur tablette */}
+              <div className={`relative flex min-h-[176px] flex-col justify-center overflow-hidden rounded-[18px] border p-5 backdrop-blur-xl md:col-span-2 md:min-h-[154px] xl:col-span-1 xl:min-h-[190px] ${
+                isDark
+                  ? 'border-white/20 bg-[#030815]/78 shadow-[0_18px_45px_rgba(0,0,0,.30)]'
+                  : 'border-slate-200 bg-white/88 shadow-lg'
+              }`}>
+                <Crosshair className="absolute right-5 top-1/2 h-16 w-16 -translate-y-1/2 text-violet-400/85 drop-shadow-[0_0_14px_rgba(139,92,246,.55)]" />
+                <div className="relative z-10 max-w-[205px]">
+                  <span className={`text-xs font-semibold uppercase tracking-[0.06em] ${isDark ? 'text-white/80' : 'text-slate-600'}`}>Restant à atteindre</span>
+                  <strong className="mt-2 block text-[34px] font-black leading-none tracking-[-0.035em]">{eur(performance.remaining)}</strong>
+                  <div className={`mt-4 text-sm leading-6 ${isDark ? 'text-white/75' : 'text-slate-600'}`}>
+                    {performance.remaining <= 0 && performance.objectifCa > 0 ? (
+                      <span className="flex items-center gap-2 font-semibold text-emerald-400"><Trophy className="w-5 h-5" /> Objectif atteint ce mois !</span>
+                    ) : performance.objectifCa === 0 ? (
+                      <span>Aucun objectif défini pour ce mois.</span>
+                    ) : isMoisCourant ? (
+                      <>
+                        Il manque {eur(performance.remaining)} —{' '}
+                        <strong className="text-amber-400">soit {eur(performance.dailyNeeded)}/jour ouvré sur {joRestants} j. restants</strong>.
+                      </>
+                    ) : (
+                      <>Il manquait {eur(performance.remaining)} pour atteindre l'objectif de {MONTH_NAMES[selectedMonthIdx]} {selectedYear}.</>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>
@@ -998,7 +1027,11 @@ export default function PerformanceCA() {
 
           {/* PROGRESSION — compacte, individuelle (10 niveaux) ou équipe (25/50/75/100%) */}
           {viewMode === 'commercial' && performance.currentLevel ? (
-            <LevelProgression dark={isDark} currentLevel={performance.currentLevel} />
+            <LevelProgression
+              dark={isDark}
+              currentLevel={performance.currentLevel}
+              levelProgress={performance.levelProgress ?? 0}
+            />
           ) : (
             <TeamProgression dark={isDark} progress={performance.progressPercent} />
           )}
@@ -1008,28 +1041,33 @@ export default function PerformanceCA() {
             <KpiCard
               dark={isDark} title="CA PROBABLE" value={eur(performance.probable)} subtitle="Cumulé du mois"
               growth={performance.probableGrowth} accent="violet"
-              progress={performance.objectifCa > 0 ? clamp((performance.probable / performance.objectifCa) * 100, 0, 100) : 0}
+              series={dailySeries.probable}
               icon={<ArrowUpRight className="h-5 w-5" />}
             />
             <KpiCard
               dark={isDark} title="CA ENCAISSÉ" value={eur(performance.encaisse)} subtitle="Règlements reçus"
               growth={performance.encaisseGrowth} accent="blue"
-              progress={performance.objectifCa > 0 ? clamp((performance.encaisse / performance.objectifCa) * 100, 0, 100) : 0}
+              series={dailySeries.encaisse}
               icon={<Wallet className="h-5 w-5" />}
             />
             <KpiCard
               dark={isDark} title="OBJECTIF" value={eur(performance.objectifCa)} subtitle="Objectif du mois"
-              accent="amber" progress={100} icon={<Target className="h-5 w-5" />}
+              accent="amber" progress={performance.progressPercent} icon={<Target className="h-5 w-5" />}
             />
             <KpiCard
               dark={isDark} title="COMMISSION PAYÉE" value={eur(performance.commission)} subtitle="Règlements encaissés ce mois"
-              growth={performance.commissionGrowth} accent="green" icon={<Banknote className="h-5 w-5" />}
+              growth={performance.commissionGrowth} accent="green" series={dailySeries.commission} icon={<Banknote className="h-5 w-5" />}
             />
           </div>
 
           {/* Graphique réel + récapitulatif (CA confirmé toujours visible ici, jamais fusionné) */}
           <div className="grid gap-4 xl:grid-cols-[1.25fr_.75fr]">
-            <RevenueChart dark={isDark} series={dailySeries} objectif={performance.objectifCa} />
+            <RevenueChart
+              dark={isDark}
+              series={dailySeries}
+              objectif={performance.objectifCa}
+              showLevelMarkers={viewMode === 'commercial'}
+            />
             <MonthlySummary
               dark={isDark}
               probable={performance.probable}
@@ -1170,48 +1208,46 @@ export default function PerformanceCA() {
   );
 }
 
-// Décor de fond du hero : chaîne de montagnes en couches + chemin lumineux
-// ascendant vers un sommet marqué d'un fanion, avec un repère qui monte selon
-// la progression réelle — jamais masqué par un overlay opaque.
+// Fond panoramique local généré pour cette page. L'image ne contient aucun
+// texte ni composant UI : les données réelles restent du HTML accessible.
 function MountainScene({ dark, progress }: { dark: boolean; progress: number }) {
-  const markerY = 450 - clamp(progress, 0, 100) * 3.3;
+  const normalized = clamp(progress, 0, 100);
+  const trailPoints = [
+    { x: 81, y: 82 },
+    { x: 76, y: 70 },
+    { x: 79, y: 58 },
+    { x: 75, y: 45 },
+    { x: 78, y: 31 },
+    { x: 76, y: 15 },
+  ];
+  const scaled = (normalized / 100) * (trailPoints.length - 1);
+  const pointIndex = Math.min(Math.floor(scaled), trailPoints.length - 2);
+  const pointProgress = scaled - pointIndex;
+  const from = trailPoints[pointIndex];
+  const to = trailPoints[pointIndex + 1];
+  const markerX = from.x + (to.x - from.x) * pointProgress;
+  const markerY = from.y + (to.y - from.y) * pointProgress;
+
   return (
     <div className="pointer-events-none absolute inset-0 overflow-hidden">
-      <svg viewBox="0 0 1600 500" preserveAspectRatio="xMidYMax slice" className="absolute bottom-0 right-[-6%] h-full w-[75%]">
-        <defs>
-          <linearGradient id="mountainMain" x1="0" y1="0" x2="1" y2="1">
-            <stop offset="0%" stopColor={dark ? '#253B70' : '#DCE8FF'} />
-            <stop offset="55%" stopColor={dark ? '#17274D' : '#B8CDF5'} />
-            <stop offset="100%" stopColor={dark ? '#0E1B36' : '#8FADE3'} />
-          </linearGradient>
-          <linearGradient id="pathGradient" x1="0" y1="1" x2="1" y2="0">
-            <stop offset="0%" stopColor="#6D28D9" />
-            <stop offset="60%" stopColor="#C084FC" />
-            <stop offset="100%" stopColor="#FFFFFF" />
-          </linearGradient>
-          <filter id="pathGlow">
-            <feGaussianBlur stdDeviation="7" result="blur" />
-            <feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge>
-          </filter>
-        </defs>
-        <path
-          d="M0 500 L160 350 L260 420 L430 260 L560 390 L720 235 L850 395 L1010 255 L1160 405 L1320 300 L1600 500 Z"
-          fill={dark ? '#0A1429' : '#E2EAF8'} opacity=".8"
-        />
-        <path
-          d="M430 500 L640 390 L770 330 L880 235 L985 45 L1090 218 L1200 310 L1320 385 L1530 500 Z"
-          fill="url(#mountainMain)"
-        />
-        <path d="M985 45 L925 150 L970 130 L1000 170 L1020 125 L1090 218 Z" fill={dark ? '#AFC8FF' : '#FFFFFF'} opacity=".88" />
-        <path
-          d="M760 500 C790 440 920 465 925 395 C930 335 855 350 900 300 C945 250 1040 280 1005 220 C980 175 945 165 985 85"
-          stroke="url(#pathGradient)" strokeWidth="8" fill="none" strokeLinecap="round" filter="url(#pathGlow)"
-        />
-        <line x1="985" y1="42" x2="985" y2="4" stroke="#FFFFFF" strokeWidth="3" />
-        <path d="M987 5 L1040 22 L987 39 Z" fill="#8B5CF6" />
-        <circle cx="910" cy={markerY} r="11" fill="#FFFFFF" stroke="#8B5CF6" strokeWidth="5" filter="url(#pathGlow)" />
-      </svg>
-      <div className={`absolute inset-0 ${dark ? 'bg-gradient-to-r from-[#07101f] via-[#07101f]/50 to-transparent' : 'bg-gradient-to-r from-white via-white/45 to-transparent'}`} />
+      <img
+        src="/assets/performance-ca/hero-mountain-ascent.jpg"
+        alt=""
+        aria-hidden="true"
+        className={`absolute inset-0 h-full w-full object-cover object-[68%_center] transition duration-500 ${
+          dark ? 'opacity-100' : 'opacity-45 saturate-75'
+        }`}
+      />
+      <div className={`absolute inset-0 ${
+        dark
+          ? 'bg-[linear-gradient(90deg,rgba(2,6,18,.84)_0%,rgba(3,8,24,.55)_39%,rgba(3,8,24,.08)_69%,rgba(2,6,18,.38)_100%)]'
+          : 'bg-[linear-gradient(90deg,rgba(255,255,255,.96)_0%,rgba(248,250,252,.76)_42%,rgba(255,255,255,.18)_70%,rgba(255,255,255,.62)_100%)]'
+      }`} />
+      <div className={`absolute inset-x-0 bottom-0 h-24 ${dark ? 'bg-gradient-to-t from-[#040915] to-transparent' : 'bg-gradient-to-t from-white/80 to-transparent'}`} />
+      <div
+        className="absolute hidden h-4 w-4 -translate-x-1/2 -translate-y-1/2 rounded-full border-[3px] border-violet-300 bg-white shadow-[0_0_9px_3px_rgba(168,85,247,.85)] transition-all duration-700 lg:block"
+        style={{ left: `${markerX}%`, top: `${markerY}%` }}
+      />
     </div>
   );
 }
@@ -1221,11 +1257,12 @@ function MountainScene({ dark, progress }: { dark: boolean; progress: number }) 
 function TeamBadge({ progress }: { progress: number }) {
   return (
     <div className="flex items-center justify-center">
-      <div className="flex h-[200px] w-[172px] flex-col items-center justify-center rounded-[34px] border border-[#6AABB4]/30 bg-white/10 text-center backdrop-blur-md md:h-[220px] md:w-[188px]">
-        <Users className="h-6 w-6 text-[#6AABB4]" />
-        <div className="mt-3 text-[10px] font-black uppercase tracking-[0.2em] text-[#6AABB4]">Performance équipe</div>
-        <div className="mt-2 text-[60px] font-black leading-none tracking-tight text-white md:text-[68px]">{Math.round(progress)}%</div>
-        <div className="mt-3 text-xs text-white/70">de l'objectif collectif</div>
+      <div className="relative flex h-[190px] w-[170px] flex-col items-center justify-center overflow-hidden rounded-[28px] border border-[#6AABB4]/35 bg-[#050a18]/78 text-center shadow-[0_18px_46px_rgba(0,0,0,.32)] backdrop-blur-xl md:h-[222px] md:w-[192px]">
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_36%,rgba(106,171,180,.30),transparent_52%)]" />
+        <ShieldCheck className="relative z-10 h-7 w-7 text-[#87d1dc]" />
+        <div className="relative z-10 mt-3 text-[10px] font-black uppercase tracking-[0.2em] text-[#87d1dc]">Performance équipe</div>
+        <div className="relative z-10 mt-2 text-[58px] font-black leading-none tracking-[-0.06em] text-white md:text-[68px]">{Math.round(progress)}%</div>
+        <div className="relative z-10 mt-3 text-xs text-white/65">de l'objectif collectif</div>
       </div>
     </div>
   );
@@ -1236,57 +1273,113 @@ function TeamBadge({ progress }: { progress: number }) {
 function RankCard({ level, name, stars }: { level: number; name?: string; stars: number }) {
   return (
     <div className="flex items-center justify-center">
-      <div className="relative flex h-[200px] w-[172px] flex-col items-center justify-center overflow-hidden rounded-[34px] border border-violet-400/30 bg-white/10 backdrop-blur-md md:h-[220px] md:w-[188px]">
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_40%,rgba(124,58,237,.35),transparent_55%)]" />
-        <Trophy className="relative z-10 h-6 w-6 text-amber-400" />
-        <div className="relative z-10 mt-2 text-[10px] font-black uppercase tracking-[0.22em] text-violet-300">Niveau actuel</div>
-        <div className="relative z-10 mt-1 bg-gradient-to-b from-white via-violet-200 to-violet-500 bg-clip-text text-[76px] font-black leading-none tracking-tight text-transparent drop-shadow-[0_2px_10px_rgba(0,0,0,.4)] md:text-[84px]">
-          {String(level).padStart(2, '0')}
+      <div className="relative h-[194px] w-[170px] md:h-[238px] md:w-[210px]">
+        {/* Ailes métalliques : géométrie pure, légère et responsive. */}
+        <div className="absolute left-[-2px] top-[52px] h-[96px] w-[50px] -rotate-[7deg] bg-gradient-to-br from-amber-100/80 via-violet-400/50 to-slate-950 [clip-path:polygon(100%_0,35%_20%,78%_34%,12%_48%,72%_61%,27%_78%,100%_100%)] md:left-[-8px] md:top-[60px] md:h-[116px] md:w-[62px]" />
+        <div className="absolute right-[-2px] top-[52px] h-[96px] w-[50px] rotate-[7deg] bg-gradient-to-bl from-amber-100/80 via-violet-400/50 to-slate-950 [clip-path:polygon(0_0,65%_20%,22%_34%,88%_48%,28%_61%,73%_78%,0_100%)] md:right-[-8px] md:top-[60px] md:h-[116px] md:w-[62px]" />
+        <div className="absolute inset-x-[22px] inset-y-0 bg-gradient-to-b from-amber-100 via-violet-400 to-violet-950 p-[2px] shadow-[0_0_26px_rgba(139,92,246,.48)] [clip-path:polygon(50%_0,94%_13%,91%_68%,77%_87%,50%_100%,23%_87%,9%_68%,6%_13%)] md:inset-x-[25px]">
+          <div className="flex h-full w-full flex-col items-center justify-center bg-[radial-gradient(circle_at_50%_40%,rgba(124,58,237,.50),transparent_48%),linear-gradient(180deg,#11102a_0%,#070918_62%,#140d2d_100%)] [clip-path:polygon(50%_1%,93%_14%,90%_67%,76%_86%,50%_98%,24%_86%,10%_67%,7%_14%)]">
+            <div className="text-[9px] font-black uppercase tracking-[0.14em] text-violet-100 md:text-[10px]">Niveau actuel</div>
+            <div className="mt-1 bg-gradient-to-b from-white via-violet-200 to-violet-500 bg-clip-text text-[60px] font-black leading-none tracking-[-0.08em] text-transparent drop-shadow-[0_0_14px_rgba(167,139,250,.55)] md:text-[78px]">
+              {String(level).padStart(2, '0')}
+            </div>
+            <div className="mt-3 flex gap-2">
+              {[0, 1, 2].map((s) => (
+                <Star key={s} className={`h-4 w-4 ${s < stars ? 'fill-amber-300 text-amber-300' : 'fill-white/15 text-white/20'}`} />
+              ))}
+            </div>
+          </div>
         </div>
-        <div className="relative z-10 mt-3 flex gap-2">
-          {[0, 1, 2].map((s) => (
-            <span key={s} className={`h-2.5 w-2.5 rotate-45 rounded-[2px] ${s < stars ? 'bg-amber-400' : 'bg-white/20'}`} />
-          ))}
+        <div className="absolute left-1/2 top-[-3px] h-7 w-7 -translate-x-1/2 rotate-45 border border-amber-100/80 bg-gradient-to-br from-white via-violet-300 to-violet-700 shadow-[0_0_16px_rgba(167,139,250,.7)] md:h-8 md:w-8">
+          <div className="absolute inset-[7px] rounded-full bg-white/90 shadow-[0_0_7px_white]" />
         </div>
-        {name && <div className="relative z-10 mt-3 text-xs text-white/70">{name}</div>}
+        {name && <span className="sr-only">{name}</span>}
       </div>
     </div>
   );
 }
 
 // Frise des 10 niveaux — compacte (utilisée uniquement en vue individuelle).
-function LevelProgression({ dark, currentLevel }: { dark: boolean; currentLevel: GameLevel }) {
+function LevelProgression({
+  dark,
+  currentLevel,
+  levelProgress,
+}: {
+  dark: boolean;
+  currentLevel: GameLevel;
+  levelProgress: number;
+}) {
   const currentIndex = LEVELS.findIndex((l) => l.level === currentLevel.level);
+  const milestones = [25, 50, 75, 100];
+  const nextMilestone = milestones.find((milestone) => levelProgress < milestone) ?? 100;
+
   return (
-    <section className={`rounded-[20px] border p-4 ${dark ? 'border-white/10 bg-[#080d1a] text-white' : 'border-slate-200 bg-white shadow-sm text-slate-900'}`}>
-      <h2 className="mb-3 text-xs font-bold uppercase tracking-wide">Progression des niveaux</h2>
-      <div className="relative overflow-x-auto pb-1">
-        <div className="min-w-[820px]">
+    <section className={`overflow-hidden rounded-[20px] border ${dark ? 'border-white/10 bg-[#050b18]/92 text-white shadow-[0_18px_48px_rgba(0,0,0,.18)]' : 'border-slate-200 bg-white shadow-sm text-slate-900'}`}>
+      <div className="p-4 pb-3 sm:px-5">
+        <h2 className="mb-3 text-xs font-bold uppercase tracking-wide">Progression des niveaux</h2>
+        <div className="relative overflow-x-auto pb-2 [scrollbar-width:thin]">
+          <div className="min-w-[920px]">
           <div className="relative flex items-start justify-between">
-            <div className={`absolute left-3 right-3 top-[14px] h-[2px] ${dark ? 'bg-white/10' : 'bg-slate-200'}`} />
-            <div className="absolute left-3 top-[14px] h-[2px] bg-lime-500" style={{ width: `${clamp((currentIndex / (LEVELS.length - 1)) * 100, 0, 100)}%` }} />
+              <div className={`absolute left-5 right-5 top-[18px] h-[3px] rounded-full ${dark ? 'bg-white/20' : 'bg-slate-200'}`} />
+              <div
+                className="absolute left-5 top-[18px] h-[3px] rounded-full bg-lime-400 shadow-[0_0_10px_rgba(163,230,53,.55)]"
+                style={{ width: `calc(${clamp((currentIndex / (LEVELS.length - 1)) * 100, 0, 100)}% - 20px)` }}
+              />
             {LEVELS.map((level, index) => {
               const done = index < currentIndex;
               const current = index === currentIndex;
               const locked = index > currentIndex;
               return (
-                <div key={level.level} className="relative z-10 flex w-[72px] flex-col items-center text-center">
+                  <div key={level.level} className="relative z-10 flex w-[82px] flex-col items-center text-center">
+                    {current && <span className="absolute -top-4 h-0 w-0 border-x-[6px] border-t-[8px] border-x-transparent border-t-violet-300" />}
                   <div
-                    className={`flex h-7 w-7 items-center justify-center rounded-full border-2 text-xs font-bold ${
-                      done ? 'border-lime-400 bg-lime-500 text-white'
-                        : current ? 'border-violet-400 bg-violet-600 text-white shadow-[0_0_16px_rgba(139,92,246,.7)]'
-                        : dark ? 'border-white/20 bg-[#101827] text-white/40' : 'border-slate-300 bg-slate-50 text-slate-400'
+                      className={`flex h-9 w-9 items-center justify-center rounded-full border-2 text-xs font-bold ${
+                        done ? 'border-lime-300 bg-[#183113] text-lime-200 shadow-[0_0_14px_rgba(163,230,53,.32)]'
+                          : current ? 'scale-110 border-violet-300 bg-[#281249] text-white shadow-[0_0_20px_rgba(168,85,247,.72)]'
+                          : dark ? 'border-white/25 bg-[#10131a] text-white/45' : 'border-slate-300 bg-slate-50 text-slate-400'
                     }`}
                   >
-                    {done ? <Check className="h-3.5 w-3.5" /> : locked ? <Lock className="h-3 w-3" /> : level.level}
+                      {done ? <Check className="h-4 w-4" /> : locked ? <Lock className="h-3.5 w-3.5" /> : level.level}
                   </div>
-                  <div className={`mt-1.5 text-[10px] font-bold ${current ? 'text-violet-400' : ''}`}>NIV. {level.level}</div>
-                  <div className={`text-[10px] ${dark ? 'text-white/40' : 'text-slate-400'}`}>{eur(level.amount)}</div>
+                    <div className={`mt-2 text-[10px] font-bold uppercase ${current ? 'text-violet-300' : ''}`}>Niveau {level.level}</div>
+                    <div className={`mt-0.5 text-[10px] ${dark ? 'text-white/55' : 'text-slate-400'}`}>{eur(level.amount)}</div>
                 </div>
               );
             })}
+            </div>
           </div>
         </div>
+      </div>
+
+      <div className={`grid grid-cols-2 border-t sm:grid-cols-4 ${dark ? 'border-white/[0.08] bg-[#07101d]/82' : 'border-slate-200 bg-slate-50/80'}`}>
+        {milestones.map((milestone, index) => {
+          const reached = levelProgress >= milestone;
+          const active = !reached && milestone === nextMilestone;
+          return (
+            <div
+              key={milestone}
+              className={`flex min-h-[68px] items-center justify-center gap-3 px-3 py-3 ${
+                index > 0 ? dark ? 'border-l border-white/[0.08]' : 'border-l border-slate-200' : ''
+              }`}
+            >
+              <div className={`flex h-10 w-10 items-center justify-center rounded-[12px] border ${
+                reached
+                  ? 'border-lime-300/50 bg-lime-400/15 text-lime-300'
+                  : active
+                    ? 'border-violet-300/50 bg-violet-500/20 text-violet-200 shadow-[0_0_16px_rgba(168,85,247,.30)]'
+                    : dark
+                      ? 'border-white/20 bg-white/[0.04] text-white/45'
+                      : 'border-slate-300 bg-white text-slate-400'
+              }`}>
+                {reached ? <Check className="h-5 w-5" /> : active ? <Star className="h-4 w-4" /> : <Lock className="h-4 w-4" />}
+              </div>
+              <div>
+                <div className={`text-sm font-bold ${reached ? 'text-lime-300' : active ? 'text-violet-300' : ''}`}>{milestone}%</div>
+                <div className={`text-[10px] ${dark ? 'text-white/50' : 'text-slate-500'}`}>du niveau</div>
+              </div>
+            </div>
+          );
+        })}
       </div>
     </section>
   );
@@ -1324,7 +1417,7 @@ function TeamProgression({ dark, progress }: { dark: boolean; progress: number }
 }
 
 function KpiCard({
-  dark, icon, title, value, subtitle, growth, progress, accent,
+  dark, icon, title, value, subtitle, growth, progress, series, accent,
 }: {
   dark: boolean;
   icon: ReactNode;
@@ -1333,21 +1426,26 @@ function KpiCard({
   subtitle: string;
   growth?: number | null;
   progress?: number;
+  series?: DailyPoint[];
   accent: 'violet' | 'blue' | 'amber' | 'green';
 }) {
   const styles = {
-    violet: { icon: 'bg-violet-500/15 text-violet-500', bar: 'bg-violet-500' },
-    blue: { icon: 'bg-blue-500/15 text-blue-500', bar: 'bg-blue-500' },
-    amber: { icon: 'bg-amber-400/15 text-amber-500', bar: 'bg-amber-400' },
-    green: { icon: 'bg-emerald-500/15 text-emerald-500', bar: 'bg-emerald-500' },
+    violet: { icon: 'border-violet-400/30 bg-violet-500/20 text-violet-300', bar: 'bg-gradient-to-r from-violet-700 to-fuchsia-300', stroke: '#c084fc' },
+    blue: { icon: 'border-blue-400/30 bg-blue-500/20 text-blue-300', bar: 'bg-gradient-to-r from-blue-700 to-sky-300', stroke: '#60a5fa' },
+    amber: { icon: 'border-amber-400/30 bg-amber-400/15 text-amber-300', bar: 'bg-gradient-to-r from-amber-700 to-amber-300', stroke: '#fbbf24' },
+    green: { icon: 'border-lime-400/25 bg-lime-400/15 text-lime-300', bar: 'bg-gradient-to-r from-lime-700 to-lime-300', stroke: '#a3e635' },
   }[accent];
   return (
-    <div className={`rounded-[22px] border p-5 ${dark ? 'border-white/10 bg-[#080d1a] text-white' : 'border-slate-200 bg-white shadow-sm text-slate-800'}`}>
+    <div className={`group relative min-h-[160px] overflow-hidden rounded-[18px] border p-4 transition duration-300 hover:-translate-y-0.5 ${
+      dark
+        ? 'border-white/10 bg-[#070c18]/95 text-white shadow-[0_16px_38px_rgba(0,0,0,.16)] hover:border-white/20'
+        : 'border-slate-200 bg-white text-slate-800 shadow-sm hover:shadow-lg'
+    }`}>
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-center gap-3">
-          <div className={`flex h-11 w-11 items-center justify-center rounded-xl ${styles.icon}`}>{icon}</div>
+          <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border shadow-[inset_0_0_18px_rgba(255,255,255,.04)] ${styles.icon}`}>{icon}</div>
           <div className="flex items-center gap-2">
-            <span className="text-xs font-bold">{title}</span>
+            <span className="text-xs font-bold uppercase tracking-[0.03em]">{title}</span>
             <Info className="h-3.5 w-3.5 opacity-40" />
           </div>
         </div>
@@ -1358,23 +1456,81 @@ function KpiCard({
           </div>
         )}
       </div>
-      <div className="mt-4 text-3xl font-black">{value}</div>
+      <div className="mt-3 text-[32px] font-black leading-none tracking-[-0.04em]">{value}</div>
       <div className={`mt-1 text-xs ${dark ? 'text-white/45' : 'text-slate-500'}`}>{subtitle}</div>
-      {progress !== undefined && (
-        <div className={`mt-7 h-2 overflow-hidden rounded-full ${dark ? 'bg-white/10' : 'bg-slate-100'}`}>
-          <div className={`h-full rounded-full ${styles.bar}`} style={{ width: `${clamp(progress, 0, 100)}%` }} />
+      {series ? (
+        <KpiSparkline dark={dark} series={series} stroke={styles.stroke} id={`${accent}-${title.replace(/\s+/g, '-').toLowerCase()}`} />
+      ) : progress !== undefined ? (
+        <div className={`mt-6 h-2 overflow-hidden rounded-full ${dark ? 'bg-white/10' : 'bg-slate-100'}`}>
+          <div className={`h-full rounded-full shadow-[0_0_12px_currentColor] ${styles.bar}`} style={{ width: `${clamp(progress, 0, 100)}%` }} />
         </div>
-      )}
+      ) : null}
     </div>
   );
 }
 
 type DailyPoint = { day: number; cumul: number };
 
+function KpiSparkline({
+  dark,
+  series,
+  stroke,
+  id,
+}: {
+  dark: boolean;
+  series: DailyPoint[];
+  stroke: string;
+  id: string;
+}) {
+  const width = 320;
+  const height = 54;
+  const max = Math.max(...series.map((point) => point.cumul), 1);
+  const path = series.map((point, index) => {
+    const x = series.length <= 1 ? 0 : (index / (series.length - 1)) * width;
+    const y = height - 4 - (point.cumul / max) * (height - 10);
+    return `${index === 0 ? 'M' : 'L'}${x.toFixed(1)} ${y.toFixed(1)}`;
+  }).join(' ');
+  const areaPath = path ? `${path} L${width} ${height} L0 ${height} Z` : '';
+
+  return (
+    <svg
+      viewBox={`0 0 ${width} ${height}`}
+      preserveAspectRatio="none"
+      aria-hidden="true"
+      className="absolute inset-x-3 bottom-2 h-[52px] w-[calc(100%-24px)] overflow-visible"
+    >
+      <defs>
+        <linearGradient id={`spark-${id}`} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor={stroke} stopOpacity={dark ? 0.38 : 0.26} />
+          <stop offset="100%" stopColor={stroke} stopOpacity="0" />
+        </linearGradient>
+      </defs>
+      {areaPath && <path d={areaPath} fill={`url(#spark-${id})`} />}
+      {path && <path d={path} fill="none" stroke={stroke} strokeWidth="2" vectorEffect="non-scaling-stroke" strokeLinecap="round" strokeLinejoin="round" />}
+      {series.filter((_, index) => index % Math.max(Math.floor(series.length / 10), 1) === 0).map((point, index, sampled) => {
+        const originalIndex = series.findIndex((candidate) => candidate.day === point.day);
+        const x = series.length <= 1 ? 0 : (originalIndex / (series.length - 1)) * width;
+        const y = height - 4 - (point.cumul / max) * (height - 10);
+        return <circle key={`${point.day}-${index}-${sampled.length}`} cx={x} cy={y} r="2.1" fill={dark ? '#07101d' : '#ffffff'} stroke={stroke} strokeWidth="1.4" vectorEffect="non-scaling-stroke" />;
+      })}
+    </svg>
+  );
+}
+
 // Graphique réel à 3 courbes (probable / confirmé / encaissé) + objectif en
 // pointillé — dérivé des vraies signatures, transmissions à Mathilde et
 // règlements du mois affiché (jamais un tracé fixe).
-function RevenueChart({ dark, series, objectif }: { dark: boolean; series: { probable: DailyPoint[]; confirme: DailyPoint[]; encaisse: DailyPoint[] }; objectif: number }) {
+function RevenueChart({
+  dark,
+  series,
+  objectif,
+  showLevelMarkers,
+}: {
+  dark: boolean;
+  series: { probable: DailyPoint[]; confirme: DailyPoint[]; encaisse: DailyPoint[] };
+  objectif: number;
+  showLevelMarkers: boolean;
+}) {
   const lastDay = series.probable.length || 1;
   const maxVal = Math.max(
     objectif,
@@ -1386,36 +1542,69 @@ function RevenueChart({ dark, series, objectif }: { dark: boolean; series: { pro
   const toX = (day: number) => ((day - 1) / Math.max(lastDay - 1, 1)) * 900;
   const toY = (val: number) => 290 - Math.min(val / maxVal, 1) * 290;
   const pathFor = (pts: DailyPoint[]) => pts.map((p, i) => `${i === 0 ? 'M' : 'L'}${toX(p.day)} ${toY(p.cumul)}`).join(' ');
+  const probablePath = pathFor(series.probable);
+  const probableAreaPath = probablePath ? `${probablePath} L900 290 L0 290 Z` : '';
   const objY = toY(objectif);
   const ticks = [1, 0.75, 0.5, 0.25, 0].map((f) => Math.round(maxVal * f));
   const xLabels = [1, 5, 10, 15, 20, 25, lastDay].filter((d, i, arr) => arr.indexOf(d) === i && d <= lastDay);
+  const levelMarkers = showLevelMarkers
+    ? LEVELS.flatMap((level) => {
+        const point = series.probable.find((candidate) => candidate.cumul >= level.amount);
+        return point ? [{ ...level, point }] : [];
+      })
+    : [];
 
   return (
-    <div className={`rounded-[24px] border p-5 md:p-6 ${dark ? 'border-white/10 bg-[#080d1a] text-white' : 'border-slate-200 bg-white shadow-sm text-slate-900'}`}>
-      <h3 className="text-sm font-black">ÉVOLUTION DU CA</h3>
+    <div className={`overflow-hidden rounded-[18px] border p-4 sm:p-5 ${dark ? 'border-white/10 bg-[#050b18]/95 text-white shadow-[0_16px_42px_rgba(0,0,0,.16)]' : 'border-slate-200 bg-white shadow-sm text-slate-900'}`}>
+      <h3 className="text-sm font-black">ÉVOLUTION DU CA PROBABLE</h3>
       <div className={`mt-2 flex flex-wrap gap-4 text-[11px] ${dark ? 'text-white/40' : 'text-slate-500'}`}>
         <span className="flex items-center gap-1.5"><span className="h-[2px] w-4 bg-violet-500" /> CA probable</span>
         <span className="flex items-center gap-1.5"><span className="h-[2px] w-4 bg-[#5A9BA3]" /> CA confirmé</span>
         <span className="flex items-center gap-1.5"><span className="h-[2px] w-4 bg-blue-500" /> CA encaissé</span>
         <span className="flex items-center gap-1.5"><span className="h-[2px] w-4 border-t border-dashed border-slate-400" /> Objectif</span>
       </div>
-      <div className="relative mt-5 h-[300px]">
-        <div className="absolute inset-0 flex flex-col justify-between">
-          {ticks.map((value) => (
-            <div key={value} className="flex items-center gap-3">
-              <span className={`w-14 text-right text-[11px] ${dark ? 'text-white/35' : 'text-slate-400'}`}>{eur(value)}</span>
-              <div className={`h-px flex-1 ${dark ? 'bg-white/[0.06]' : 'bg-slate-100'}`} />
-            </div>
-          ))}
-        </div>
-        <svg className="absolute bottom-4 left-[64px] right-0 h-[270px] w-[calc(100%-64px)]" viewBox="0 0 900 290" preserveAspectRatio="none">
-          {series.probable.length > 0 && <path d={pathFor(series.probable)} fill="none" stroke="#8B5CF6" strokeWidth="3.5" strokeLinecap="round" />}
-          {series.confirme.length > 0 && <path d={pathFor(series.confirme)} fill="none" stroke="#5A9BA3" strokeWidth="3.5" strokeLinecap="round" />}
-          {series.encaisse.length > 0 && <path d={pathFor(series.encaisse)} fill="none" stroke="#3B82F6" strokeWidth="3.5" strokeLinecap="round" />}
-          {objectif > 0 && <path d={`M0 ${objY} L900 ${objY}`} fill="none" stroke="#94A3B8" strokeWidth="2" strokeDasharray="9 9" opacity="0.7" />}
-        </svg>
-        <div className={`absolute bottom-0 left-[64px] right-0 flex justify-between text-[11px] ${dark ? 'text-white/35' : 'text-slate-400'}`}>
-          {xLabels.map((d) => <span key={d}>{String(d).padStart(2, '0')}</span>)}
+      <div className="mt-4 overflow-x-auto pb-1 [scrollbar-width:thin]">
+        <div className="relative h-[286px] min-w-[620px]">
+          <div className="absolute inset-0 flex flex-col justify-between">
+            {ticks.map((value) => (
+              <div key={value} className="flex items-center gap-3">
+                <span className={`w-14 text-right text-[11px] ${dark ? 'text-white/35' : 'text-slate-400'}`}>{eur(value)}</span>
+                <div className={`h-px flex-1 border-t border-dashed ${dark ? 'border-white/[0.07]' : 'border-slate-200'}`} />
+              </div>
+            ))}
+          </div>
+          <svg className="absolute bottom-4 left-[64px] right-0 h-[256px] w-[calc(100%-64px)] overflow-visible" viewBox="0 0 900 290" preserveAspectRatio="none">
+            <defs>
+              <linearGradient id="revenue-area-gradient" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="#8B5CF6" stopOpacity={dark ? 0.34 : 0.22} />
+                <stop offset="100%" stopColor="#8B5CF6" stopOpacity="0" />
+              </linearGradient>
+            </defs>
+            {probableAreaPath && <path d={probableAreaPath} fill="url(#revenue-area-gradient)" />}
+            {probablePath && <path d={probablePath} fill="none" stroke="#A855F7" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />}
+            {series.confirme.length > 0 && <path d={pathFor(series.confirme)} fill="none" stroke="#5A9BA3" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" opacity=".9" vectorEffect="non-scaling-stroke" />}
+            {series.encaisse.length > 0 && <path d={pathFor(series.encaisse)} fill="none" stroke="#3B82F6" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" opacity=".9" vectorEffect="non-scaling-stroke" />}
+            {objectif > 0 && <path d={`M0 ${objY} L900 ${objY}`} fill="none" stroke="#CBD5E1" strokeWidth="2" strokeDasharray="9 9" opacity="0.65" vectorEffect="non-scaling-stroke" />}
+            {levelMarkers.map(({ level, point }) => (
+              <g key={level}>
+                <circle cx={toX(point.day)} cy={toY(point.cumul)} r="8" fill={dark ? '#090d1b' : '#ffffff'} stroke="#C4B5FD" strokeWidth="3" vectorEffect="non-scaling-stroke" />
+                <text
+                  x={toX(point.day)}
+                  y={toY(point.cumul) - 16}
+                  fill={dark ? '#DDD6FE' : '#6D28D9'}
+                  fontSize="12"
+                  fontWeight="700"
+                  textAnchor="middle"
+                  vectorEffect="non-scaling-stroke"
+                >
+                  NIV. {level}
+                </text>
+              </g>
+            ))}
+          </svg>
+          <div className={`absolute bottom-0 left-[64px] right-0 flex justify-between text-[11px] ${dark ? 'text-white/35' : 'text-slate-400'}`}>
+            {xLabels.map((d) => <span key={d}>{String(d).padStart(2, '0')}</span>)}
+          </div>
         </div>
       </div>
     </div>
@@ -1443,28 +1632,24 @@ function MonthlySummary({
     { label: 'Commission payée', value: commission, percent: null as number | null, color: 'bg-emerald-500' },
   ];
   return (
-    <div className={`rounded-[24px] border p-5 md:p-6 ${dark ? 'border-white/10 bg-[#080d1a] text-white' : 'border-slate-200 bg-white shadow-sm text-slate-900'}`}>
+    <div className={`rounded-[18px] border p-4 sm:p-5 ${dark ? 'border-white/10 bg-[#050b18]/95 text-white shadow-[0_16px_42px_rgba(0,0,0,.16)]' : 'border-slate-200 bg-white shadow-sm text-slate-900'}`}>
       <h3 className="text-sm font-black">RÉCAPITULATIF DU MOIS</h3>
-      <div className="mt-7 space-y-6">
+      <div className="mt-6 space-y-5">
         {rows.map((row) => {
           const width = row.percent === null ? Math.min((row.value / (objectif || 1)) * 100, 100) : clamp(row.percent, 0, 100);
           return (
-            <div key={row.label}>
-              <div className="flex items-center justify-between gap-4 text-sm">
-                <span className={dark ? 'text-white/60' : 'text-slate-600'}>{row.label}</span>
-                <div className="flex gap-4">
-                  <strong>{eur(row.value)}</strong>
-                  <span className={`w-10 text-right ${dark ? 'text-white/40' : 'text-slate-500'}`}>{row.percent === null ? '—' : `${Math.round(row.percent)}%`}</span>
-                </div>
-              </div>
-              <div className={`mt-2 h-2 overflow-hidden rounded-full ${dark ? 'bg-white/[0.08]' : 'bg-slate-100'}`}>
+            <div key={row.label} className="grid grid-cols-[92px_minmax(55px,1fr)_76px_38px] items-center gap-2 text-xs sm:grid-cols-[108px_minmax(70px,1fr)_88px_42px] sm:gap-3 sm:text-sm">
+              <span className={dark ? 'text-white/65' : 'text-slate-600'}>{row.label}</span>
+              <div className={`h-2 overflow-hidden rounded-full ${dark ? 'bg-white/[0.08]' : 'bg-slate-100'}`}>
                 <div className={`h-full rounded-full ${row.color}`} style={{ width: `${width}%` }} />
               </div>
+              <strong className="text-right">{eur(row.value)}</strong>
+              <span className={`text-right ${dark ? 'text-white/45' : 'text-slate-500'}`}>{row.percent === null ? '—' : `${Math.round(row.percent)}%`}</span>
             </div>
           );
         })}
       </div>
-      <div className={`mt-8 flex items-center gap-2 text-xs ${dark ? 'text-white/35' : 'text-slate-400'}`}>
+      <div className={`mt-7 flex items-center gap-2 border-t pt-4 text-[11px] ${dark ? 'border-white/[0.08] text-white/35' : 'border-slate-100 text-slate-400'}`}>
         <RefreshCw className="h-3.5 w-3.5" />
         {lastUpdatedLabel ? <>Données mises à jour le {lastUpdatedLabel}</> : 'Données synchronisées en direct'}
       </div>

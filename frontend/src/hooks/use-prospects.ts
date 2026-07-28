@@ -15,6 +15,9 @@ export interface Prospect {
   date_dernier_appel: string;
   date_prochaine_relance: string;
   date_relance_planifiee: string;
+  // null = relance standard ; 'confirmation_visio' = rappel auto J-1 avant une
+  // visio (violet) ; 'lapin' = prospect non venu à sa visio (couleur spéciale).
+  type_relance_planifiee: string | null;
   nombre_appels: number;
   nombre_appels_repondus: number;
   nombre_relances: number;

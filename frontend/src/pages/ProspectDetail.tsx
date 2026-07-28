@@ -35,6 +35,16 @@ const toLocalInputValue = (d: Date) => {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 };
 
+// Rappel de confirmation automatique programmé 24h avant une visio (violet
+// dans "Relance datée" / "Mes visios") — null si le rendez-vous est déjà à
+// moins de 24h (pas de sens à programmer un rappel dans le passé).
+function computeVisioReminder(dateVisioIso: string): { date_relance_planifiee: string; type_relance_planifiee: string } | null {
+  const visio = new Date(dateVisioIso);
+  const reminder = new Date(visio.getTime() - 24 * 60 * 60 * 1000);
+  if (reminder.getTime() <= Date.now()) return null;
+  return { date_relance_planifiee: reminder.toISOString(), type_relance_planifiee: 'confirmation_visio' };
+}
+
 const PIPELINE_STAGES = [
   'Appel telephonique', 'Relance 1', 'Relance 2', 'Relance 3', 'Relance 4',
   'Visio', 'Demande de documents', 'Signature', 'Dossier complet', 'Envoyé à Mathilde', 'Refus / Perdu',
@@ -409,9 +419,18 @@ export default function ProspectDetail() {
   const handleLogVisio = useCallback(async (dateTimeLocal?: string, noteOverride?: string) => {
     if (!prospect) return;
     const iso = dateTimeLocal ? new Date(dateTimeLocal).toISOString() : new Date().toISOString();
-    updateProspectOptimistic({ statut_avancement: 'Visio', date_visio: iso, date_relance_planifiee: '' });
+    // Un rendez-vous confirmé programme automatiquement son propre rappel de
+    // confirmation 24h avant (violet) — remplace l'ancien effacement pur et
+    // simple de la relance planifiée.
+    const reminder = computeVisioReminder(iso);
+    const visioPatch = {
+      statut_avancement: 'Visio', date_visio: iso,
+      date_relance_planifiee: reminder?.date_relance_planifiee ?? '',
+      type_relance_planifiee: reminder?.type_relance_planifiee ?? null,
+    };
+    updateProspectOptimistic(visioPatch);
     try {
-      await client.entities.prospects.update({ id: String(prospect.id), data: { statut_avancement: 'Visio', date_visio: iso, date_relance_planifiee: null } });
+      await client.entities.prospects.update({ id: String(prospect.id), data: { ...visioPatch, date_relance_planifiee: reminder?.date_relance_planifiee ?? null } });
       await client.entities.commercial_actions.create({
         data: { prospect_id: prospect.id, action_type: 'visio', appel_repondu: false, from_status: prospect.statut_avancement, to_status: 'Visio', notes: noteOverride || actionNote || `Visio planifiée le ${new Date(iso).toLocaleString('fr-FR')}`, action_date: new Date().toISOString() },
       });

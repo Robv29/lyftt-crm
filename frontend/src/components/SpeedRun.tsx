@@ -17,6 +17,22 @@ import {
   XCircle, Shuffle, MapPin, Building2, Trophy, User, Flame, Minus, Pencil, Star,
 } from 'lucide-react';
 
+// Rappel de confirmation automatique programmé 24h avant une visio (violet
+// dans "Relance datée" / "Mes visios") — null si le rendez-vous est déjà à
+// moins de 24h (pas de sens à programmer un rappel dans le passé).
+function computeVisioReminder(dateVisioIso: string): { date_relance_planifiee: string; type_relance_planifiee: string } | null {
+  const visio = new Date(dateVisioIso);
+  const reminder = new Date(visio.getTime() - 24 * 60 * 60 * 1000);
+  if (reminder.getTime() <= Date.now()) return null;
+  return { date_relance_planifiee: reminder.toISOString(), type_relance_planifiee: 'confirmation_visio' };
+}
+
+// Le speed dial ne sert qu'à décrocher un premier appel ("non appelé") ou à
+// relancer un NRP : une fois qu'un dossier a avancé (Visio calée, documents
+// demandés, Signature, Dossier complet, Envoyé à Mathilde), il sort du pool —
+// ce n'est plus un appel à froid, ça se gère depuis la fiche prospect.
+const SPEED_RUN_STATUSES = new Set(['Appel telephonique', 'Relance 1', 'Relance 2', 'Relance 3', 'Relance 4']);
+
 const norm = (s?: string) => (s || '').toLowerCase().replace(/\s+/g, ' ').trim();
 function shuffle<T>(arr: T[]): T[] {
   const a = [...arr];
@@ -149,9 +165,7 @@ export default function SpeedRun({ onClose, minimized = false, onMinimize, onMax
 
   const basePool = useMemo(() => {
     const set = new Set(commercialCities);
-    // Un prospect déjà en "Visio" a un RDV calé : il ne doit plus ressortir
-    // en speed dial (sinon on rappelle des gens qui ont déjà un rendez-vous).
-    return prospects.filter((p) => p.statut_gagne_perdu === 'actif' && p.statut_avancement !== 'Visio' && set.has(p.zone_geographique));
+    return prospects.filter((p) => p.statut_gagne_perdu === 'actif' && SPEED_RUN_STATUSES.has(p.statut_avancement) && set.has(p.zone_geographique));
   }, [prospects, commercialCities]);
 
   const villes = useMemo(() => Array.from(new Set(basePool.map((p) => p.zone_geographique).filter(Boolean))).sort(), [basePool]);
@@ -304,8 +318,10 @@ export default function SpeedRun({ onClose, minimized = false, onMinimize, onMax
   const doVisio = useCallback(async (dateTimeLocal?: string) => {
     const p = current; if (!p) return;
     const iso = dateTimeLocal ? new Date(dateTimeLocal).toISOString() : new Date().toISOString();
+    // Programme automatiquement le rappel de confirmation 24h avant (violet).
+    const reminder = computeVisioReminder(iso);
     try {
-      await client.entities.prospects.update({ id: String(p.id), data: { statut_avancement: 'Visio', date_visio: iso, date_relance_planifiee: null } });
+      await client.entities.prospects.update({ id: String(p.id), data: { statut_avancement: 'Visio', date_visio: iso, date_relance_planifiee: reminder?.date_relance_planifiee ?? null, type_relance_planifiee: reminder?.type_relance_planifiee ?? null } });
       await client.entities.commercial_actions.create({ data: { prospect_id: p.id, action_type: 'visio', appel_repondu: false, from_status: p.statut_avancement, to_status: 'Visio', notes: noteText || `Visio planifiée ${new Date(iso).toLocaleString('fr-FR')} (speed run)`, action_date: new Date().toISOString() } });
     } catch { /* ignore */ }
     setStats((s) => ({ ...s, done: s.done + 1 }));

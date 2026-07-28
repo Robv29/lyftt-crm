@@ -812,20 +812,27 @@ function RelanceDateRow({ prospect: p, overdue = false }: { prospect: Prospect; 
   const dt = p.date_relance_planifiee ? new Date(p.date_relance_planifiee) : null;
   const heure = dt ? dt.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) : '--:--';
   const jour = dt ? dt.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' }) : '';
-  // Relance créée depuis "Mes visios passées" : le prospect reste au statut
-  // "Visio" (pas de changement d'étape), ce qui permet de la distinguer
-  // visuellement (violet) des relances NRP/classiques (teal / rouge si en retard).
-  const isVisioFollowup = p.statut_avancement === 'Visio';
+  // Trois cas particuliers en plus de la relance standard (teal), par ordre de
+  // priorité : en retard (rouge) > lapin posé à une visio (ambre) > rappel de
+  // confirmation avant visio programmé auto J-1, ou fiche encore au statut
+  // "Visio" pour compat avec les anciennes relances créées avant ce marquage
+  // explicite (violet) > standard (teal).
+  const isLapin = p.type_relance_planifiee === 'lapin';
+  const isVisioFollowup = p.type_relance_planifiee === 'confirmation_visio' || p.statut_avancement === 'Visio';
   const rowClass = overdue
     ? 'border-red-200 bg-red-50/70 hover:bg-red-50'
-    : isVisioFollowup
-      ? 'border-purple-200 bg-purple-50/70 hover:bg-purple-50'
-      : 'border-slate-100 hover:border-[#6AABB4]/40 hover:bg-gradient-to-r hover:from-teal-50/50 hover:to-cyan-50/30';
+    : isLapin
+      ? 'border-amber-200 bg-amber-50/70 hover:bg-amber-50'
+      : isVisioFollowup
+        ? 'border-purple-200 bg-purple-50/70 hover:bg-purple-50'
+        : 'border-slate-100 hover:border-[#6AABB4]/40 hover:bg-gradient-to-r hover:from-teal-50/50 hover:to-cyan-50/30';
   const badgeClass = overdue
     ? 'bg-red-500 text-white'
-    : isVisioFollowup
-      ? 'bg-purple-500 text-white'
-      : 'bg-[#5A9BA3]/10 text-[#5A9BA3]';
+    : isLapin
+      ? 'bg-amber-500 text-white'
+      : isVisioFollowup
+        ? 'bg-purple-500 text-white'
+        : 'bg-[#5A9BA3]/10 text-[#5A9BA3]';
   return (
     <Link
       to={`/prospects/${p.id}`}
@@ -834,7 +841,8 @@ function RelanceDateRow({ prospect: p, overdue = false }: { prospect: Prospect; 
       <div className="w-16 shrink-0 text-center">
         <span className={`inline-block px-2 py-1 rounded-lg text-sm font-bold tabular-nums ${badgeClass}`}>{heure}</span>
         {overdue && <p className="text-[10px] font-bold text-red-600 mt-0.5">{jour} en retard</p>}
-        {!overdue && isVisioFollowup && <p className="text-[10px] font-bold text-purple-600 mt-0.5">Visio</p>}
+        {!overdue && isLapin && <p className="text-[10px] font-bold text-amber-600 mt-0.5">🐇 Lapin</p>}
+        {!overdue && !isLapin && isVisioFollowup && <p className="text-[10px] font-bold text-purple-600 mt-0.5">{p.type_relance_planifiee === 'confirmation_visio' ? 'Confirmation visio' : 'Visio'}</p>}
       </div>
       <div className="min-w-0 flex-1">
         <p className="text-sm font-semibold text-slate-900 truncate group-hover:text-[#5A9BA3] transition-colors">{p.nom_societe}</p>

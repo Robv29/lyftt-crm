@@ -25,7 +25,7 @@ interface LayoutProps {
 const navItems = [
   { path: '/', label: 'Tableau de bord', icon: LayoutDashboard, adminOnly: false },
   { path: '/prospects', label: 'Prospects', icon: Users, adminOnly: false },
-  { path: '/visios-passees', label: 'Mes visios passées', icon: Video, adminOnly: false },
+  { path: '/visios-passees', label: 'Mes visios', icon: Video, adminOnly: false },
   { path: '/attributions', label: 'Attributions', icon: MapPin, adminOnly: false },
   { path: '/performance-ca', label: 'Performance CA', icon: TrendingUp, adminOnly: false },
   { path: '/admin/users', label: 'Gestion utilisateurs', icon: UserCog, adminOnly: true },

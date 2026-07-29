@@ -271,7 +271,11 @@ export default function Dashboard() {
     const appelsRepondus = fa.filter((a) => (a.action_type === 'appel' || a.action_type === 'relance') && a.appel_repondu).length;
     const refus = fa.filter((a) => a.action_type === 'status_change' && a.to_status === 'Refus / Perdu').length;
     const signatures = fa.filter((a) => a.action_type === 'status_change' && a.to_status === 'Signature').length;
-    const visios = fa.filter((a) => a.action_type === 'visio').length;
+    // Compte des visios DISTINCTES (par prospect), pas des actions "visio"
+    // brutes : reprogrammer 2 fois le même rendez-vous (changement de date/
+    // heure) crée 3 lignes commercial_actions pour un seul RDV réel — sans
+    // dédoublonnage, le KPI comptait ce genre de cas comme 3 visios.
+    const visios = new Set(fa.filter((a) => a.action_type === 'visio').map((a) => a.prospect_id)).size;
     const currentRate = computeConversionRate(actions, start, end);
     const { start: ps, end: pe } = getPreviousDateRange(selectedPeriod);
     const previousRate = computeConversionRate(actions, ps, pe);

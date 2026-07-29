@@ -28,6 +28,7 @@ const navItems = [
   { path: '/visios-passees', label: 'Mes visios', icon: Video, adminOnly: false },
   { path: '/attributions', label: 'Attributions', icon: MapPin, adminOnly: false },
   { path: '/performance-ca', label: 'Performance CA', icon: TrendingUp, adminOnly: false },
+  { path: '/profil', label: 'Mon profil', icon: User, adminOnly: false },
   { path: '/admin/users', label: 'Gestion utilisateurs', icon: UserCog, adminOnly: true },
 ];
 

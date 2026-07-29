@@ -20,6 +20,7 @@ const ProspectDetail = lazy(() => import('./pages/ProspectDetail'));
 const Pipeline = lazy(() => import('./pages/Pipeline'));
 const VisiosPassees = lazy(() => import('./pages/VisiosPassees'));
 const PerformanceCA = lazy(() => import('./pages/PerformanceCA'));
+const Profile = lazy(() => import('./pages/Profile'));
 const AdminUsers = lazy(() => import('./pages/AdminUsers'));
 const Attributions = lazy(() => import('./pages/Attributions'));
 const NotFound = lazy(() => import('./pages/NotFound'));
@@ -119,6 +120,16 @@ const App = () => (
                 <Layout>
                   <LazyPage>
                     <PerformanceCA />
+                  </LazyPage>
+                </Layout>
+              }
+            />
+            <Route
+              path="/profil"
+              element={
+                <Layout>
+                  <LazyPage>
+                    <Profile />
                   </LazyPage>
                 </Layout>
               }

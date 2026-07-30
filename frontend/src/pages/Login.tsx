@@ -60,23 +60,25 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-slate-50 px-4">
-      <div className="w-full max-w-md">
+    <div className="relative min-h-screen overflow-hidden bg-[#eef4f4] px-4 flex items-center justify-center">
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_78%_12%,rgba(90,155,163,.12),transparent_26rem),radial-gradient(circle_at_12%_88%,rgba(185,144,70,.07),transparent_22rem)]" />
+      <div className="relative w-full max-w-md">
         <div className="flex flex-col items-center mb-8">
-          <div className="h-14 w-14 rounded-2xl bg-blue-800 text-white flex items-center justify-center text-2xl font-bold shadow-lg">
-            L
+          <div className="rounded-2xl border border-white/80 bg-white p-2 shadow-[0_16px_40px_-24px_rgba(15,40,48,.4)]">
+            <img src="/assets/lyftt-logo.png" alt="LYFTT" className="h-14 w-14 rounded-xl" />
           </div>
-          <h1 className="mt-4 text-2xl font-bold text-slate-900">LYFTT CRM</h1>
-          <p className="text-sm text-slate-500">Suivi commercial</p>
+          <h1 className="mt-4 text-2xl font-bold tracking-tight text-[#16313a]">LYFTT CRM</h1>
+          <p className="text-sm text-slate-500">Pilotage commercial</p>
         </div>
 
-        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
-          <div className="flex gap-1 p-1 bg-slate-100 rounded-lg mb-6">
+        <div className="relative overflow-hidden bg-white rounded-2xl shadow-[0_24px_70px_-42px_rgba(15,40,48,.45)] border border-[#d7e4e5] p-6">
+          <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-[#b99046]/70 to-transparent" />
+          <div className="flex gap-1 p-1 bg-[#edf4f4] rounded-lg mb-6">
             <button
               type="button"
               onClick={() => setMode('signin')}
               className={`flex-1 text-sm font-medium py-2 rounded-md transition ${
-                mode === 'signin' ? 'bg-white shadow text-slate-900' : 'text-slate-500'
+                mode === 'signin' ? 'bg-white shadow-sm text-[#16313a]' : 'text-slate-500'
               }`}
             >
               Connexion
@@ -85,7 +87,7 @@ export default function Login() {
               type="button"
               onClick={() => setMode('signup')}
               className={`flex-1 text-sm font-medium py-2 rounded-md transition ${
-                mode === 'signup' ? 'bg-white shadow text-slate-900' : 'text-slate-500'
+                mode === 'signup' ? 'bg-white shadow-sm text-[#16313a]' : 'text-slate-500'
               }`}
             >
               Créer un compte
@@ -141,7 +143,7 @@ export default function Login() {
             <Button
               type="submit"
               disabled={submitting}
-              className="w-full bg-blue-800 hover:bg-blue-900"
+              className="w-full"
             >
               {submitting
                 ? 'Veuillez patienter…'

@@ -128,7 +128,7 @@ export default function Pipeline() {
               <div className="flex items-center gap-2 mb-3 px-1">
                 <div className={`w-2.5 h-2.5 rounded-full bg-gradient-to-r ${stage.gradient}`} />
                 <h3 className="text-sm font-semibold text-slate-700">{stage.label}</h3>
-                <Badge variant="secondary" className={`ml-auto text-xs font-semibold ${stage.light}`}>{stageProspects.length}</Badge>
+                <Badge variant="secondary" className={`ml-auto min-w-7 shrink-0 px-2 font-semibold ${stage.light}`}>{stageProspects.length}</Badge>
               </div>
               {stageTotal > 0 && <p className="text-xs text-slate-400 mb-2 px-1 font-medium">{stageTotal.toLocaleString('fr-FR')} €</p>}
               <div className="space-y-2">

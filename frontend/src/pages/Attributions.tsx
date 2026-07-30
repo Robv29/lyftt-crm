@@ -173,11 +173,11 @@ export default function Attributions() {
             {isAdmin ? 'Attribuez les villes/zones aux commerciaux' : 'Gérez vos attributions de villes/zones'}
           </p>
         </div>
-        <div className="flex flex-wrap items-center gap-2.5 sm:gap-3">
-          <Badge variant="outline" className="min-h-10 gap-2 px-3.5 py-2 rounded-full whitespace-nowrap">
+        <div className="grid w-full grid-cols-1 gap-2 min-[420px]:flex min-[420px]:w-auto min-[420px]:flex-wrap sm:gap-3">
+          <Badge variant="outline" className="min-h-9 w-full justify-center px-3 py-2 min-[420px]:w-auto sm:min-h-10 sm:px-3.5">
             <MapPin className="w-3.5 h-3.5" /> {attributions.length} attribution(s)
           </Badge>
-          <Badge variant="outline" className="min-h-10 gap-2 px-3.5 py-2 text-amber-600 border-amber-200 bg-amber-50 rounded-full whitespace-nowrap">
+          <Badge variant="outline" className="min-h-9 w-full justify-center border-amber-200 bg-amber-50 px-3 py-2 text-amber-700 hover:border-amber-300 hover:bg-amber-100/70 min-[420px]:w-auto sm:min-h-10 sm:px-3.5">
             <Building2 className="w-3.5 h-3.5" /> {unattributedCities.length} non attribuée(s)
           </Badge>
         </div>
@@ -255,7 +255,7 @@ export default function Attributions() {
             return (
               <Card key={u.id} className={`border-0 shadow-sm rounded-2xl ${isOwnSection ? 'ring-1 ring-teal-200' : ''}`}>
                 <CardContent className="p-5 sm:p-6">
-                  <div className="flex items-center gap-4 mb-5">
+                  <div className="flex items-center gap-3 mb-5 sm:gap-4">
                     <div className={`w-10 h-10 shrink-0 rounded-xl flex items-center justify-center ${isOwnSection ? 'bg-gradient-to-br from-[#5A9BA3] to-[#6AABB4]' : 'bg-gradient-to-br from-teal-100 to-cyan-100'}`}>
                       <Users className={`w-4 h-4 ${isOwnSection ? 'text-white' : 'text-[#5A9BA3]'}`} />
                     </div>
@@ -265,27 +265,27 @@ export default function Attributions() {
                         {isOwnSection ? <span className="text-xs text-[#5A9BA3] ml-2">(vous)</span> : null}
                       </p>
                     </div>
-                    <Badge variant="secondary" className="shrink-0 rounded-full px-3 py-1.5 text-xs">
+                    <Badge variant="secondary" className="shrink-0 px-2.5 py-1.5 sm:px-3">
                       {allUserAttrs.length} ville(s)
                     </Badge>
                   </div>
                   {displayAttrs.length === 0 ? (
                     <p className="text-sm text-slate-400 italic sm:pl-14">Aucune ville attribuée</p>
                   ) : (
-                    <div className="flex flex-wrap items-center gap-x-3 gap-y-3 sm:pl-14">
+                    <div className="grid grid-cols-1 gap-2.5 min-[420px]:flex min-[420px]:flex-wrap min-[420px]:items-center sm:gap-3 sm:pl-14">
                       {displayAttrs.map((attr) => (
                         <Badge
                           key={attr.id}
                           variant="outline"
-                          className={`min-h-10 max-w-full gap-2 rounded-full border-[#d7e2e4] bg-white px-3.5 py-2 shadow-[0_4px_14px_-12px_rgba(15,40,48,.45)] transition-all ${canEdit ? 'hover:border-red-200 hover:bg-red-50 group' : ''}`}
+                          className={`min-h-9 w-full max-w-full justify-start gap-2 border-[#d7e2e4] bg-white px-2.5 py-1.5 shadow-[0_4px_14px_-12px_rgba(15,40,48,.45)] min-[420px]:w-auto sm:min-h-10 sm:px-3 ${canEdit ? 'hover:border-red-200 hover:bg-red-50 group' : ''}`}
                         >
                           <MapPin className={`w-4 h-4 shrink-0 ${canEdit ? 'text-slate-400 group-hover:text-red-400 transition-colors' : 'text-slate-400'}`} />
-                          <span className="min-w-0 break-words text-sm font-medium leading-tight">{attr.city}</span>
+                          <span className="min-w-0 flex-1 truncate text-left text-xs font-medium sm:text-sm">{attr.city}</span>
                           {canEdit ? (
                             <button
                               type="button"
                               onClick={() => handleRemove(attr)}
-                              className="ml-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-slate-300 transition-colors hover:bg-red-100 hover:text-red-500"
+                              className="ml-auto flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-slate-300 transition-colors hover:bg-red-100 hover:text-red-500 min-[420px]:ml-0"
                               title={`Supprimer ${attr.city}`}
                               aria-label={`Supprimer l'attribution ${attr.city}`}
                             >
@@ -312,10 +312,11 @@ export default function Attributions() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="flex flex-wrap items-center gap-x-3 gap-y-3">
+            <div className="grid grid-cols-1 gap-2 min-[420px]:flex min-[420px]:flex-wrap min-[420px]:items-center sm:gap-3">
               {unattributedCities.map((city) => (
-                <Badge key={city} variant="outline" className="min-h-9 gap-2 rounded-full border-amber-200 bg-amber-50 px-3 py-2 text-amber-700">
-                  <MapPin className="w-3.5 h-3.5 shrink-0" /> {city}
+                <Badge key={city} variant="outline" className="min-h-9 w-full justify-start border-amber-200 bg-amber-50 px-3 py-2 text-amber-700 hover:border-amber-300 hover:bg-amber-100/70 min-[420px]:w-auto">
+                  <MapPin className="w-3.5 h-3.5 shrink-0" />
+                  <span className="truncate">{city}</span>
                 </Badge>
               ))}
             </div>

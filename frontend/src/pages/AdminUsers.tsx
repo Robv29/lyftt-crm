@@ -354,12 +354,12 @@ export default function AdminUsers() {
                       <TableCell>
                         {u.role === 'admin' ? (
                           <Badge className="bg-amber-100 text-amber-700 border-0">
-                            <ShieldCheck className="w-3 h-3 mr-1" />
+                            <ShieldCheck className="w-3 h-3" />
                             Admin
                           </Badge>
                         ) : (
                           <Badge className="bg-blue-100 text-blue-700 border-0">
-                            <Briefcase className="w-3 h-3 mr-1" />
+                            <Briefcase className="w-3 h-3" />
                             Commercial
                           </Badge>
                         )}

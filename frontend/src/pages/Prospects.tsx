@@ -26,7 +26,6 @@ import { toast } from 'sonner';
 import {
   Search, Upload, Plus, Phone, ExternalLink, Filter, Trash2, X,
   MapPin, Building2, UserCircle, Download, ChevronLeft, ChevronRight, Copy, GitMerge,
-  FileDown,
 } from 'lucide-react';
 import ErrorState from '../components/ErrorState';
 import type * as XLSXType from 'xlsx';
@@ -160,79 +159,6 @@ function parseMondayExcel(XLSX: typeof XLSXType, workbook: XLSXType.WorkBook): P
     }
   }
   return prospects;
-}
-
-// Colonnes attendues par le modèle CSV vierge (bouton "Modèle CSV") — texte
-// exact des en-têtes générées, ré-utilisé aussi côté lecture (findCol) pour
-// que le fichier rempli soit reconnu même si l'ordre des colonnes change.
-const TEMPLATE_HEADERS = [
-  'Nom de la société', 'Dirigeant', 'Téléphone', 'Email', 'Ville / Zone',
-  'Catégorie métier', 'Commercial assigné', 'Forme juridique', 'Nombre de salariés',
-  'Montant potentiel (€)', 'Priorité (faible/moyenne/élevée)', 'Source', 'Notes',
-] as const;
-
-interface FlatParsedProspect extends ParsedProspect {
-  montant_potentiel?: number;
-  priorite?: string;
-  source_lead?: string;
-  notes?: string;
-}
-
-// Import "modèle CSV vierge" : une ligne = un prospect, colonnes reconnues par
-// mot-clé (comme parseMondayExcel) pour tolérer un ordre différent ou de
-// légères variations d'intitulé si le fichier est modifié à la main.
-function parseFlatCsv(XLSX: typeof XLSXType, workbook: XLSXType.WorkBook): FlatParsedProspect[] {
-  const sheet = workbook.Sheets[workbook.SheetNames[0]];
-  if (!sheet) return [];
-  const rows: (string | number | null)[][] = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: null });
-  if (rows.length < 2) return [];
-
-  const headers = rows[0].map((c) => String(c ?? '').toLowerCase().trim());
-  const findCol = (...pats: string[]) => headers.findIndex((h) => pats.some((p) => h.includes(p)));
-  const col = {
-    name: findCol('nom de la société', 'nom société', 'société', 'societe', 'name'),
-    dirigeant: findCol('dirigeant', 'gérant', 'gerant', 'responsable'),
-    tel: findCol('téléphone', 'telephone', 'tel', 'phone', 'portable', 'mobile'),
-    mail: findCol('email', 'mail', 'courriel'),
-    zone: findCol('ville', 'zone'),
-    categorie: findCol('catégorie', 'categorie', 'métier', 'metier'),
-    commercial: findCol('commercial'),
-    forme: findCol('forme juridique', 'juridique', 'forme'),
-    effectif: findCol('salarié', 'salarie', 'effectif'),
-    montant: findCol('montant'),
-    priorite: findCol('priorité', 'priorite'),
-    source: findCol('source'),
-    notes: findCol('notes', 'note', 'commentaire'),
-  };
-
-  const result: FlatParsedProspect[] = [];
-  for (let i = 1; i < rows.length; i++) {
-    const row = rows[i];
-    if (!row || row.length === 0) continue;
-    const g = (idx: number) => (idx >= 0 ? String(row[idx] ?? '').trim() : '');
-    const nom = col.name >= 0 ? g(col.name) : '';
-    if (!nom) continue;
-    const montantRaw = col.montant >= 0 ? row[col.montant] : null;
-    const montant = montantRaw != null && montantRaw !== '' ? Number(String(montantRaw).replace(',', '.')) : undefined;
-    result.push({
-      nom_societe: nom,
-      nom_dirigeant: g(col.dirigeant),
-      telephone: g(col.tel),
-      email: g(col.mail),
-      commercial_assigne: g(col.commercial),
-      zone_geographique: g(col.zone),
-      categorie_metier: g(col.categorie),
-      effectif: g(col.effectif),
-      forme: g(col.forme),
-      statut_monday: '',
-      date_visio: '',
-      montant_potentiel: montant != null && !Number.isNaN(montant) ? montant : undefined,
-      priorite: g(col.priorite) || undefined,
-      source_lead: g(col.source) || undefined,
-      notes: g(col.notes) || undefined,
-    });
-  }
-  return result;
 }
 
 // Lit la 2e feuille de l'export Monday (les "updates") et associe le contenu de
@@ -655,19 +581,15 @@ export default function Prospects() {
     [filtered, currentPage]
   );
 
-  // Le modèle CSV vierge (voir handleDownloadTemplate) est une ligne = un
-  // prospect, une seule feuille : reconnu au .csv pour se distinguer d'un
-  // export Monday (toujours .xlsx, plusieurs feuilles, lignes de catégorie).
   const handleImport = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    const isCsvTemplate = file.name.toLowerCase().endsWith('.csv');
     try {
       const XLSX = await import('xlsx');
       const data = await file.arrayBuffer();
       const workbook = XLSX.read(data, { cellDates: true });
-      const parsed: FlatParsedProspect[] = isCsvTemplate ? parseFlatCsv(XLSX, workbook) : parseMondayExcel(XLSX, workbook);
-      const updates = isCsvTemplate ? new Map<string, string>() : parseUpdates(XLSX, workbook); // 2e feuille : "update content" -> notes
+      const parsed = parseMondayExcel(XLSX, workbook);
+      const updates = parseUpdates(XLSX, workbook); // 2e feuille : "update content" -> notes
       if (parsed.length === 0) { toast.error('Aucun prospect trouvé dans le fichier.'); return; }
       // Anti-doublon PAR OBJET (pas juste par clé) : une société déjà en base
       // n'est plus ignorée au réimport, elle est MISE À JOUR (forme
@@ -727,18 +649,9 @@ export default function Prospects() {
             // Effectif/Forme vont désormais dans leurs colonnes dédiées
             // (forme_juridique, nombre_salaries) plutôt que dans notes.
             const ctx = p.statut_monday ? `Statut Monday: ${p.statut_monday}` : '';
-            const note = isCsvTemplate ? (p.notes || '') : [ctx, upd].filter(Boolean).join('\n\n');
+            const note = [ctx, upd].filter(Boolean).join('\n\n');
             const res = await client.entities.prospects.create({
-              data: {
-                nom_societe: p.nom_societe, nom_dirigeant: p.nom_dirigeant, telephone: p.telephone, email: p.email || '',
-                zone_geographique: p.zone_geographique, categorie_metier: p.categorie_metier, commercial_assigne: p.commercial_assigne,
-                source_lead: p.source_lead || (isCsvTemplate ? 'Import CSV' : 'Import Excel'),
-                montant_potentiel: p.montant_potentiel ?? 0, notes: note,
-                forme_juridique: p.forme || '', nombre_salaries: p.effectif || '',
-                statut_avancement: mapped.statut_avancement, priorite: p.priorite || 'moyenne',
-                statut_gagne_perdu: mapped.statut_gagne_perdu, nombre_appels: 0, nombre_appels_repondus: 0,
-                nombre_relances: 0, date_visio: p.date_visio || null,
-              },
+              data: { nom_societe: p.nom_societe, nom_dirigeant: p.nom_dirigeant, telephone: p.telephone, email: p.email || '', zone_geographique: p.zone_geographique, categorie_metier: p.categorie_metier, commercial_assigne: p.commercial_assigne, source_lead: 'Import Excel', montant_potentiel: 0, notes: note, forme_juridique: p.forme || '', nombre_salaries: p.effectif || '', statut_avancement: mapped.statut_avancement, priorite: 'moyenne', statut_gagne_perdu: mapped.statut_gagne_perdu, nombre_appels: 0, nombre_appels_repondus: 0, nombre_relances: 0, date_visio: p.date_visio || null },
             });
             existingByKey.set(key, res.data as Prospect);
             imported++;
@@ -820,17 +733,6 @@ export default function Prospects() {
     invalidateProspects();
   }, [selectedIds, invalidateProspects]);
 
-  // Modèle CSV vierge : en-têtes uniquement, prêt à remplir et à réimporter
-  // via le même bouton "Importer" (détecté automatiquement au .csv).
-  const handleDownloadTemplate = useCallback(async () => {
-    const XLSX = await import('xlsx');
-    const ws = XLSX.utils.aoa_to_sheet([[...TEMPLATE_HEADERS]]);
-    ws['!cols'] = TEMPLATE_HEADERS.map((h) => ({ wch: Math.max(h.length, 18) }));
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'Prospects');
-    XLSX.writeFile(wb, 'modele_import_prospects.csv', { bookType: 'csv' });
-  }, []);
-
   const handleExportExcel = useCallback(async () => {
     try {
       const XLSX = await import('xlsx');
@@ -886,18 +788,17 @@ export default function Prospects() {
           <input ref={fileInputRef} type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={handleImport} />
           {duplicateCount > 0 && (
             <Button variant="outline" onClick={() => setShowDuplicatesDialog(true)} className="gap-2 rounded-xl border-amber-200 text-amber-700 hover:bg-amber-50">
-              <Copy className="w-4 h-4" /> Doublons <Badge className="bg-amber-100 text-amber-700 border-amber-200 rounded-lg ml-0.5">{duplicateCount}</Badge>
+              <Copy className="w-4 h-4" /> Doublons <Badge className="ml-0.5 min-w-6 border-amber-200 bg-amber-100 px-1.5 text-amber-700">{duplicateCount}</Badge>
             </Button>
           )}
           {categoryGroups.length > 0 && (
             <Button variant="outline" onClick={() => setShowMergeDialog(true)} className="gap-2 rounded-xl border-indigo-200 text-indigo-700 hover:bg-indigo-50">
-              <GitMerge className="w-4 h-4" /> Fusionner catégories <Badge className="bg-indigo-100 text-indigo-700 border-indigo-200 rounded-lg ml-0.5">{categoryGroups.length}</Badge>
+              <GitMerge className="w-4 h-4" /> Fusionner catégories <Badge className="ml-0.5 min-w-6 border-indigo-200 bg-indigo-100 px-1.5 text-indigo-700">{categoryGroups.length}</Badge>
             </Button>
           )}
           <Button variant="outline" onClick={handleExportExcel} disabled={filtered.length === 0} className="gap-2 rounded-xl border-slate-200"><Download className="w-4 h-4" /> Exporter</Button>
-          <Button variant="outline" onClick={handleDownloadTemplate} title="Télécharger un modèle CSV vierge à remplir" className="gap-2 rounded-xl border-slate-200"><FileDown className="w-4 h-4" /> Modèle CSV</Button>
           <Button variant="outline" onClick={() => fileInputRef.current?.click()} className="gap-2 rounded-xl border-slate-200"><Upload className="w-4 h-4" /> Importer</Button>
-          <Button onClick={() => setShowAddDialog(true)} className="gap-2 bg-gradient-to-r from-[#5A9BA3] to-[#6AABB4] hover:from-[#4A8B93] hover:to-[#5A9BA4] text-white rounded-xl shadow-md shadow-[#6AABB4]/20"><Plus className="w-4 h-4" /> Ajouter</Button>
+          <Button onClick={() => setShowAddDialog(true)} className="gap-2"><Plus className="w-4 h-4" /> Ajouter</Button>
         </div>
       </div>
 
@@ -1041,7 +942,7 @@ export default function Prospects() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowAddDialog(false)} disabled={saving} className="rounded-xl">Annuler</Button>
-            <Button onClick={handleAddProspect} disabled={saving} className="bg-gradient-to-r from-[#5A9BA3] to-[#6AABB4] hover:from-[#4A8B93] hover:to-[#5A9BA4] text-white rounded-xl">{saving ? 'Ajout...' : 'Ajouter'}</Button>
+            <Button onClick={handleAddProspect} disabled={saving}>{saving ? 'Ajout...' : 'Ajouter'}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -1060,7 +961,7 @@ export default function Prospects() {
             ) : duplicateGroups.map((group, gi) => (
               <div key={gi} className={`rounded-2xl border p-3 ${group.certain ? 'border-red-200 bg-red-50/40' : 'border-amber-200 bg-amber-50/40'}`}>
                 <div className="flex items-center gap-2 mb-2">
-                  <Badge className={`text-[10px] rounded-md ${group.certain ? 'bg-red-100 text-red-700 border-red-200' : 'bg-amber-100 text-amber-700 border-amber-200'}`}>
+                  <Badge className={`text-[10px] sm:text-[10px] ${group.certain ? 'bg-red-100 text-red-700 border-red-200' : 'bg-amber-100 text-amber-700 border-amber-200'}`}>
                     {group.certain ? 'Doublon certain' : 'Doublon probable'}
                   </Badge>
                   <span className="text-xs text-slate-500">{group.items.length} fiches</span>
@@ -1119,7 +1020,7 @@ export default function Prospects() {
                 <div className="flex items-center gap-2 mb-2 sticky -top-1 bg-white/95 backdrop-blur py-1 z-10">
                   <UserCircle className="w-4 h-4 text-[#5A9BA3]" />
                   <h3 className="text-sm font-semibold text-slate-900">{commercial}</h3>
-                  <Badge className="bg-indigo-50 text-indigo-700 border-indigo-200 rounded-lg text-xs">{groups.length}</Badge>
+                  <Badge className="min-w-6 shrink-0 border-indigo-200 bg-indigo-50 px-1.5 text-indigo-700">{groups.length}</Badge>
                 </div>
                 <div className="space-y-3">
                   {groups.map((group) => {
@@ -1129,7 +1030,10 @@ export default function Prospects() {
                       <div key={`${commercial}-${group.key}`} className="rounded-2xl border border-indigo-200 bg-indigo-50/40 p-3">
                         <div className="flex flex-wrap gap-1.5 mb-2.5">
                           {group.variants.map((v) => (
-                            <Badge key={v.name} variant="outline" className="text-xs rounded-lg bg-white">{v.name} <span className="text-slate-400 ml-1">({v.count})</span></Badge>
+                            <Badge key={v.name} variant="outline" className="max-w-full bg-white">
+                              <span className="truncate">{v.name}</span>
+                              <span className="text-slate-400">({v.count})</span>
+                            </Badge>
                           ))}
                           <span className="text-xs text-slate-500 self-center ml-1">{total} prospects (chez {commercial})</span>
                         </div>
@@ -1179,9 +1083,9 @@ const ProspectRow = memo(function ProspectRow({ prospect: p, selected, onToggle 
       <td className="px-4 py-3"><div><p className="font-semibold text-slate-900 text-sm">{p.nom_societe}</p><p className="text-xs text-slate-400 lg:hidden">{p.categorie_metier}</p></div></td>
       <td className="px-4 py-3 text-sm text-slate-600 hidden md:table-cell">{p.nom_dirigeant}</td>
       <td className="px-4 py-3 text-sm text-slate-600 hidden lg:table-cell">{p.zone_geographique}</td>
-      <td className="px-4 py-3 hidden lg:table-cell"><Badge variant="outline" className="text-xs rounded-lg">{p.categorie_metier}</Badge></td>
-      <td className="px-4 py-3"><Badge className={`text-xs rounded-lg ${statusBadgeColors[p.statut_avancement] || 'bg-slate-100 text-slate-700'}`}>{p.statut_avancement}</Badge></td>
-      <td className="px-4 py-3 hidden sm:table-cell"><Badge className={`text-xs rounded-lg ${resultColors[p.statut_gagne_perdu] || 'bg-slate-100 text-slate-700'}`}>{p.statut_gagne_perdu}</Badge></td>
+      <td className="px-4 py-3 hidden lg:table-cell"><Badge variant="outline">{p.categorie_metier}</Badge></td>
+      <td className="px-4 py-3"><Badge className={`max-w-[11rem] ${statusBadgeColors[p.statut_avancement] || 'bg-slate-100 text-slate-700'}`}><span className="truncate">{p.statut_avancement}</span></Badge></td>
+      <td className="px-4 py-3 hidden sm:table-cell"><Badge className={`${resultColors[p.statut_gagne_perdu] || 'bg-slate-100 text-slate-700'}`}>{p.statut_gagne_perdu}</Badge></td>
       <td className="px-4 py-3 hidden md:table-cell"><div className="flex items-center gap-1 text-sm text-slate-600"><Phone className="w-3 h-3" />{p.nombre_appels || 0}</div></td>
       <td className="px-4 py-3 text-center" onClick={stop}><Link to={`/prospects/${p.id}`}><Button variant="ghost" size="sm" className="gap-1 text-[#5A9BA3] hover:text-[#4A8B93] hover:bg-teal-50 rounded-lg"><ExternalLink className="w-4 h-4" /><span className="hidden sm:inline">Voir</span></Button></Link></td>
     </tr>

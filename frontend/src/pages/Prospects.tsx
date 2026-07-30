@@ -961,7 +961,7 @@ export default function Prospects() {
             ) : duplicateGroups.map((group, gi) => (
               <div key={gi} className={`rounded-2xl border p-3 ${group.certain ? 'border-red-200 bg-red-50/40' : 'border-amber-200 bg-amber-50/40'}`}>
                 <div className="flex items-center gap-2 mb-2">
-                  <Badge className={`text-[10px] sm:text-[10px] ${group.certain ? 'bg-red-100 text-red-700 border-red-200' : 'bg-amber-100 text-amber-700 border-amber-200'}`}>
+                  <Badge className={`text-[10px] ${group.certain ? 'bg-red-100 text-red-700 border-red-200' : 'bg-amber-100 text-amber-700 border-amber-200'}`}>
                     {group.certain ? 'Doublon certain' : 'Doublon probable'}
                   </Badge>
                   <span className="text-xs text-slate-500">{group.items.length} fiches</span>

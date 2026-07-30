@@ -898,7 +898,7 @@ const ActionRow = memo(function ActionRow({ action: a, formatDate }: { action: C
           <div className="flex items-center gap-2">
             <span className="text-sm font-medium text-slate-900">{actionTypeLabels[a.action_type] || a.action_type}</span>
             {(a.action_type === 'appel' || a.action_type === 'relance') && (
-              <Badge className={`shrink-0 text-[10px] sm:text-[10px] ${a.appel_repondu ? 'bg-emerald-100 text-emerald-700 border-emerald-200' : 'bg-red-100 text-red-600 border-red-200'}`}>
+              <Badge className={`shrink-0 text-[10px] ${a.appel_repondu ? 'bg-emerald-100 text-emerald-700 border-emerald-200' : 'bg-red-100 text-red-600 border-red-200'}`}>
                 {a.appel_repondu ? 'Répondu' : 'Non répondu'}
               </Badge>
             )}

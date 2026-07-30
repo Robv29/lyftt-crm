@@ -766,7 +766,7 @@ export default function Dashboard() {
                     <div className="flex items-center gap-1.5 mb-1.5 px-0.5">
                       <UserCircle className="w-3.5 h-3.5 text-slate-400" />
                       <span className="text-xs font-bold text-slate-500 uppercase tracking-wide">{commercialName}</span>
-                      <Badge className="min-w-6 shrink-0 border-0 bg-slate-100 px-1.5 text-[10px] font-bold text-slate-500 sm:text-[10px]">{items.length}</Badge>
+                      <Badge className="min-w-6 shrink-0 border-0 bg-slate-100 px-1.5 text-[10px] font-bold text-slate-500">{items.length}</Badge>
                     </div>
                     <div className="space-y-2">
                       {items.map(({ p, overdue }) => <RelanceDateRow key={p.id} prospect={p} overdue={overdue} />)}
@@ -857,7 +857,7 @@ function CallbackRow({ prospect: p, overdue = false }: { prospect: Prospect; ove
           <p className="text-sm font-semibold text-slate-900 truncate group-hover:text-[#5A9BA3] transition-colors">{p.nom_societe}</p>
           <p className="text-xs text-slate-500 mt-0.5">{p.nom_dirigeant}</p>
         </div>
-        <Badge className={`shrink-0 text-[10px] sm:text-[10px] ${priorityColors[p.priorite] || 'bg-slate-100 text-slate-700'}`}>{p.priorite}</Badge>
+        <Badge className={`shrink-0 text-[10px] ${priorityColors[p.priorite] || 'bg-slate-100 text-slate-700'}`}>{p.priorite}</Badge>
       </div>
       <div className="mt-2 flex items-center gap-2">
         <span className="text-xs font-semibold text-orange-600">{daysAgo !== null ? `Il y a ${daysAgo} jour${daysAgo > 1 ? 's' : ''}` : '-'}</span>

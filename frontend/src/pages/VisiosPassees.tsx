@@ -327,7 +327,7 @@ function VisioCard({ prospect: p, busy, onOpen, onDemandeDocuments, onDocumentsR
             <p className="font-semibold text-slate-900 truncate">{p.nom_societe || 'Sans nom'}</p>
             {p.nom_dirigeant && <p className="text-xs text-slate-500 truncate flex items-center gap-1 mt-0.5"><User className="w-3 h-3" /> {p.nom_dirigeant}</p>}
           </div>
-          <Badge className="shrink-0 border-purple-200 bg-purple-100 text-[10px] font-bold text-purple-700 sm:text-[10px]">Visio</Badge>
+          <Badge className="shrink-0 border-purple-200 bg-purple-100 text-[10px] font-bold text-purple-700">Visio</Badge>
         </div>
 
         <div className="space-y-1 text-xs text-slate-500">

@@ -173,11 +173,11 @@ export default function Attributions() {
             {isAdmin ? 'Attribuez les villes/zones aux commerciaux' : 'Gérez vos attributions de villes/zones'}
           </p>
         </div>
-        <div className="flex items-center gap-2">
-          <Badge variant="outline" className="gap-1.5 py-1.5 px-3 rounded-xl">
+        <div className="flex flex-wrap items-center gap-2.5 sm:gap-3">
+          <Badge variant="outline" className="min-h-10 gap-2 px-3.5 py-2 rounded-full whitespace-nowrap">
             <MapPin className="w-3.5 h-3.5" /> {attributions.length} attribution(s)
           </Badge>
-          <Badge variant="outline" className="gap-1.5 py-1.5 px-3 text-amber-600 border-amber-200 bg-amber-50 rounded-xl">
+          <Badge variant="outline" className="min-h-10 gap-2 px-3.5 py-2 text-amber-600 border-amber-200 bg-amber-50 rounded-full whitespace-nowrap">
             <Building2 className="w-3.5 h-3.5" /> {unattributedCities.length} non attribuée(s)
           </Badge>
         </div>
@@ -237,7 +237,7 @@ export default function Attributions() {
       </div>
 
       {/* Attributions by user */}
-      <div className="grid gap-4">
+      <div className="grid gap-5">
         {commercialUsers
           .filter((u) => {
             if (!searchTerm) return true;
@@ -254,30 +254,42 @@ export default function Attributions() {
 
             return (
               <Card key={u.id} className={`border-0 shadow-sm rounded-2xl ${isOwnSection ? 'ring-1 ring-teal-200' : ''}`}>
-                <CardContent className="p-4">
-                  <div className="flex items-center gap-3 mb-3">
-                    <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${isOwnSection ? 'bg-gradient-to-br from-[#5A9BA3] to-[#6AABB4]' : 'bg-gradient-to-br from-teal-100 to-cyan-100'}`}>
+                <CardContent className="p-5 sm:p-6">
+                  <div className="flex items-center gap-4 mb-5">
+                    <div className={`w-10 h-10 shrink-0 rounded-xl flex items-center justify-center ${isOwnSection ? 'bg-gradient-to-br from-[#5A9BA3] to-[#6AABB4]' : 'bg-gradient-to-br from-teal-100 to-cyan-100'}`}>
                       <Users className={`w-4 h-4 ${isOwnSection ? 'text-white' : 'text-[#5A9BA3]'}`} />
                     </div>
-                    <div className="flex-1">
-                      <p className="font-semibold text-slate-900">
+                    <div className="min-w-0 flex-1">
+                      <p className="font-semibold text-slate-900 leading-tight">
                         {u.first_name ? `${u.first_name} ${u.last_name || ''}`.trim() : ''}
                         {isOwnSection ? <span className="text-xs text-[#5A9BA3] ml-2">(vous)</span> : null}
                       </p>
                     </div>
-                    <Badge variant="secondary" className="text-xs rounded-lg">{allUserAttrs.length} ville(s)</Badge>
+                    <Badge variant="secondary" className="shrink-0 rounded-full px-3 py-1.5 text-xs">
+                      {allUserAttrs.length} ville(s)
+                    </Badge>
                   </div>
                   {displayAttrs.length === 0 ? (
-                    <p className="text-sm text-slate-400 italic pl-12">Aucune ville attribuée</p>
+                    <p className="text-sm text-slate-400 italic sm:pl-14">Aucune ville attribuée</p>
                   ) : (
-                    <div className="flex flex-wrap gap-2 pl-12">
+                    <div className="flex flex-wrap items-center gap-x-3 gap-y-3 sm:pl-14">
                       {displayAttrs.map((attr) => (
-                        <Badge key={attr.id} variant="outline" className={`gap-1.5 py-1 px-2.5 bg-slate-50 transition-all rounded-lg ${canEdit ? 'hover:bg-red-50 hover:border-red-200 group' : ''}`}>
-                          <MapPin className={`w-3 h-3 ${canEdit ? 'text-slate-400 group-hover:text-red-400 transition-colors' : 'text-slate-400'}`} />
-                          <span className="text-sm">{attr.city}</span>
+                        <Badge
+                          key={attr.id}
+                          variant="outline"
+                          className={`min-h-10 max-w-full gap-2 rounded-full border-[#d7e2e4] bg-white px-3.5 py-2 shadow-[0_4px_14px_-12px_rgba(15,40,48,.45)] transition-all ${canEdit ? 'hover:border-red-200 hover:bg-red-50 group' : ''}`}
+                        >
+                          <MapPin className={`w-4 h-4 shrink-0 ${canEdit ? 'text-slate-400 group-hover:text-red-400 transition-colors' : 'text-slate-400'}`} />
+                          <span className="min-w-0 break-words text-sm font-medium leading-tight">{attr.city}</span>
                           {canEdit ? (
-                            <button onClick={() => handleRemove(attr)} className="ml-1 text-slate-300 hover:text-red-500 transition-colors" title="Supprimer">
-                              <Trash2 className="w-3 h-3" />
+                            <button
+                              type="button"
+                              onClick={() => handleRemove(attr)}
+                              className="ml-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-slate-300 transition-colors hover:bg-red-100 hover:text-red-500"
+                              title={`Supprimer ${attr.city}`}
+                              aria-label={`Supprimer l'attribution ${attr.city}`}
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
                             </button>
                           ) : null}
                         </Badge>
@@ -300,10 +312,10 @@ export default function Attributions() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-3">
               {unattributedCities.map((city) => (
-                <Badge key={city} variant="outline" className="py-1 px-2.5 bg-amber-50 border-amber-200 text-amber-700 rounded-lg">
-                  <MapPin className="w-3 h-3 mr-1" /> {city}
+                <Badge key={city} variant="outline" className="min-h-9 gap-2 rounded-full border-amber-200 bg-amber-50 px-3 py-2 text-amber-700">
+                  <MapPin className="w-3.5 h-3.5 shrink-0" /> {city}
                 </Badge>
               ))}
             </div>

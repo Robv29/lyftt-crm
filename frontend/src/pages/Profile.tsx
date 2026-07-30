@@ -212,6 +212,31 @@ const TROPHY_ART_INDEX: Record<string, number> = {
   special_goat: 4,
 };
 
+const TROPHY_ART_FRAMES: Record<
+  string,
+  { scale: number; translateX?: number; translateY?: number }
+> = {
+  closing_1: { scale: 1.08, translateY: 4 },
+  closing_25: { scale: 1.05, translateY: 3 },
+  closing_75: { scale: 1 },
+  closing_150: { scale: 0.92, translateY: -2 },
+  revenue_25: { scale: 1.12, translateY: 7 },
+  revenue_50: { scale: 1.1, translateY: 6 },
+  revenue_80: { scale: 1.06, translateY: 5 },
+  revenue_120: { scale: 1.01, translateY: 3 },
+  revenue_160: { scale: 0.97, translateY: 1 },
+  revenue_250: { scale: 0.9, translateY: -3 },
+  regularity_3: { scale: 1.12, translateY: 7 },
+  regularity_6: { scale: 1.08, translateY: 5 },
+  regularity_9: { scale: 1.01, translateY: 2 },
+  regularity_12: { scale: 0.9, translateY: -3 },
+  special_number_one: { scale: 1.18, translateY: 9 },
+  special_speed_runner: { scale: 1.12, translateY: 7 },
+  special_overdrive: { scale: 1.06, translateY: 5 },
+  special_recordman: { scale: 0.96 },
+  special_goat: { scale: 0.86, translateY: -4 },
+};
+
 const formatNumber = (value: number) =>
   new Intl.NumberFormat('fr-FR').format(Math.round(value));
 const formatEuro = (value: number) => `${formatNumber(value)} €`;
@@ -534,42 +559,47 @@ function Cup({ trophy }: { trophy: CommercialTrophy }) {
   const rarity = RARITY[trophy.rarity];
   const sheet = TROPHY_SHEETS[trophy.collection];
   const artIndex = TROPHY_ART_INDEX[trophy.code] ?? 0;
+  const frame = TROPHY_ART_FRAMES[trophy.code] ?? { scale: 1 };
   const cellRatio = sheet.ratio / sheet.count;
 
   return (
-    <div className="profile-trophy-stage relative flex h-28 w-[108px] shrink-0 items-center justify-center sm:h-44 sm:w-40">
+    <div className="profile-trophy-stage relative flex h-32 w-[112px] shrink-0 items-center justify-center sm:h-44 sm:w-40">
       <div
         className="profile-trophy-aura absolute left-1/2 top-[48%] h-[72%] w-[72%] -translate-x-1/2 -translate-y-1/2 rounded-full blur-2xl"
         style={{ background: trophy.unlocked ? rarity.glow : 'rgba(71,85,105,.13)' }}
       />
       <div
-        className={`profile-real-trophy relative h-full overflow-hidden rounded-[42%_42%_14%_14%] ${
+        className={`profile-real-trophy relative flex h-full w-full items-center justify-center ${
           trophy.unlocked
             ? 'brightness-105 contrast-110'
             : 'grayscale saturate-[.15] brightness-[.38] contrast-125'
         }`}
         style={{
-          aspectRatio: `${cellRatio}`,
           filter: trophy.unlocked
             ? `drop-shadow(0 18px 13px rgba(0,0,0,.62)) drop-shadow(0 0 12px ${rarity.glow})`
             : 'drop-shadow(0 16px 11px rgba(0,0,0,.55)) grayscale(1) saturate(.15) brightness(.38) contrast(1.25)',
-          WebkitMaskImage:
-            'linear-gradient(to bottom, transparent 0%, black 5%, black 92%, transparent 100%)',
-          maskImage:
-            'linear-gradient(to bottom, transparent 0%, black 5%, black 92%, transparent 100%)',
         }}
       >
-        <img
-          src={sheet.src}
-          alt=""
-          aria-hidden="true"
-          draggable={false}
-          className="absolute inset-y-0 h-full max-w-none select-none object-contain transition duration-700 group-hover:scale-[1.035]"
+        <div
+          className="relative h-[94%] overflow-hidden"
           style={{
-            width: `${sheet.count * 100}%`,
-            left: `-${artIndex * 100}%`,
+            aspectRatio: `${cellRatio}`,
+            transform: `translate(${frame.translateX ?? 0}px, ${frame.translateY ?? 0}px) scale(${frame.scale})`,
+            transformOrigin: '50% 88%',
           }}
-        />
+        >
+          <img
+            src={sheet.src}
+            alt=""
+            aria-hidden="true"
+            draggable={false}
+            className="absolute inset-y-0 h-full max-w-none select-none"
+            style={{
+              width: `${sheet.count * 100}%`,
+              left: `-${artIndex * 100}%`,
+            }}
+          />
+        </div>
       </div>
 
       {!trophy.unlocked && (
@@ -619,7 +649,7 @@ function TrophyCard({ trophy, index }: { trophy: CommercialTrophy; index: number
           <div className="pointer-events-none absolute inset-x-[14%] top-[5%] h-[42%] rounded-full border border-white/[0.045] bg-[radial-gradient(circle,rgba(255,255,255,.045),transparent_68%)]" />
           <div className="pointer-events-none absolute bottom-[42%] left-1/2 h-px w-[72%] -translate-x-1/2 bg-gradient-to-r from-transparent via-[#d6b35b]/25 to-transparent" />
 
-          <div className="relative grid h-full grid-cols-[108px_minmax(0,1fr)] items-center gap-3 px-3 py-4 text-left sm:flex sm:flex-col sm:px-5 sm:py-5 sm:text-center">
+          <div className="relative grid h-full grid-cols-[112px_minmax(0,1fr)] items-center gap-3 px-3 py-4 text-left sm:flex sm:flex-col sm:px-5 sm:py-5 sm:text-center">
             <Cup trophy={trophy} />
             <div className="flex min-w-0 flex-col sm:w-full sm:flex-1 sm:items-center">
               <div className="flex max-w-full items-center gap-2">

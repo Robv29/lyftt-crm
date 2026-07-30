@@ -266,6 +266,7 @@ export function useUpsertObjectifCA() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['objectifs_ca'] });
+      queryClient.invalidateQueries({ queryKey: ['trophy_profiles'] });
     },
   });
 }
@@ -295,6 +296,7 @@ export function useAddPaiement() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['paiements_clients'] });
+      queryClient.invalidateQueries({ queryKey: ['trophy_profiles'] });
     },
   });
 }
@@ -305,6 +307,7 @@ export function useDeletePaiement() {
     mutationFn: async (id: number) => client.entities.paiements_clients.delete({ id }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['paiements_clients'] });
+      queryClient.invalidateQueries({ queryKey: ['trophy_profiles'] });
     },
   });
 }
@@ -393,6 +396,11 @@ export function useInvalidateProspects() {
   const queryClient = useQueryClient();
   return () => {
     queryClient.invalidateQueries({ queryKey: queryKeys.prospects });
+    // Une signature, un changement de statut ou de montant potentiel peut
+    // debloquer un trophee (cote base, calcule en temps reel par trigger) :
+    // on force le rafraichissement du profil trophees pour que ca se voie
+    // immediatement sur la page "Mon profil", sans attendre le staleTime.
+    queryClient.invalidateQueries({ queryKey: ['trophy_profiles'] });
   };
 }
 

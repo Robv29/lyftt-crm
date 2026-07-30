@@ -35,6 +35,9 @@ export default function Layout({ children }: LayoutProps) {
   const { user, userRole, logout, login, loading, isAdmin, accessDenied } = useAuth();
   const location = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const isImmersivePage =
+    location.pathname.startsWith('/profil') ||
+    location.pathname.startsWith('/performance-ca');
 
   if (loading) {
     return (
@@ -216,8 +219,22 @@ export default function Layout({ children }: LayoutProps) {
           </div>
         </header>
 
-        <main className="crm-workspace flex-1 p-4 sm:p-6 lg:p-8 overflow-auto smooth-scroll">
-          <div className="animate-page-enter">
+        <main
+          className={`crm-workspace relative flex-1 overflow-auto p-4 sm:p-6 lg:p-8 smooth-scroll ${
+            isImmersivePage ? 'crm-workspace--immersive' : 'crm-workspace--standard'
+          }`}
+        >
+          <div className="crm-workspace-details" aria-hidden="true">
+            <span className="crm-workspace-rule" />
+            <span className="crm-workspace-corner crm-workspace-corner--top" />
+            <span className="crm-workspace-corner crm-workspace-corner--bottom" />
+            <span className="crm-workspace-diamonds">
+              <i />
+              <i />
+              <i />
+            </span>
+          </div>
+          <div className="crm-page-content relative z-[1] animate-page-enter">
             {children}
           </div>
         </main>

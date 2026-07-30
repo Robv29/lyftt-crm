@@ -549,45 +549,16 @@ export default function Dashboard() {
         </Card>
       )}
 
-      {/* Commercial info banner */}
-      {selectedCommercial !== 'global' && (
-        <div className="bg-gradient-to-r from-teal-50 to-cyan-50 rounded-2xl p-4 border border-teal-100">
-          <div className="flex flex-wrap items-center gap-4">
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 bg-gradient-to-br from-[#5A9BA3] to-[#6AABB4] rounded-lg flex items-center justify-center">
-                <UserCircle className="w-4 h-4 text-white" />
-              </div>
-              <span className="font-semibold text-teal-900">{selectedCommercial}</span>
-            </div>
-            <div className="text-sm text-teal-700">
-              {commercialCities && commercialCities.length > 0 ? (
-                <span className="flex flex-wrap items-center gap-1">
-                  Zones :
-                  {commercialCities.map((city) => (
-                    <Badge key={city} variant="secondary" className="bg-teal-100/80 text-teal-700 border-0 text-xs">{city}</Badge>
-                  ))}
-                </span>
-              ) : (
-                <span className="text-teal-400 italic">Aucune zone attribuée</span>
-              )}
-            </div>
-            <div className="ml-auto text-sm text-teal-600 font-semibold">
-              {prospects.length} prospect{prospects.length > 1 ? 's' : ''}
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Conseil du jour : appels/jour recommandés pour rattraper l'objectif,
           basé sur le taux de transformation annuel réel du commercial. */}
       {selectedCommercial !== 'global' && conseilAppels && (
         <Card className="border-0 shadow-sm rounded-2xl bg-gradient-to-br from-orange-50 to-amber-50">
           <CardContent className="p-5">
-            <div className="flex items-start gap-3">
+            <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-xl bg-orange-100 flex items-center justify-center shrink-0">
                 <PhoneCall className="w-5 h-5 text-orange-600" />
               </div>
-              <div className="min-w-0">
+              <div className="min-w-0 flex-1">
                 <p className="text-sm font-semibold text-slate-800">Conseil du jour</p>
                 {conseilAppels.state === 'no_objectif' && (
                   <p className="text-sm text-slate-500 mt-0.5">
@@ -621,24 +592,28 @@ export default function Dashboard() {
       {/* General KPIs */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <Card className="border-0 shadow-sm rounded-2xl">
-          <CardContent className="p-6">
-            <p className="text-sm font-medium text-slate-500 mb-2">Prospects actifs</p>
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 shrink-0 bg-teal-50 rounded-xl flex items-center justify-center">
-                <TrendingUp className="w-5 h-5 text-[#5A9BA3]" />
+          <CardContent className="p-5 sm:p-6">
+            <div className="flex items-center gap-4">
+              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-teal-50">
+                <TrendingUp className="w-6 h-6 text-[#5A9BA3]" />
               </div>
-              <p className="text-3xl font-bold text-slate-900 tracking-tight leading-none">{activeProspects}</p>
+              <div className="flex min-h-12 min-w-0 flex-col justify-center">
+                <p className="text-2xl font-bold leading-none text-slate-900">{activeProspects}</p>
+                <p className="mt-1.5 truncate text-sm leading-5 text-slate-500">Prospects actifs</p>
+              </div>
             </div>
           </CardContent>
         </Card>
         <Card className="border-0 shadow-sm rounded-2xl">
-          <CardContent className="p-6">
-            <p className="text-sm font-medium text-slate-500 mb-2">Deals gagnés</p>
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 shrink-0 bg-emerald-50 rounded-xl flex items-center justify-center">
-                <FileSignature className="w-5 h-5 text-emerald-600" />
+          <CardContent className="p-5 sm:p-6">
+            <div className="flex items-center gap-4">
+              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-emerald-50">
+                <FileSignature className="w-6 h-6 text-emerald-600" />
               </div>
-              <p className="text-3xl font-bold text-emerald-600 tracking-tight leading-none">{wonDeals}</p>
+              <div className="flex min-h-12 min-w-0 flex-col justify-center">
+                <p className="text-2xl font-bold leading-none text-emerald-600">{wonDeals}</p>
+                <p className="mt-1.5 truncate text-sm leading-5 text-slate-500">Deals gagnés</p>
+              </div>
             </div>
           </CardContent>
         </Card>

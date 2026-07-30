@@ -899,22 +899,60 @@ export default function PerformanceCA() {
             >
               <CalendarDays className="h-4 w-4 shrink-0 text-[#d6b35b]" />
               <Select value={String(selectedMonthIdx)} onValueChange={setMonthPart}>
-                <SelectTrigger className={`h-8 w-[104px] rounded-none border-0 px-2 text-xs shadow-none ${isDark ? 'text-[#f4e6bc]' : ''}`}>
+                <SelectTrigger
+                  aria-label="Choisir le mois"
+                  className={`h-8 w-[104px] rounded-none border-0 px-2 text-xs shadow-none transition-colors [&>svg]:opacity-100 ${
+                    isDark
+                      ? '!bg-transparent !text-[#f4e6bc] hover:!bg-white/[0.06] [&>svg]:text-[#d6b35b]'
+                      : '!bg-transparent !text-slate-800 hover:!bg-slate-900/[0.04] [&>svg]:text-[#8a6a2f]'
+                  }`}
+                >
                   <SelectValue />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent
+                  className={
+                    isDark
+                      ? 'border-[#b99046]/35 bg-[#050914] text-[#f4e6bc]'
+                      : 'border-[#b99046]/25 bg-white text-slate-900'
+                  }
+                >
                   {MONTH_NAMES.map((m, i) => (
-                    <SelectItem key={m} value={String(i)}>{m}</SelectItem>
+                    <SelectItem
+                      key={m}
+                      value={String(i)}
+                      className={isDark ? 'focus:bg-[#b99046]/20 focus:text-[#fff4d6]' : ''}
+                    >
+                      {m}
+                    </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
               <Select value={selectedYear} onValueChange={setYearPart}>
-                <SelectTrigger className={`h-8 w-[68px] rounded-none border-0 px-2 text-xs shadow-none ${isDark ? 'text-[#f4e6bc]' : ''}`}>
+                <SelectTrigger
+                  aria-label="Choisir l’année"
+                  className={`h-8 w-[68px] rounded-none border-0 px-2 text-xs shadow-none transition-colors [&>svg]:opacity-100 ${
+                    isDark
+                      ? '!bg-transparent !text-[#f4e6bc] hover:!bg-white/[0.06] [&>svg]:text-[#d6b35b]'
+                      : '!bg-transparent !text-slate-800 hover:!bg-slate-900/[0.04] [&>svg]:text-[#8a6a2f]'
+                  }`}
+                >
                   <SelectValue />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent
+                  className={
+                    isDark
+                      ? 'border-[#b99046]/35 bg-[#050914] text-[#f4e6bc]'
+                      : 'border-[#b99046]/25 bg-white text-slate-900'
+                  }
+                >
                   {yearsOptions.map((y) => (
-                    <SelectItem key={y} value={String(y)}>{y}</SelectItem>
+                    <SelectItem
+                      key={y}
+                      value={String(y)}
+                      className={isDark ? 'focus:bg-[#b99046]/20 focus:text-[#fff4d6]' : ''}
+                    >
+                      {y}
+                    </SelectItem>
                   ))}
                 </SelectContent>
               </Select>

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { useTrophyProfiles } from '../hooks/use-prospects';
 import {
   LayoutDashboard,
   Users,
@@ -21,6 +22,17 @@ interface LayoutProps {
   children: React.ReactNode;
 }
 
+const CHAMPION_SPRITE = '/assets/lyftt-champions-v1.jpg';
+
+const CHAMPION_POSITIONS: Record<string, string> = {
+  summit: '0% 0%',
+  navigator: '50% 0%',
+  closer: '100% 0%',
+  vanguard: '0% 100%',
+  strategist: '50% 100%',
+  ace: '100% 100%',
+};
+
 const navItems = [
   { path: '/', label: 'Tableau de bord', icon: LayoutDashboard, adminOnly: false },
   { path: '/prospects', label: 'Prospects', icon: Users, adminOnly: false },
@@ -30,6 +42,36 @@ const navItems = [
   { path: '/profil', label: 'Mon profil', icon: User, adminOnly: false },
   { path: '/admin/users', label: 'Gestion utilisateurs', icon: UserCog, adminOnly: true },
 ];
+
+function SidebarHero({ userRoleId }: { userRoleId: number }) {
+  const { data } = useTrophyProfiles();
+  const avatarKey = data?.profiles.find((profile) => profile.userRoleId === userRoleId)?.avatarKey;
+  const backgroundPosition = avatarKey ? CHAMPION_POSITIONS[avatarKey] : null;
+
+  return (
+    <div className="relative h-11 w-11 shrink-0 overflow-hidden rounded-xl border border-[#d6b35b]/35 bg-[#0b2630] shadow-[0_6px_18px_rgba(0,0,0,.28)]">
+      {backgroundPosition ? (
+        <>
+          <div
+            className="absolute inset-0 scale-[1.03] bg-cover bg-no-repeat"
+            style={{
+              backgroundImage: `url(${CHAMPION_SPRITE})`,
+              backgroundPosition,
+              backgroundSize: '300% 200%',
+            }}
+            aria-hidden="true"
+          />
+          <div className="absolute inset-0 bg-gradient-to-t from-[#07151e]/65 via-transparent to-white/[0.04]" />
+          <span className="absolute inset-[3px] rounded-[8px] border border-white/10" />
+        </>
+      ) : (
+        <div className="flex h-full w-full items-center justify-center bg-[#5A9BA3]">
+          <User className="h-4 w-4 text-white" />
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function Layout({ children }: LayoutProps) {
   const { user, userRole, logout, login, loading, isAdmin, accessDenied } = useAuth();
@@ -177,9 +219,13 @@ export default function Layout({ children }: LayoutProps) {
         {/* User section */}
         <div className="p-3 border-t border-white/[0.07] mt-auto">
           <div className="flex items-center gap-3 px-3 py-2.5 mb-1 rounded-lg bg-white/[0.045] ring-1 ring-inset ring-white/[0.05]">
-            <div className="w-9 h-9 bg-[#5A9BA3] rounded-lg flex items-center justify-center ring-1 ring-white/10">
-              <User className="w-4 h-4 text-white" />
-            </div>
+            {userRole ? (
+              <SidebarHero userRoleId={userRole.id} />
+            ) : (
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#5A9BA3] ring-1 ring-white/10">
+                <User className="h-4 w-4 text-white" />
+              </div>
+            )}
             <div className="flex-1 min-w-0">
               <p className="text-sm font-medium text-white truncate">
                 {userRole?.first_name

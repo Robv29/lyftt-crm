@@ -42,6 +42,22 @@ dessous est maintenant Supabase.
 
 ---
 
+## Migration 0006 — Profils commerciaux et trophées
+
+Le fichier `supabase/migrations/0006_commercial_trophies.sql` ajoute :
+
+- le personnage sélectionnable du profil commercial ;
+- 4 trophées Closing, 6 trophées de CA encaissé et 4 trophées de régularité ;
+- les trophées spéciaux persistants ;
+- le Recordman unique et transférable, avec historique des détenteurs ;
+- les fonctions de calcul et de lecture utilisées par la page `/profil`.
+
+Les trophées de CA encaissé appliquent le même plafonnement par dossier que
+la page Performance CA. Les policies RLS existantes de `prospects` ne sont
+pas modifiées par cette migration.
+
+---
+
 ## Étape 2 — Réglages Auth Supabase
 
 Dans **Authentication → Sign In / Providers** :

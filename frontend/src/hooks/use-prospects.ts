@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { client } from '../lib/api';
+import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 
 export interface Prospect {
@@ -100,6 +101,47 @@ export interface RegisteredUser {
   role: string;
   is_active: boolean;
   taux_commission?: number | null;
+}
+
+export type TrophyCollection = 'closing' | 'revenue' | 'regularity' | 'special';
+export type TrophyRarity = 'bronze' | 'silver' | 'gold' | 'epic' | 'legendary' | 'mythic';
+
+export interface CommercialTrophy {
+  code: string;
+  collection: TrophyCollection;
+  name: string;
+  description: string;
+  rarity: TrophyRarity;
+  threshold: number;
+  sortOrder: number;
+  dynamic: boolean;
+  unlocked: boolean;
+  unlockedAt: string | null;
+  progress: number;
+  record: { amount: number; month: string; since: string } | null;
+}
+
+export interface TrophyProfile {
+  userRoleId: number;
+  firstName: string | null;
+  lastName: string | null;
+  avatarKey: string;
+  trophies: CommercialTrophy[];
+}
+
+export interface RecordmanHistoryEntry {
+  userRoleId: number;
+  firstName: string | null;
+  lastName: string | null;
+  amount: number;
+  month: string;
+  acquiredAt: string;
+  relinquishedAt: string | null;
+}
+
+export interface TrophyProfilesResponse {
+  profiles: TrophyProfile[];
+  recordHistory: RecordmanHistoryEntry[];
 }
 
 export interface CityAttribution {
@@ -284,6 +326,30 @@ export function useRegisteredUsers() {
     },
     staleTime: 5 * 60 * 1000,
     gcTime: 15 * 60 * 1000,
+  });
+}
+
+export function useTrophyProfiles() {
+  return useQuery({
+    queryKey: ['trophy_profiles'] as const,
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc('get_trophy_profiles');
+      if (error) throw error;
+      return data as TrophyProfilesResponse;
+    },
+    staleTime: 60 * 1000,
+  });
+}
+
+export function useSetMyAvatar() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (avatarKey: string) => {
+      const { data, error } = await supabase.rpc('set_my_avatar', { p_avatar_key: avatarKey });
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['trophy_profiles'] }),
   });
 }
 

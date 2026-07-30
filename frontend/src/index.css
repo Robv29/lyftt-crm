@@ -109,7 +109,95 @@
     background-color: #f4f7f7;
     background-image:
       radial-gradient(circle at 96% 2%, rgba(90, 155, 163, 0.06), transparent 26rem),
-      radial-gradient(circle at 2% 98%, rgba(185, 144, 70, 0.035), transparent 24rem);
+      radial-gradient(circle at 2% 98%, rgba(185, 144, 70, 0.035), transparent 24rem),
+      linear-gradient(rgba(90, 155, 163, 0.018) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(90, 155, 163, 0.018) 1px, transparent 1px);
+    background-size: auto, auto, 34px 34px, 34px 34px;
+  }
+
+  .crm-workspace-details {
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    overflow: hidden;
+    pointer-events: none;
+  }
+
+  .crm-workspace-rule {
+    position: absolute;
+    inset: 0 4% auto;
+    height: 1px;
+    background: linear-gradient(
+      90deg,
+      transparent,
+      rgba(90, 155, 163, 0.42) 22%,
+      rgba(185, 144, 70, 0.3) 78%,
+      transparent
+    );
+  }
+
+  .crm-workspace-corner {
+    position: absolute;
+    width: 84px;
+    height: 84px;
+    opacity: 0.18;
+  }
+
+  .crm-workspace-corner--top {
+    right: 18px;
+    top: 18px;
+    border-right: 1px solid #b99046;
+    border-top: 1px solid #b99046;
+  }
+
+  .crm-workspace-corner--bottom {
+    bottom: 18px;
+    left: 18px;
+    border-bottom: 1px solid #6aabb4;
+    border-left: 1px solid #6aabb4;
+  }
+
+  .crm-workspace-diamonds {
+    position: absolute;
+    right: 32px;
+    top: 30px;
+    display: flex;
+    gap: 9px;
+    opacity: 0.24;
+  }
+
+  .crm-workspace-diamonds i {
+    display: block;
+    width: 6px;
+    height: 6px;
+    rotate: 45deg;
+    border: 1px solid #b99046;
+  }
+
+  .crm-workspace-diamonds i:nth-child(2) {
+    border-color: #6aabb4;
+    background: rgba(90, 155, 163, 0.12);
+  }
+
+  .crm-workspace--standard .crm-page-content h1::before {
+    content: '';
+    display: inline-block;
+    width: 7px;
+    height: 7px;
+    margin-right: 12px;
+    translate: 0 -2px;
+    rotate: 45deg;
+    border: 1px solid rgba(185, 144, 70, 0.72);
+    background: rgba(106, 171, 180, 0.12);
+    box-shadow: 0 0 0 3px rgba(185, 144, 70, 0.045);
+  }
+
+  .crm-workspace--standard tbody tr {
+    transition: background-color 180ms ease, box-shadow 180ms ease;
+  }
+
+  .crm-workspace--standard tbody tr:hover {
+    box-shadow: inset 2px 0 rgba(90, 155, 163, 0.5);
   }
 
   .crm-workspace h1 {
@@ -120,6 +208,29 @@
   .crm-workspace h2,
   .crm-workspace h3 {
     color: #1a3640;
+  }
+
+  @media (max-width: 640px) {
+    .crm-workspace-corner {
+      width: 52px;
+      height: 52px;
+    }
+
+    .crm-workspace-corner--top {
+      right: 10px;
+      top: 10px;
+    }
+
+    .crm-workspace-corner--bottom,
+    .crm-workspace-diamonds {
+      display: none;
+    }
+
+    .crm-workspace--standard .crm-page-content h1::before {
+      width: 6px;
+      height: 6px;
+      margin-right: 9px;
+    }
   }
 }
 
@@ -387,6 +498,11 @@
     .profile-trophy-aura,
     .profile-cup-specular,
     .profile-trophy-stage::after {
+      transition: none !important;
+    }
+
+    .crm-workspace--standard tbody tr,
+    [data-slot='card'] {
       transition: none !important;
     }
   }

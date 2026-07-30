@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import {
   Check,
   ChevronRight,
@@ -12,7 +12,6 @@ import {
   Star,
   Swords,
   Trophy,
-  X,
   Zap,
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
@@ -26,6 +25,14 @@ import {
 import ErrorState from '../components/ErrorState';
 import LoadingSpinner from '../components/LoadingSpinner';
 import { usePersistentState } from '../hooks/use-persistent-state';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { toast } from 'sonner';
 
@@ -363,135 +370,73 @@ function ChampionFrame({
 
 function AvatarSelector({
   activeKey,
-  onSelect,
+  saving,
+  onConfirm,
   onClose,
 }: {
   activeKey: string;
-  onSelect: (key: string) => void;
+  saving: boolean;
+  onConfirm: (key: string) => Promise<void>;
   onClose: () => void;
 }) {
-  const activeAvatar = AVATARS.find((avatar) => avatar.key === activeKey) ?? AVATARS[0];
+  const [selectedKey, setSelectedKey] = useState(activeKey);
+  const selectedAvatar =
+    AVATARS.find((avatar) => avatar.key === selectedKey) ?? AVATARS[0];
 
-  useEffect(() => {
-    const previousOverflow = document.body.style.overflow;
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose();
-    };
-
-    document.body.style.overflow = 'hidden';
-    window.addEventListener('keydown', handleKeyDown);
-
-    return () => {
-      document.body.style.overflow = previousOverflow;
-      window.removeEventListener('keydown', handleKeyDown);
-    };
-  }, [onClose]);
+  const confirmSelection = async () => {
+    if (selectedKey === activeKey) {
+      onClose();
+      return;
+    }
+    await onConfirm(selectedKey);
+  };
 
   return (
-    <div
-      className="fixed inset-0 z-[100] flex items-end justify-center bg-[#01040a]/90 backdrop-blur-md sm:items-center sm:p-5"
-      role="dialog"
-      aria-modal="true"
-      aria-label="Sélection du héros"
-    >
-      <button
-        type="button"
-        onClick={onClose}
-        className="absolute inset-0 cursor-default"
-        aria-label="Fermer la sélection"
-      />
-      <div className="profile-reveal relative flex max-h-[94dvh] w-full flex-col overflow-hidden border-x border-t border-[#b99046]/55 bg-[#030711]/[0.99] shadow-[0_35px_110px_rgba(0,0,0,.88)] sm:max-h-[min(900px,92dvh)] sm:w-[calc(100%-2rem)] sm:max-w-[940px] sm:border sm:[clip-path:polygon(2%_0,98%_0,100%_4%,100%_96%,98%_100%,2%_100%,0_96%,0_4%)]">
-        <div className="pointer-events-none absolute inset-x-[8%] top-0 z-20 h-px bg-gradient-to-r from-transparent via-[#f1d488] to-transparent" />
-        <div className="pointer-events-none absolute left-3 top-3 z-20 h-8 w-8 border-l border-t border-[#d6b35b]/50 sm:left-5 sm:top-5 sm:h-12 sm:w-12" />
-        <div className="pointer-events-none absolute bottom-3 right-3 z-20 h-8 w-8 border-b border-r border-[#5A9BA3]/45 sm:bottom-5 sm:right-5 sm:h-12 sm:w-12" />
-
-        <header className="relative z-10 shrink-0 border-b border-[#b99046]/20 bg-[#030711]/95 px-4 py-4 pr-16 backdrop-blur-xl sm:px-7 sm:py-5 sm:pr-20">
-          <div className="flex min-w-0 items-center gap-3">
-            <span className="flex h-9 w-9 shrink-0 rotate-45 items-center justify-center border border-[#b99046]/55 bg-[#07101d] text-[#f1d488]">
-              <Crown className="h-4 w-4 -rotate-45" />
+    <Dialog open onOpenChange={(open) => !open && !saving && onClose()}>
+      <DialogContent className="flex max-h-[calc(100dvh-1.5rem)] w-[calc(100%-1.5rem)] max-w-2xl flex-col gap-0 overflow-hidden rounded-2xl border-[#b99046]/35 bg-[#07101d] p-0 text-white shadow-[0_28px_90px_rgba(0,0,0,.72)] [&>button]:right-4 [&>button]:top-4 [&>button]:z-20 [&>button]:rounded-lg [&>button]:border [&>button]:border-white/10 [&>button]:bg-white/5 [&>button]:p-2 [&>button]:text-white [&>button]:opacity-80 hover:[&>button]:opacity-100">
+        <DialogHeader className="shrink-0 border-b border-white/10 px-5 py-5 pr-16 text-left sm:px-6">
+          <DialogTitle className="flex items-center gap-3 font-display text-lg font-bold uppercase tracking-[0.06em] text-[#f4e6bc] sm:text-xl">
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-[#b99046]/40 bg-[#b99046]/10">
+              <Crown className="h-5 w-5 text-[#f1d488]" />
             </span>
-            <div className="min-w-0">
-              <p className="font-display text-[8px] font-bold uppercase tracking-[0.24em] text-[#d6b35b]/70 sm:text-[9px] sm:tracking-[0.3em]">
-                Galerie des champions
-              </p>
-              <h2 className="mt-1 truncate font-display text-base font-bold uppercase tracking-[0.055em] text-[#f4e6bc] sm:text-xl">
-                Choisissez votre héros
-              </h2>
-            </div>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="absolute right-3 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center border border-[#b99046]/35 bg-[#07101d] text-[#f1d488] transition hover:border-[#f1d488] hover:bg-[#101b2a] sm:right-6"
-            aria-label="Fermer"
-          >
-            <X className="h-5 w-5" />
-          </button>
-        </header>
+            Choisir un héros
+          </DialogTitle>
+          <DialogDescription className="pt-1 text-sm text-white/50">
+            Sélectionnez un personnage, puis confirmez votre choix.
+          </DialogDescription>
+        </DialogHeader>
 
-        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 py-4 pb-[max(1rem,env(safe-area-inset-bottom))] [scrollbar-color:rgba(185,144,70,.45)_rgba(255,255,255,.04)] sm:px-6 sm:py-6">
-          <div className="mb-4 flex items-center justify-between gap-3 border border-[#b99046]/18 bg-[#07101d]/60 px-3 py-2.5 sm:px-4">
-            <div className="flex min-w-0 items-center gap-3">
-              <ChampionArt
-                avatar={activeAvatar}
-                overlay={false}
-                className="h-10 w-10 shrink-0 border border-[#b99046]/30"
-              />
-              <div className="min-w-0">
-                <p className="text-[9px] font-bold uppercase tracking-[0.16em] text-white/35">
-                  Héros actuel
-                </p>
-                <p className="truncate font-display text-[10px] font-bold uppercase tracking-[0.08em] text-[#f4e6bc] sm:text-xs">
-                  {activeAvatar.name}
-                </p>
-              </div>
-            </div>
-            <span className="hidden text-right text-[10px] leading-4 text-white/38 sm:block">
-              Touchez un portrait pour l’adopter
-            </span>
-          </div>
-
-          <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 sm:gap-4">
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-4 sm:p-6">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4">
             {AVATARS.map((avatar) => {
-              const active = activeKey === avatar.key;
+              const selected = selectedKey === avatar.key;
               return (
                 <button
                   key={avatar.key}
                   type="button"
-                  onClick={() => onSelect(avatar.key)}
-                  aria-pressed={active}
-                  className={`group relative min-w-0 overflow-hidden border p-[3px] text-left transition duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#f1d488] ${
-                    active
-                      ? 'border-[#f1d488] bg-[#d6b35b]/12 shadow-[0_0_32px_rgba(214,179,91,.16)]'
-                      : 'border-white/10 bg-white/[0.025] hover:-translate-y-1 hover:border-[#6AABB4]/65 hover:shadow-[0_18px_40px_rgba(0,0,0,.35)]'
+                  onClick={() => setSelectedKey(avatar.key)}
+                  aria-pressed={selected}
+                  className={`group relative min-w-0 overflow-hidden rounded-xl border-2 bg-[#030711] text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#f1d488] ${
+                    selected
+                      ? 'border-[#f1d488] shadow-[0_0_24px_rgba(214,179,91,.2)]'
+                      : 'border-white/10 hover:border-[#6AABB4]/60'
                   }`}
                 >
-                  <div className="relative overflow-hidden bg-[#07101d]">
-                    <ChampionArt
-                      avatar={avatar}
-                      className="aspect-[4/5] w-full transition duration-700 group-hover:scale-[1.045]"
-                    />
-                    <div className="pointer-events-none absolute inset-x-0 bottom-0 h-1/2 bg-gradient-to-t from-[#02050c] via-[#02050c]/72 to-transparent" />
-                    <div className="absolute inset-x-0 bottom-0 p-2.5 sm:p-4">
-                      <p className="break-words font-display text-[9px] font-bold uppercase leading-4 tracking-[0.045em] text-[#f4e6bc] sm:text-[11px] sm:leading-5 sm:tracking-[0.06em]">
-                        {avatar.name}
-                      </p>
-                      <p className="mt-1 line-clamp-2 text-[8px] leading-3.5 text-white/45 sm:text-[9px] sm:leading-4">
-                        {avatar.role}
-                      </p>
-                    </div>
+                  <ChampionArt
+                    avatar={avatar}
+                    className="aspect-[4/5] w-full transition duration-500 group-hover:scale-[1.025]"
+                  />
+                  <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-[#02050c] via-[#02050c]/95 to-transparent px-3 pb-3 pt-12">
+                    <p className="line-clamp-2 font-display text-[10px] font-bold uppercase leading-4 tracking-[0.04em] text-[#f4e6bc] sm:text-xs">
+                      {avatar.name}
+                    </p>
+                    <p className="mt-1 truncate text-[9px] text-white/45 sm:text-[10px]">
+                      {avatar.role}
+                    </p>
                   </div>
-
-                  <span className={`absolute left-2 top-2 h-5 w-5 border-l border-t transition sm:h-7 sm:w-7 ${
-                    active ? 'border-[#f1d488]' : 'border-white/18 group-hover:border-[#6AABB4]/75'
-                  }`} />
-                  <span className={`absolute bottom-2 right-2 h-5 w-5 border-b border-r transition sm:h-7 sm:w-7 ${
-                    active ? 'border-[#f1d488]' : 'border-white/18 group-hover:border-[#6AABB4]/75'
-                  }`} />
-
-                  {active && (
-                    <span className="absolute right-2 top-2 flex h-8 w-8 rotate-45 items-center justify-center border border-[#f1d488]/75 bg-[#050913]/92 text-[#f1d488] shadow-[0_0_20px_rgba(214,179,91,.28)]">
-                      <Check className="h-4 w-4 -rotate-45" />
+                  {selected && (
+                    <span className="absolute right-2 top-2 flex h-8 w-8 items-center justify-center rounded-full border border-[#f1d488]/70 bg-[#07101d]/95 text-[#f1d488] shadow-lg">
+                      <Check className="h-4 w-4" />
                     </span>
                   )}
                 </button>
@@ -499,8 +444,48 @@ function AvatarSelector({
             })}
           </div>
         </div>
-      </div>
-    </div>
+
+        <DialogFooter className="shrink-0 gap-3 border-t border-white/10 bg-[#030711]/70 px-4 py-4 sm:items-center sm:justify-between sm:px-6">
+          <div className="hidden min-w-0 items-center gap-3 sm:flex">
+            <ChampionArt
+              avatar={selectedAvatar}
+              overlay={false}
+              className="h-11 w-11 shrink-0 rounded-lg border border-white/10"
+            />
+            <div className="min-w-0 text-left">
+              <p className="text-[9px] font-bold uppercase tracking-[0.14em] text-white/35">
+                Votre sélection
+              </p>
+              <p className="truncate text-sm font-semibold text-[#f4e6bc]">
+                {selectedAvatar.name}
+              </p>
+            </div>
+          </div>
+          <div className="flex w-full flex-col-reverse gap-2 min-[420px]:flex-row sm:w-auto">
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={saving}
+              className="h-11 rounded-xl border border-white/10 px-5 text-sm font-semibold text-white/70 transition hover:bg-white/5 hover:text-white disabled:opacity-50"
+            >
+              Annuler
+            </button>
+            <button
+              type="button"
+              onClick={confirmSelection}
+              disabled={saving}
+              className="h-11 rounded-xl bg-[#d6b35b] px-5 text-sm font-bold text-[#07101d] transition hover:bg-[#f1d488] disabled:cursor-wait disabled:opacity-60"
+            >
+              {saving
+                ? 'Enregistrement…'
+                : selectedKey === activeKey
+                  ? 'Conserver ce héros'
+                  : 'Choisir ce héros'}
+            </button>
+          </div>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -921,7 +906,8 @@ export default function Profile() {
         {avatarOpen && isOwnProfile && (
           <AvatarSelector
             activeKey={activeProfile.avatarKey}
-            onSelect={changeAvatar}
+            saving={setAvatar.isPending}
+            onConfirm={changeAvatar}
             onClose={() => setAvatarOpen(false)}
           />
         )}

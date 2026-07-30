@@ -164,82 +164,52 @@ const RARITY: Record<
   },
 };
 
-const TROPHY_MATERIALS: Record<
-  TrophyRarity,
-  {
-    light: string;
-    mid: string;
-    dark: string;
-    edge: string;
-    base: string;
-    plaque: string;
-    jewel: string;
-  }
+const TROPHY_SHEETS: Record<
+  TrophyCollection,
+  { src: string; count: number; ratio: number }
 > = {
-  bronze: {
-    light: '#f2b17d',
-    mid: '#a95732',
-    dark: '#3b1a15',
-    edge: '#ffd0a1',
-    base: '#24120f',
-    plaque: '#bd6b40',
-    jewel: '#ef8c4b',
+  closing: {
+    src: '/assets/trophies-closing.jpg',
+    count: 4,
+    ratio: 1200 / 600,
   },
-  silver: {
-    light: '#ffffff',
-    mid: '#a7bac8',
-    dark: '#394957',
-    edge: '#eaf7ff',
-    base: '#202b36',
-    plaque: '#c7d6df',
-    jewel: '#8ed8ef',
+  revenue: {
+    src: '/assets/trophies-revenue.jpg',
+    count: 6,
+    ratio: 1200 / 589,
   },
-  gold: {
-    light: '#fff4ad',
-    mid: '#d79b2f',
-    dark: '#624016',
-    edge: '#fff7c6',
-    base: '#2d210e',
-    plaque: '#e8b84f',
-    jewel: '#f8db76',
+  regularity: {
+    src: '/assets/trophies-regularity.jpg',
+    count: 4,
+    ratio: 1100 / 600,
   },
-  epic: {
-    light: '#f7e9ff',
-    mid: '#a86fe3',
-    dark: '#392354',
-    edge: '#f4d6ff',
-    base: '#21152d',
-    plaque: '#c396ed',
-    jewel: '#c26dff',
-  },
-  legendary: {
-    light: '#ffd38a',
-    mid: '#e06624',
-    dark: '#42170c',
-    edge: '#ffe4ae',
-    base: '#1d0d09',
-    plaque: '#ef873b',
-    jewel: '#ffb03a',
-  },
-  mythic: {
-    light: '#ecfeff',
-    mid: '#61c8db',
-    dark: '#173e54',
-    edge: '#ffffff',
-    base: '#071b26',
-    plaque: '#9cebf1',
-    jewel: '#6ff2ff',
+  special: {
+    src: '/assets/trophies-special.jpg',
+    count: 5,
+    ratio: 1167 / 600,
   },
 };
 
-const LOCKED_TROPHY_MATERIAL = {
-  light: '#77828d',
-  mid: '#414b56',
-  dark: '#171d25',
-  edge: '#8d98a2',
-  base: '#111720',
-  plaque: '#56616b',
-  jewel: '#65717c',
+const TROPHY_ART_INDEX: Record<string, number> = {
+  closing_1: 0,
+  closing_25: 1,
+  closing_75: 2,
+  closing_150: 3,
+  revenue_25: 0,
+  revenue_50: 1,
+  revenue_80: 2,
+  revenue_120: 3,
+  revenue_160: 4,
+  revenue_250: 5,
+  regularity_3: 0,
+  regularity_6: 1,
+  regularity_9: 2,
+  regularity_12: 3,
+  special_number_one: 0,
+  special_speed_runner: 1,
+  special_overdrive: 2,
+  special_recordman: 3,
+  special_goat: 4,
 };
 
 const formatNumber = (value: number) =>
@@ -560,300 +530,47 @@ function AvatarSelector({
   );
 }
 
-function TrophyEmblem({
-  collection,
-  fill,
-  edge,
-}: {
-  collection: TrophyCollection;
-  fill: string;
-  edge: string;
-}) {
-  if (collection === 'closing') {
-    return (
-      <g>
-        <path d="M58 70 82 94M82 70 58 94" stroke={edge} strokeWidth="4.2" strokeLinecap="round" />
-        <path d="m55 67 6 1-5 5-4-1Z" fill={fill} stroke={edge} strokeWidth="1.2" />
-        <path d="m85 67-6 1 5 5 4-1Z" fill={fill} stroke={edge} strokeWidth="1.2" />
-      </g>
-    );
-  }
-
-  if (collection === 'revenue') {
-    return (
-      <path
-        d="m70 66 13 13-13 19-13-19Z"
-        fill={fill}
-        stroke={edge}
-        strokeWidth="1.8"
-      />
-    );
-  }
-
-  if (collection === 'regularity') {
-    return (
-      <path
-        d="m70 66 4.4 9 9.9 1.4-7.2 7 1.7 9.8-8.8-4.6-8.8 4.6 1.7-9.8-7.2-7 9.9-1.4Z"
-        fill={fill}
-        stroke={edge}
-        strokeWidth="1.5"
-      />
-    );
-  }
-
-  return (
-    <path
-      d="M55 89 52 69l10 8 8-14 8 14 10-8-3 20Z"
-      fill={fill}
-      stroke={edge}
-      strokeWidth="1.8"
-      strokeLinejoin="round"
-    />
-  );
-}
-
 function Cup({ trophy }: { trophy: CommercialTrophy }) {
   const rarity = RARITY[trophy.rarity];
-  const material = trophy.unlocked
-    ? TROPHY_MATERIALS[trophy.rarity]
-    : LOCKED_TROPHY_MATERIAL;
-  const id = trophy.code.replace(/[^a-z0-9]/gi, '-');
-  const rarityRank = ['bronze', 'silver', 'gold', 'epic', 'legendary', 'mythic'].indexOf(
-    trophy.rarity
-  );
-  const ornate = rarityRank >= 3;
-  const sovereign = rarityRank >= 4;
+  const sheet = TROPHY_SHEETS[trophy.collection];
+  const artIndex = TROPHY_ART_INDEX[trophy.code] ?? 0;
+  const cellRatio = sheet.ratio / sheet.count;
 
   return (
-    <div className="profile-trophy-stage relative flex h-28 w-[108px] shrink-0 items-center justify-center sm:h-40 sm:w-36">
+    <div className="profile-trophy-stage relative flex h-28 w-[108px] shrink-0 items-center justify-center sm:h-44 sm:w-40">
       <div
-        className="profile-trophy-aura absolute left-1/2 top-[46%] h-[72%] w-[78%] -translate-x-1/2 -translate-y-1/2 rounded-full blur-2xl"
+        className="profile-trophy-aura absolute left-1/2 top-[48%] h-[72%] w-[72%] -translate-x-1/2 -translate-y-1/2 rounded-full blur-2xl"
         style={{ background: trophy.unlocked ? rarity.glow : 'rgba(71,85,105,.13)' }}
       />
-
-      <svg
-        viewBox="0 0 140 170"
-        aria-hidden="true"
-        className={`profile-real-trophy relative h-full w-full overflow-visible ${
-          trophy.unlocked ? '' : 'saturate-[.45]'
+      <div
+        className={`profile-real-trophy relative h-full overflow-hidden rounded-[42%_42%_14%_14%] ${
+          trophy.unlocked
+            ? 'brightness-105 contrast-110'
+            : 'grayscale saturate-[.15] brightness-[.38] contrast-125'
         }`}
         style={{
+          aspectRatio: `${cellRatio}`,
           filter: trophy.unlocked
-            ? `drop-shadow(0 18px 13px rgba(0,0,0,.58)) drop-shadow(0 0 12px ${rarity.glow})`
-            : 'drop-shadow(0 16px 11px rgba(0,0,0,.5))',
+            ? `drop-shadow(0 18px 13px rgba(0,0,0,.62)) drop-shadow(0 0 12px ${rarity.glow})`
+            : 'drop-shadow(0 16px 11px rgba(0,0,0,.55)) grayscale(1) saturate(.15) brightness(.38) contrast(1.25)',
+          WebkitMaskImage:
+            'linear-gradient(to bottom, transparent 0%, black 5%, black 92%, transparent 100%)',
+          maskImage:
+            'linear-gradient(to bottom, transparent 0%, black 5%, black 92%, transparent 100%)',
         }}
       >
-        <defs>
-          <linearGradient id={`${id}-metal`} x1="0" y1="0" x2="1" y2="0">
-            <stop offset="0%" stopColor={material.dark} />
-            <stop offset="18%" stopColor={material.mid} />
-            <stop offset="38%" stopColor={material.light} />
-            <stop offset="53%" stopColor={material.edge} />
-            <stop offset="67%" stopColor={material.mid} />
-            <stop offset="100%" stopColor={material.dark} />
-          </linearGradient>
-          <linearGradient id={`${id}-bowl`} x1="0" y1="0" x2=".8" y2="1">
-            <stop offset="0%" stopColor={material.edge} />
-            <stop offset="23%" stopColor={material.light} />
-            <stop offset="58%" stopColor={material.mid} />
-            <stop offset="100%" stopColor={material.dark} />
-          </linearGradient>
-          <linearGradient id={`${id}-base`} x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor={material.mid} />
-            <stop offset="22%" stopColor={material.base} />
-            <stop offset="100%" stopColor="#030609" />
-          </linearGradient>
-          <radialGradient id={`${id}-jewel`} cx="35%" cy="24%" r="75%">
-            <stop offset="0%" stopColor="#ffffff" />
-            <stop offset="22%" stopColor={material.edge} />
-            <stop offset="58%" stopColor={material.jewel} />
-            <stop offset="100%" stopColor={material.dark} />
-          </radialGradient>
-          <linearGradient id={`${id}-shine`} x1="0" y1="0" x2="1" y2="0">
-            <stop offset="0%" stopColor="#ffffff" stopOpacity="0" />
-            <stop offset="48%" stopColor="#ffffff" stopOpacity="0" />
-            <stop offset="55%" stopColor="#ffffff" stopOpacity=".72" />
-            <stop offset="62%" stopColor="#ffffff" stopOpacity="0" />
-            <stop offset="100%" stopColor="#ffffff" stopOpacity="0" />
-          </linearGradient>
-          <filter id={`${id}-inner-shadow`}>
-            <feGaussianBlur in="SourceAlpha" stdDeviation="1.6" result="blur" />
-            <feOffset dy="2" result="offsetBlur" />
-            <feComposite in="offsetBlur" in2="SourceAlpha" operator="out" result="inverse" />
-            <feFlood floodColor="#000000" floodOpacity=".72" result="color" />
-            <feComposite in="color" in2="inverse" operator="in" result="shadow" />
-            <feComposite in="shadow" in2="SourceGraphic" operator="over" />
-          </filter>
-        </defs>
-
-        <ellipse cx="70" cy="160" rx="43" ry="7" fill="#000" opacity=".5" />
-
-        {sovereign && (
-          <g opacity={trophy.unlocked ? 0.9 : 0.42}>
-            <path
-              d="M37 109C20 97 13 78 17 57M103 109c17-12 24-31 20-52"
-              fill="none"
-              stroke={`url(#${id}-metal)`}
-              strokeWidth="4.2"
-              strokeLinecap="round"
-            />
-            {[0, 1, 2, 3].map((leaf) => (
-              <g key={leaf}>
-                <ellipse
-                  cx={25 - leaf * 2.2}
-                  cy={94 - leaf * 12}
-                  rx="4"
-                  ry="8"
-                  fill={`url(#${id}-metal)`}
-                  transform={`rotate(${-35 - leaf * 4} ${25 - leaf * 2.2} ${94 - leaf * 12})`}
-                />
-                <ellipse
-                  cx={115 + leaf * 2.2}
-                  cy={94 - leaf * 12}
-                  rx="4"
-                  ry="8"
-                  fill={`url(#${id}-metal)`}
-                  transform={`rotate(${35 + leaf * 4} ${115 + leaf * 2.2} ${94 - leaf * 12})`}
-                />
-              </g>
-            ))}
-          </g>
-        )}
-
-        {ornate && (
-          <g>
-            <path
-              d="M43 33 50 18l10 10 10-18 10 18 10-10 7 15Z"
-              fill={`url(#${id}-metal)`}
-              stroke={material.edge}
-              strokeWidth=".9"
-            />
-            <circle
-              cx="70"
-              cy="23"
-              r={sovereign ? 7 : 5}
-              fill={`url(#${id}-jewel)`}
-              stroke={material.edge}
-              strokeWidth="1.2"
-            />
-          </g>
-        )}
-
-        <path
-          d="M39 45C18 38 11 50 15 67c4 18 18 28 34 25"
-          fill="none"
-          stroke={`url(#${id}-metal)`}
-          strokeWidth={sovereign ? 8 : 6.5}
-          strokeLinecap="round"
+        <img
+          src={sheet.src}
+          alt=""
+          aria-hidden="true"
+          draggable={false}
+          className="absolute inset-y-0 h-full max-w-none select-none object-contain transition duration-700 group-hover:scale-[1.035]"
+          style={{
+            width: `${sheet.count * 100}%`,
+            left: `-${artIndex * 100}%`,
+          }}
         />
-        <path
-          d="M101 45c21-7 28 5 24 22-4 18-18 28-34 25"
-          fill="none"
-          stroke={`url(#${id}-metal)`}
-          strokeWidth={sovereign ? 8 : 6.5}
-          strokeLinecap="round"
-        />
-        <path
-          d="M35 41h70l-5.6 38.5C96 97 83.8 108 70 111 56.2 108 44 97 40.6 79.5Z"
-          fill={`url(#${id}-bowl)`}
-          stroke={material.edge}
-          strokeWidth="1.3"
-          filter={`url(#${id}-inner-shadow)`}
-        />
-        <path
-          d="M36 42c10 8 58 8 68 0"
-          fill="none"
-          stroke="#ffffff"
-          strokeOpacity=".44"
-          strokeWidth="2"
-        />
-        <ellipse
-          cx="70"
-          cy="41"
-          rx="36"
-          ry="7"
-          fill={material.dark}
-          stroke={material.edge}
-          strokeWidth="1.4"
-        />
-        <ellipse cx="70" cy="39.5" rx="30" ry="3.5" fill="#02050a" opacity=".72" />
-        <path
-          className="profile-cup-specular"
-          d="M49 50c1 21 7 37 18 47"
-          fill="none"
-          stroke="#fff"
-          strokeWidth="4"
-          strokeLinecap="round"
-          opacity=".44"
-        />
-
-        <circle
-          cx="70"
-          cy="80"
-          r={sovereign ? 20 : 17}
-          fill={material.base}
-          stroke={material.edge}
-          strokeWidth="1.5"
-          opacity=".94"
-        />
-        <circle
-          cx="70"
-          cy="80"
-          r={sovereign ? 16 : 13}
-          fill={`url(#${id}-jewel)`}
-          stroke={material.dark}
-          strokeWidth="1"
-        />
-        <TrophyEmblem
-          collection={trophy.collection}
-          fill={material.mid}
-          edge={material.edge}
-        />
-
-        <path
-          d="M64 108h12l3 25H61Z"
-          fill={`url(#${id}-metal)`}
-          stroke={material.dark}
-          strokeWidth="1"
-        />
-        <path
-          d="M55 129h30l7 10H48Z"
-          fill={`url(#${id}-metal)`}
-          stroke={material.dark}
-          strokeWidth="1"
-        />
-        <path
-          d="M42 138h56l7 21H35Z"
-          fill={`url(#${id}-base)`}
-          stroke={material.edge}
-          strokeWidth="1.2"
-        />
-        <path
-          d="M47 143h46l-2 10H49Z"
-          fill={material.plaque}
-          stroke={material.edge}
-          strokeWidth=".8"
-        />
-        <text
-          x="70"
-          y="151"
-          textAnchor="middle"
-          fill={trophy.unlocked ? material.dark : '#202832'}
-          fontFamily="Cinzel, Georgia, serif"
-          fontSize="6.7"
-          fontWeight="700"
-          letterSpacing="1.2"
-        >
-          LYFTT
-        </text>
-
-        <path
-          className="profile-cup-specular"
-          d="M20 0h19l48 170H68Z"
-          fill={`url(#${id}-shine)`}
-          opacity=".28"
-        />
-      </svg>
+      </div>
 
       {!trophy.unlocked && (
         <span className="absolute bottom-1 right-0 flex h-7 w-7 items-center justify-center rotate-45 border border-slate-500/45 bg-[#070c16]/95 shadow-[0_8px_20px_rgba(0,0,0,.5)] sm:h-9 sm:w-9">

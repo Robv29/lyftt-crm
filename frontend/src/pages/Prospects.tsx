@@ -658,9 +658,7 @@ export default function Prospects() {
   // Le modèle CSV vierge (voir handleDownloadTemplate) est une ligne = un
   // prospect, une seule feuille : reconnu au .csv pour se distinguer d'un
   // export Monday (toujours .xlsx, plusieurs feuilles, lignes de catégorie).
-  const handleImport = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  const processImportFile = useCallback(async (file: File) => {
     const isCsvTemplate = file.name.toLowerCase().endsWith('.csv');
     try {
       const XLSX = await import('xlsx');
@@ -750,8 +748,22 @@ export default function Prospects() {
       toast.success(`${imported} créé(s), ${updated} mis à jour${skippedMsg}`, { id: toastId });
       invalidateProspects();
     } catch { toast.error("Erreur lors de l'import"); }
+  }, [invalidateProspects, prospects]);
+
+  const handleImport = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) processImportFile(file);
     if (fileInputRef.current) fileInputRef.current.value = '';
-  }, [invalidateProspects]);
+  }, [processImportFile]);
+
+  const [showImportDialog, setShowImportDialog] = useState(false);
+  const [dragActive, setDragActive] = useState(false);
+  const handleImportDrop = useCallback((e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    setDragActive(false);
+    const file = e.dataTransfer.files?.[0];
+    if (file) { setShowImportDialog(false); processImportFile(file); }
+  }, [processImportFile]);
 
   const handleAddProspect = useCallback(async () => {
     if (saving) return; // anti double-submit (double clic / double Enter)
@@ -895,8 +907,7 @@ export default function Prospects() {
             </Button>
           )}
           <Button variant="outline" onClick={handleExportExcel} disabled={filtered.length === 0} className="gap-2 rounded-xl border-slate-200"><Download className="w-4 h-4" /> Exporter</Button>
-          <Button variant="outline" onClick={handleDownloadTemplate} title="Télécharger un modèle CSV vierge à remplir" className="gap-2 rounded-xl border-slate-200"><FileDown className="w-4 h-4" /> Modèle CSV</Button>
-          <Button variant="outline" onClick={() => fileInputRef.current?.click()} className="gap-2 rounded-xl border-slate-200"><Upload className="w-4 h-4" /> Importer</Button>
+          <Button variant="outline" onClick={() => setShowImportDialog(true)} className="gap-2 rounded-xl border-slate-200"><Upload className="w-4 h-4" /> Importer</Button>
           <Button onClick={() => setShowAddDialog(true)} className="gap-2 bg-gradient-to-r from-[#5A9BA3] to-[#6AABB4] hover:from-[#4A8B93] hover:to-[#5A9BA4] text-white rounded-xl shadow-md shadow-[#6AABB4]/20"><Plus className="w-4 h-4" /> Ajouter</Button>
         </div>
       </div>
@@ -1000,6 +1011,47 @@ export default function Prospects() {
           </div>
         )}
       </Card>
+
+      {/* Import Dialog : glisser-deposer un fichier existant OU telecharger un
+          modele CSV vierge a remplir. Les deux options reutilisent le meme
+          moteur d'import (processImportFile / handleDownloadTemplate). */}
+      <Dialog open={showImportDialog} onOpenChange={setShowImportDialog}>
+        <DialogContent className="max-w-md rounded-2xl">
+          <DialogHeader>
+            <DialogTitle>Importer des prospects</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div
+              onDragOver={(e) => { e.preventDefault(); setDragActive(true); }}
+              onDragLeave={() => setDragActive(false)}
+              onDrop={handleImportDrop}
+              onClick={() => { setShowImportDialog(false); fileInputRef.current?.click(); }}
+              className={`flex flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed p-8 text-center cursor-pointer transition-colors ${
+                dragActive ? 'border-[#6AABB4] bg-teal-50' : 'border-slate-200 hover:border-[#6AABB4]/50 hover:bg-slate-50'
+              }`}
+            >
+              <Upload className={`w-8 h-8 ${dragActive ? 'text-[#5A9BA3]' : 'text-slate-400'}`} />
+              <p className="text-sm font-medium text-slate-700">Glisser-déposer un fichier ici</p>
+              <p className="text-xs text-slate-400">ou cliquer pour parcourir · .xlsx, .xls, .csv</p>
+            </div>
+            <div className="flex items-center gap-3">
+              <div className="h-px flex-1 bg-slate-100" />
+              <span className="text-xs text-slate-400">ou</span>
+              <div className="h-px flex-1 bg-slate-100" />
+            </div>
+            <Button
+              variant="outline"
+              onClick={() => { handleDownloadTemplate(); setShowImportDialog(false); }}
+              className="w-full gap-2 rounded-xl border-slate-200"
+            >
+              <FileDown className="w-4 h-4" /> Télécharger un modèle vierge à remplir
+            </Button>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowImportDialog(false)} className="rounded-xl">Fermer</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Add Dialog */}
       <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>

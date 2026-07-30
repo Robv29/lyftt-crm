@@ -12,6 +12,7 @@ import {
   Star,
   Swords,
   Trophy,
+  X,
   Zap,
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
@@ -220,14 +221,14 @@ function ArenaBackdrop({ avatar }: { avatar: Avatar }) {
     <div className="pointer-events-none absolute inset-0 overflow-hidden">
       <ChampionArt
         avatar={avatar}
-        className="absolute -right-[4%] -top-[42%] h-[150%] w-[72%] opacity-[0.17] blur-[1px] [mask-image:linear-gradient(to_left,black,transparent)]"
+        className="absolute -right-[38%] -top-[18%] h-[118%] w-[125%] opacity-[0.13] blur-[1px] [mask-image:linear-gradient(to_left,black,transparent)] sm:-right-[18%] sm:-top-[30%] sm:h-[135%] sm:w-[92%] sm:opacity-[0.15] 2xl:-right-[4%] 2xl:-top-[42%] 2xl:h-[150%] 2xl:w-[72%] 2xl:opacity-[0.17]"
         overlay={false}
       />
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_-10%,rgba(214,179,91,.16),transparent_30%),radial-gradient(circle_at_80%_30%,rgba(20,91,111,.22),transparent_31%),linear-gradient(115deg,#02050c_0%,#07101e_49%,#02050c_100%)]" />
       <svg
         viewBox="0 0 1600 520"
         preserveAspectRatio="none"
-        className="absolute inset-x-0 bottom-0 h-[82%] w-full opacity-60"
+        className="absolute -right-1/2 bottom-0 h-[62%] w-[180%] opacity-45 sm:-right-1/4 sm:h-[72%] sm:w-[140%] sm:opacity-55 2xl:inset-x-0 2xl:h-[82%] 2xl:w-full 2xl:opacity-60"
         aria-hidden="true"
       >
         <defs>
@@ -299,7 +300,7 @@ function ChampionFrame({
   onOpen: () => void;
 }) {
   return (
-    <div className="relative mx-auto w-full max-w-[272px] pb-8">
+    <div className="relative mx-auto w-full max-w-[220px] pb-7 sm:max-w-[272px] sm:pb-8">
       <div
         className="profile-champion-float absolute -inset-7 rounded-full opacity-60 blur-3xl"
         style={{ background: avatar.glow }}
@@ -341,45 +342,70 @@ function ChampionFrame({
 function AvatarSelector({
   activeKey,
   onSelect,
+  onClose,
 }: {
   activeKey: string;
   onSelect: (key: string) => void;
+  onClose: () => void;
 }) {
   return (
-    <div className="profile-reveal absolute left-1/2 top-[calc(100%+12px)] z-40 w-[min(92vw,560px)] -translate-x-1/2 border border-[#b99046]/50 bg-[#040914]/95 p-3 shadow-[0_30px_90px_rgba(0,0,0,.8)] backdrop-blur-xl sm:p-4">
-      <OrnamentalRule label="Sélection du héros" />
-      <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3">
-        {AVATARS.map((avatar) => {
-          const active = activeKey === avatar.key;
-          return (
-            <button
-              key={avatar.key}
-              type="button"
-              onClick={() => onSelect(avatar.key)}
-              className={`group relative overflow-hidden border p-1 text-left transition duration-300 ${
-                active
-                  ? 'border-[#f1d488] bg-[#d6b35b]/10'
-                  : 'border-white/10 bg-white/[0.025] hover:border-[#d6b35b]/55'
-              }`}
-            >
-              <ChampionArt
-                avatar={avatar}
-                className="aspect-square w-full transition duration-500 group-hover:scale-105"
-              />
-              <div className="relative px-2 pb-2 pt-2">
-                <p className="font-display text-[9px] font-bold uppercase tracking-[0.08em] text-[#f4e6bc]">
-                  {avatar.name}
-                </p>
-                <p className="mt-1 text-[9px] text-white/38">{avatar.role}</p>
-              </div>
-              {active && (
-                <span className="absolute right-2 top-2 flex h-7 w-7 items-center justify-center border border-[#f1d488]/70 bg-[#050913]/90 text-[#f1d488]">
-                  <Check className="h-4 w-4" />
-                </span>
-              )}
-            </button>
-          );
-        })}
+    <div
+      className="fixed inset-0 z-[100] flex items-end justify-center bg-[#01040a]/80 backdrop-blur-sm sm:items-center sm:p-6"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Sélection du héros"
+    >
+      <button
+        type="button"
+        onClick={onClose}
+        className="absolute inset-0 cursor-default"
+        aria-label="Fermer la sélection"
+      />
+      <div className="profile-reveal relative max-h-[92dvh] w-full overflow-y-auto border-x border-t border-[#b99046]/50 bg-[#040914]/[0.98] p-3 pb-[max(1rem,env(safe-area-inset-bottom))] shadow-[0_30px_90px_rgba(0,0,0,.8)] sm:max-w-[620px] sm:border sm:p-5">
+        <button
+          type="button"
+          onClick={onClose}
+          className="absolute right-3 top-3 z-10 flex h-10 w-10 items-center justify-center border border-[#b99046]/35 bg-[#07101d] text-[#f1d488] transition hover:border-[#f1d488]"
+          aria-label="Fermer"
+        >
+          <X className="h-5 w-5" />
+        </button>
+        <div className="pr-12">
+          <OrnamentalRule label="Sélection du héros" />
+        </div>
+        <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3">
+          {AVATARS.map((avatar) => {
+            const active = activeKey === avatar.key;
+            return (
+              <button
+                key={avatar.key}
+                type="button"
+                onClick={() => onSelect(avatar.key)}
+                className={`group relative overflow-hidden border p-1 text-left transition duration-300 ${
+                  active
+                    ? 'border-[#f1d488] bg-[#d6b35b]/10'
+                    : 'border-white/10 bg-white/[0.025] hover:border-[#d6b35b]/55'
+                }`}
+              >
+                <ChampionArt
+                  avatar={avatar}
+                  className="aspect-square w-full transition duration-500 group-hover:scale-105"
+                />
+                <div className="relative min-h-[58px] px-2 pb-2 pt-2">
+                  <p className="font-display text-[9px] font-bold uppercase leading-4 tracking-[0.06em] text-[#f4e6bc]">
+                    {avatar.name}
+                  </p>
+                  <p className="mt-1 text-[9px] leading-4 text-white/38">{avatar.role}</p>
+                </div>
+                {active && (
+                  <span className="absolute right-2 top-2 flex h-7 w-7 items-center justify-center border border-[#f1d488]/70 bg-[#050913]/90 text-[#f1d488]">
+                    <Check className="h-4 w-4" />
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
       </div>
     </div>
   );
@@ -388,7 +414,7 @@ function AvatarSelector({
 function Cup({ trophy }: { trophy: CommercialTrophy }) {
   const rarity = RARITY[trophy.rarity];
   return (
-    <div className="relative flex h-32 w-32 items-center justify-center">
+    <div className="relative flex h-24 w-24 shrink-0 items-center justify-center sm:h-32 sm:w-32">
       <div
         className={`absolute inset-2 rotate-45 border transition duration-500 group-hover:rotate-[50deg] ${
           trophy.unlocked ? '' : 'border-slate-700/40 bg-slate-900/35'
@@ -423,7 +449,7 @@ function Cup({ trophy }: { trophy: CommercialTrophy }) {
       )}
       <Trophy
         strokeWidth={1.25}
-        className={`relative h-[76px] w-[76px] transition duration-500 group-hover:scale-110 ${
+        className={`relative h-14 w-14 transition duration-500 group-hover:scale-110 sm:h-[76px] sm:w-[76px] ${
           trophy.unlocked ? '' : 'text-slate-700 grayscale'
         }`}
         style={
@@ -436,13 +462,13 @@ function Cup({ trophy }: { trophy: CommercialTrophy }) {
         }
       />
       {!trophy.unlocked && (
-        <span className="absolute bottom-1 right-1 flex h-9 w-9 items-center justify-center rotate-45 border border-slate-600/35 bg-[#070c16]">
-          <LockKeyhole className="h-4 w-4 -rotate-45 text-slate-600" />
+        <span className="absolute bottom-1 right-1 flex h-7 w-7 items-center justify-center rotate-45 border border-slate-600/35 bg-[#070c16] sm:h-9 sm:w-9">
+          <LockKeyhole className="h-3.5 w-3.5 -rotate-45 text-slate-600 sm:h-4 sm:w-4" />
         </span>
       )}
       {trophy.dynamic && trophy.unlocked && (
-        <span className="absolute -right-1 -top-1 flex h-9 w-9 items-center justify-center rotate-45 border border-cyan-300/45 bg-cyan-400/10 text-cyan-200 shadow-[0_0_20px_rgba(34,211,238,.35)]">
-          <Zap className="h-4 w-4 -rotate-45" />
+        <span className="absolute -right-1 -top-1 flex h-7 w-7 items-center justify-center rotate-45 border border-cyan-300/45 bg-cyan-400/10 text-cyan-200 shadow-[0_0_20px_rgba(34,211,238,.35)] sm:h-9 sm:w-9">
+          <Zap className="h-3.5 w-3.5 -rotate-45 sm:h-4 sm:w-4" />
         </span>
       )}
     </div>
@@ -458,7 +484,9 @@ function TrophyCard({ trophy, index }: { trophy: CommercialTrophy; index: number
     <Tooltip>
       <TooltipTrigger asChild>
         <article
-          className={`profile-trophy-card profile-reveal group relative min-h-[330px] overflow-hidden border p-[1px] transition duration-500 hover:-translate-y-2 ${
+          tabIndex={0}
+          aria-label={`${trophy.name}. ${progressLabel(trophy)}`}
+          className={`profile-trophy-card profile-reveal group relative min-h-[218px] overflow-hidden border p-[1px] transition duration-500 hover:-translate-y-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#d6b35b]/70 sm:min-h-[330px] sm:hover:-translate-y-2 ${
             trophy.unlocked
               ? 'border-[#b99046]/35'
               : 'border-white/[0.065] grayscale-[.45]'
@@ -478,54 +506,56 @@ function TrophyCard({ trophy, index }: { trophy: CommercialTrophy; index: number
           <span className="absolute bottom-2 left-2 h-8 w-8 border-b border-l border-[#d6b35b]/25" />
           <span className="absolute bottom-2 right-2 h-8 w-8 border-b border-r border-[#d6b35b]/25" />
 
-          <div className="relative flex h-full flex-col items-center px-5 py-6 text-center">
+          <div className="relative grid h-full grid-cols-[96px_minmax(0,1fr)] items-center gap-3 px-3 py-4 text-left sm:flex sm:flex-col sm:px-5 sm:py-6 sm:text-center">
             <Cup trophy={trophy} />
-            <div className="mt-4 flex items-center gap-2">
-              <span className="h-px w-5 bg-[#d6b35b]/35" />
-              <span
-                className={`font-display text-[9px] font-bold uppercase tracking-[0.2em] ${
-                  trophy.unlocked ? '' : 'text-slate-600'
-                }`}
-                style={trophy.unlocked ? { color: rarity.color } : undefined}
-              >
-                {rarity.label}
-                {trophy.dynamic ? ' · Vivant' : ''}
-              </span>
-              <span className="h-px w-5 bg-[#d6b35b]/35" />
-            </div>
-            <h3
-              className={`mt-3 font-display text-[15px] font-bold uppercase tracking-[0.045em] ${
-                trophy.unlocked ? 'text-[#f5ebcf]' : 'text-slate-500'
-              }`}
-            >
-              {trophy.name}
-            </h3>
-            <p
-              className={`mt-2 line-clamp-2 text-[11px] leading-5 ${
-                trophy.unlocked ? 'text-white/45' : 'text-slate-600'
-              }`}
-            >
-              {trophy.description}
-            </p>
-            <div className="mt-auto w-full pt-5">
-              <div className="relative h-1 overflow-hidden bg-white/[0.055]">
-                <div
-                  className="h-full transition-all duration-1000"
-                  style={{
-                    width: `${percent}%`,
-                    background: trophy.unlocked
-                      ? `linear-gradient(90deg,#5A9BA3,${rarity.color})`
-                      : '#334155',
-                    boxShadow: trophy.unlocked ? `0 0 14px ${rarity.glow}` : undefined,
-                  }}
-                />
+            <div className="flex min-w-0 flex-col sm:w-full sm:flex-1 sm:items-center">
+              <div className="flex max-w-full items-center gap-2">
+                <span className="hidden h-px w-5 bg-[#d6b35b]/35 sm:block" />
+                <span
+                  className={`truncate font-display text-[8px] font-bold uppercase tracking-[0.16em] sm:text-[9px] sm:tracking-[0.2em] ${
+                    trophy.unlocked ? '' : 'text-slate-600'
+                  }`}
+                  style={trophy.unlocked ? { color: rarity.color } : undefined}
+                >
+                  {rarity.label}
+                  {trophy.dynamic ? ' · Vivant' : ''}
+                </span>
+                <span className="hidden h-px w-5 bg-[#d6b35b]/35 sm:block" />
               </div>
-              <div
-                className={`mt-3 text-[9px] font-bold uppercase tracking-[0.12em] ${
+              <h3
+                className={`mt-2 break-words font-display text-[13px] font-bold uppercase leading-5 tracking-[0.035em] sm:mt-3 sm:text-[15px] sm:tracking-[0.045em] ${
+                  trophy.unlocked ? 'text-[#f5ebcf]' : 'text-slate-500'
+                }`}
+              >
+                {trophy.name}
+              </h3>
+              <p
+                className={`mt-1.5 line-clamp-2 text-[10px] leading-4 sm:mt-2 sm:text-[11px] sm:leading-5 ${
                   trophy.unlocked ? 'text-white/45' : 'text-slate-600'
                 }`}
               >
-                {progressLabel(trophy)}
+                {trophy.description}
+              </p>
+              <div className="mt-4 w-full sm:mt-auto sm:pt-5">
+                <div className="relative h-1 overflow-hidden bg-white/[0.055]">
+                  <div
+                    className="h-full transition-all duration-1000"
+                    style={{
+                      width: `${percent}%`,
+                      background: trophy.unlocked
+                        ? `linear-gradient(90deg,#5A9BA3,${rarity.color})`
+                        : '#334155',
+                      boxShadow: trophy.unlocked ? `0 0 14px ${rarity.glow}` : undefined,
+                    }}
+                  />
+                </div>
+                <div
+                  className={`mt-2 text-[8px] font-bold uppercase leading-4 tracking-[0.08em] sm:mt-3 sm:text-[9px] sm:tracking-[0.12em] ${
+                    trophy.unlocked ? 'text-white/45' : 'text-slate-600'
+                  }`}
+                >
+                  {progressLabel(trophy)}
+                </div>
               </div>
             </div>
           </div>
@@ -626,16 +656,16 @@ export default function Profile() {
     trophiesByCollection.get('special')?.filter((trophy) => trophy.unlocked).length ?? 0;
 
   return (
-    <div className="-m-4 min-h-[calc(100vh-3.5rem)] overflow-hidden bg-[#02050c] p-4 text-white sm:-m-6 sm:p-6 lg:-m-8 lg:min-h-screen lg:p-8">
+    <div className="-m-4 min-h-[calc(100vh-3.5rem)] overflow-x-hidden bg-[#02050c] p-4 text-white sm:-m-6 sm:p-6 lg:-m-8 lg:min-h-screen lg:p-8">
       <div className="pointer-events-none fixed inset-0 bg-[radial-gradient(circle_at_82%_0%,rgba(20,91,111,.14),transparent_32%),radial-gradient(circle_at_14%_45%,rgba(185,144,70,.08),transparent_30%)]" />
-      <div className="relative mx-auto max-w-[1660px] space-y-7">
+      <div className="relative mx-auto max-w-[1660px] space-y-5 sm:space-y-7">
         <header className="profile-reveal flex flex-col gap-5 border-b border-[#b99046]/20 pb-5 lg:flex-row lg:items-end lg:justify-between">
-          <div>
-            <div className="flex items-center gap-3 font-display text-[10px] font-bold uppercase tracking-[0.32em] text-[#d6b35b]">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2 font-display text-[8px] font-bold uppercase tracking-[0.22em] text-[#d6b35b] sm:gap-3 sm:text-[10px] sm:tracking-[0.32em]">
               <span className="h-2 w-2 rotate-45 border border-[#f1d488] bg-[#b99046]/35" />
               Temple des accomplissements
             </div>
-            <h1 className="mt-3 font-display text-3xl font-bold uppercase tracking-[0.06em] text-[#f4e6bc] md:text-4xl">
+            <h1 className="mt-3 break-words font-display text-2xl font-bold uppercase leading-tight tracking-[0.045em] text-[#f4e6bc] sm:text-3xl sm:tracking-[0.06em] md:text-4xl">
               Profil du conquérant
             </h1>
             <p className="mt-2 max-w-2xl text-sm leading-6 text-white/42">
@@ -644,7 +674,7 @@ export default function Profile() {
             </p>
           </div>
           {isAdmin && (
-            <label className="flex flex-col gap-2">
+            <label className="flex w-full flex-col gap-2 lg:w-auto">
               <span className="font-display text-[9px] font-bold uppercase tracking-[0.22em] text-[#d6b35b]/70">
                 Observer un commercial
               </span>
@@ -654,7 +684,7 @@ export default function Profile() {
                   setSelectedProfileId(Number(event.target.value));
                   setAvatarOpen(false);
                 }}
-                className="h-12 min-w-[250px] border border-[#b99046]/35 bg-[#07101d] px-4 text-sm font-semibold text-[#f4e6bc] outline-none transition focus:border-[#f1d488]"
+                className="h-12 w-full min-w-0 border border-[#b99046]/35 bg-[#07101d] px-4 text-sm font-semibold text-[#f4e6bc] outline-none transition focus:border-[#f1d488] sm:min-w-[250px] lg:w-auto"
               >
                 {data.profiles.map((profile) => (
                   <option
@@ -671,52 +701,49 @@ export default function Profile() {
           )}
         </header>
 
-        <section className="profile-reveal relative min-h-[520px] overflow-hidden border border-[#b99046]/35 shadow-[0_42px_120px_rgba(0,0,0,.48)] [clip-path:polygon(2%_0,98%_0,100%_6%,100%_94%,98%_100%,2%_100%,0_94%,0_6%)]">
+        <section className="profile-reveal relative overflow-hidden border border-[#b99046]/35 shadow-[0_42px_120px_rgba(0,0,0,.48)] [clip-path:none] sm:[clip-path:polygon(2%_0,98%_0,100%_6%,100%_94%,98%_100%,2%_100%,0_94%,0_6%)]">
           <ArenaBackdrop avatar={selectedAvatar} />
-          <span className="pointer-events-none absolute left-4 top-4 h-20 w-20 border-l border-t border-[#f1d488]/50" />
-          <span className="pointer-events-none absolute right-4 top-4 h-20 w-20 border-r border-t border-[#f1d488]/50" />
-          <span className="pointer-events-none absolute bottom-4 left-4 h-20 w-20 border-b border-l border-[#f1d488]/35" />
-          <span className="pointer-events-none absolute bottom-4 right-4 h-20 w-20 border-b border-r border-[#f1d488]/35" />
+          <span className="pointer-events-none absolute left-3 top-3 h-12 w-12 border-l border-t border-[#f1d488]/50 sm:left-4 sm:top-4 sm:h-20 sm:w-20" />
+          <span className="pointer-events-none absolute right-3 top-3 h-12 w-12 border-r border-t border-[#f1d488]/50 sm:right-4 sm:top-4 sm:h-20 sm:w-20" />
+          <span className="pointer-events-none absolute bottom-3 left-3 h-12 w-12 border-b border-l border-[#f1d488]/35 sm:bottom-4 sm:left-4 sm:h-20 sm:w-20" />
+          <span className="pointer-events-none absolute bottom-3 right-3 h-12 w-12 border-b border-r border-[#f1d488]/35 sm:bottom-4 sm:right-4 sm:h-20 sm:w-20" />
 
-          <div className="relative grid min-h-[520px] gap-10 px-6 py-10 md:px-10 lg:grid-cols-[285px_minmax(0,1fr)_300px] lg:items-center lg:px-14">
+          <div className="relative grid gap-8 px-4 py-8 sm:px-6 sm:py-10 md:grid-cols-[220px_minmax(0,1fr)] md:items-center md:gap-8 md:px-8 xl:grid-cols-[250px_minmax(0,1fr)] xl:px-10 2xl:min-h-[520px] 2xl:grid-cols-[285px_minmax(0,1fr)_300px] 2xl:gap-10 2xl:px-14">
             <div className="relative">
               <ChampionFrame
                 avatar={selectedAvatar}
                 canChange={isOwnProfile}
                 onOpen={() => isOwnProfile && setAvatarOpen((value) => !value)}
               />
-              {avatarOpen && isOwnProfile && (
-                <AvatarSelector activeKey={activeProfile.avatarKey} onSelect={changeAvatar} />
-              )}
             </div>
 
-            <div className="text-center lg:text-left">
+            <div className="min-w-0 text-center md:text-left">
               <div
-                className="inline-flex items-center gap-2 border border-white/10 bg-black/25 px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.22em] backdrop-blur"
+                className="inline-flex max-w-full items-center gap-2 border border-white/10 bg-black/25 px-3 py-1.5 text-[9px] font-bold uppercase tracking-[0.14em] backdrop-blur sm:text-[10px] sm:tracking-[0.22em]"
                 style={{ color: selectedAvatar.accent }}
               >
-                <Shield className="h-3.5 w-3.5" />
-                {selectedAvatar.role}
+                <Shield className="h-3.5 w-3.5 shrink-0" />
+                <span className="truncate">{selectedAvatar.role}</span>
               </div>
-              <h2 className="mt-5 font-display text-4xl font-bold uppercase leading-[.96] tracking-[0.025em] text-[#f4e6bc] drop-shadow-[0_6px_25px_rgba(0,0,0,.7)] md:text-6xl xl:text-7xl">
+              <h2 className="mt-5 break-words font-display text-3xl font-bold uppercase leading-[.98] tracking-[0.015em] text-[#f4e6bc] drop-shadow-[0_6px_25px_rgba(0,0,0,.7)] sm:text-4xl md:text-5xl md:tracking-[0.025em] xl:text-6xl 2xl:text-7xl">
                 {fullName}
               </h2>
-              <p className="mt-4 font-display text-xs font-bold uppercase tracking-[0.26em] text-[#d6b35b]/75">
+              <p className="mt-4 font-display text-[10px] font-bold uppercase leading-5 tracking-[0.16em] text-[#d6b35b]/75 sm:text-xs sm:tracking-[0.26em]">
                 {selectedAvatar.name}
               </p>
 
-              <div className="mx-auto mt-8 max-w-2xl lg:mx-0">
+              <div className="mx-auto mt-7 max-w-2xl md:mx-0 md:mt-8">
                 <div className="flex items-end justify-between gap-4">
-                  <div className="text-left">
+                  <div className="min-w-0 text-left">
                     <span className="text-[10px] font-bold uppercase tracking-[0.18em] text-white/38">
                       Ascension globale
                     </span>
-                    <p className="mt-1 text-sm text-white/60">
+                    <p className="mt-1 text-xs leading-5 text-white/60 sm:text-sm">
                       <strong className="text-[#f1d488]">{unlocked}</strong> trophées
                       conquis sur {totalTrophies}
                     </p>
                   </div>
-                  <span className="font-display text-3xl font-bold text-[#f1d488]">
+                  <span className="shrink-0 font-display text-2xl font-bold text-[#f1d488] sm:text-3xl">
                     {completion}%
                   </span>
                 </div>
@@ -736,7 +763,7 @@ export default function Profile() {
               </div>
             </div>
 
-            <div className="mx-auto w-full max-w-[300px]">
+            <div className="mx-auto w-full max-w-[220px] sm:max-w-[260px] md:col-span-2 2xl:col-span-1 2xl:max-w-[300px]">
               <div className="relative aspect-square">
                 <svg viewBox="0 0 160 160" className="h-full w-full -rotate-90">
                   <defs>
@@ -811,33 +838,43 @@ export default function Profile() {
           </div>
         </section>
 
-        <nav className="profile-reveal mx-auto flex w-full max-w-3xl items-center justify-center gap-2 border-y border-[#b99046]/20 py-3">
+        {avatarOpen && isOwnProfile && (
+          <AvatarSelector
+            activeKey={activeProfile.avatarKey}
+            onSelect={changeAvatar}
+            onClose={() => setAvatarOpen(false)}
+          />
+        )}
+
+        <nav className="profile-reveal mx-auto grid w-full max-w-3xl grid-cols-[minmax(0,1fr)_minmax(0,1fr)] items-center justify-center gap-1 border-y border-[#b99046]/20 py-3 sm:grid-cols-[minmax(0,1fr)_28px_minmax(0,1fr)] sm:gap-2">
           <button
             type="button"
             onClick={() => setActiveTab('trophies')}
-            className={`group flex min-h-12 flex-1 items-center justify-center gap-3 px-5 font-display text-[10px] font-bold uppercase tracking-[0.16em] transition ${
+            className={`group flex min-h-12 min-w-0 items-center justify-center gap-2 px-2 font-display text-[9px] font-bold uppercase tracking-[0.08em] transition sm:gap-3 sm:px-5 sm:text-[10px] sm:tracking-[0.16em] ${
               activeTab === 'trophies'
                 ? 'border border-[#d6b35b]/55 bg-[#d6b35b]/10 text-[#f1d488] shadow-[inset_0_0_30px_rgba(214,179,91,.08)]'
                 : 'border border-transparent text-white/38 hover:text-white/75'
             }`}
           >
             <Trophy className="h-4 w-4" />
-            Panthéon des trophées
+            <span className="sm:hidden">Trophées</span>
+            <span className="hidden sm:inline">Panthéon des trophées</span>
           </button>
-          <span className="h-7 w-7 rotate-45 border border-[#b99046]/35 bg-[#07101d]">
+          <span className="hidden h-7 w-7 rotate-45 border border-[#b99046]/35 bg-[#07101d] sm:block">
             <span className="block h-full w-full scale-50 border border-[#d6b35b]/45" />
           </span>
           <button
             type="button"
             onClick={() => setActiveTab('record')}
-            className={`group flex min-h-12 flex-1 items-center justify-center gap-3 px-5 font-display text-[10px] font-bold uppercase tracking-[0.16em] transition ${
+            className={`group flex min-h-12 min-w-0 items-center justify-center gap-2 px-2 font-display text-[9px] font-bold uppercase tracking-[0.08em] transition sm:gap-3 sm:px-5 sm:text-[10px] sm:tracking-[0.16em] ${
               activeTab === 'record'
                 ? 'border border-cyan-300/45 bg-cyan-300/[0.07] text-cyan-100 shadow-[inset_0_0_30px_rgba(34,211,238,.06)]'
                 : 'border border-transparent text-white/38 hover:text-white/75'
             }`}
           >
             <History className="h-4 w-4" />
-            Chroniques du Recordman
+            <span className="sm:hidden">Recordman</span>
+            <span className="hidden sm:inline">Chroniques du Recordman</span>
           </button>
         </nav>
 
@@ -848,19 +885,19 @@ export default function Profile() {
               const collectionUnlocked = trophies.filter((trophy) => trophy.unlocked).length;
               return (
                 <section key={collection.key} className="profile-reveal">
-                  <div className="mb-6 grid gap-4 md:grid-cols-[1fr_auto_1fr] md:items-end">
-                    <div>
-                      <span className="font-display text-[9px] font-bold uppercase tracking-[0.28em] text-[#d6b35b]/60">
+                  <div className="mb-5 grid gap-4 sm:mb-6 md:grid-cols-[1fr_auto_1fr] md:items-end">
+                    <div className="min-w-0">
+                      <span className="font-display text-[8px] font-bold uppercase tracking-[0.2em] text-[#d6b35b]/60 sm:text-[9px] sm:tracking-[0.28em]">
                         {collection.eyebrow}
                       </span>
-                      <div className="mt-2 flex items-center gap-3">
-                        <span className="flex h-10 w-10 rotate-45 items-center justify-center border border-[#b99046]/50 bg-[#0a1422] text-[#f1d488] shadow-[0_0_25px_rgba(214,179,91,.1)]">
+                      <div className="mt-2 flex min-w-0 items-center gap-3">
+                        <span className="flex h-9 w-9 shrink-0 rotate-45 items-center justify-center border border-[#b99046]/50 bg-[#0a1422] text-[#f1d488] shadow-[0_0_25px_rgba(214,179,91,.1)] sm:h-10 sm:w-10">
                           <span className="-rotate-45">
                             <CollectionIcon collection={collection.key} />
                           </span>
                         </span>
-                        <div>
-                          <h2 className="font-display text-xl font-bold uppercase tracking-[0.08em] text-[#f4e6bc] md:text-2xl">
+                        <div className="min-w-0">
+                          <h2 className="break-words font-display text-lg font-bold uppercase leading-tight tracking-[0.055em] text-[#f4e6bc] sm:text-xl sm:tracking-[0.08em] md:text-2xl">
                             Collection {collection.label}
                           </h2>
                           <p className="mt-1 text-xs text-white/38">{collection.subtitle}</p>

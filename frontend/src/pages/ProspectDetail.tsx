@@ -35,6 +35,16 @@ const toLocalInputValue = (d: Date) => {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 };
 
+// Rappel de confirmation automatique programmé 24h avant une visio (violet
+// dans "Relance datée" / "Mes visios") — null si le rendez-vous est déjà à
+// moins de 24h (pas de sens à programmer un rappel dans le passé).
+function computeVisioReminder(dateVisioIso: string): { date_relance_planifiee: string; type_relance_planifiee: string } | null {
+  const visio = new Date(dateVisioIso);
+  const reminder = new Date(visio.getTime() - 24 * 60 * 60 * 1000);
+  if (reminder.getTime() <= Date.now()) return null;
+  return { date_relance_planifiee: reminder.toISOString(), type_relance_planifiee: 'confirmation_visio' };
+}
+
 const PIPELINE_STAGES = [
   'Appel telephonique', 'Relance 1', 'Relance 2', 'Relance 3', 'Relance 4',
   'Visio', 'Demande de documents', 'Signature', 'Dossier complet', 'Envoyé à Mathilde', 'Refus / Perdu',
@@ -409,9 +419,18 @@ export default function ProspectDetail() {
   const handleLogVisio = useCallback(async (dateTimeLocal?: string, noteOverride?: string) => {
     if (!prospect) return;
     const iso = dateTimeLocal ? new Date(dateTimeLocal).toISOString() : new Date().toISOString();
-    updateProspectOptimistic({ statut_avancement: 'Visio', date_visio: iso, date_relance_planifiee: '' });
+    // Un rendez-vous confirmé programme automatiquement son propre rappel de
+    // confirmation 24h avant (violet) — remplace l'ancien effacement pur et
+    // simple de la relance planifiée.
+    const reminder = computeVisioReminder(iso);
+    const visioPatch = {
+      statut_avancement: 'Visio', date_visio: iso,
+      date_relance_planifiee: reminder?.date_relance_planifiee ?? '',
+      type_relance_planifiee: reminder?.type_relance_planifiee ?? null,
+    };
+    updateProspectOptimistic(visioPatch);
     try {
-      await client.entities.prospects.update({ id: String(prospect.id), data: { statut_avancement: 'Visio', date_visio: iso, date_relance_planifiee: null } });
+      await client.entities.prospects.update({ id: String(prospect.id), data: { ...visioPatch, date_relance_planifiee: reminder?.date_relance_planifiee ?? null } });
       await client.entities.commercial_actions.create({
         data: { prospect_id: prospect.id, action_type: 'visio', appel_repondu: false, from_status: prospect.statut_avancement, to_status: 'Visio', notes: noteOverride || actionNote || `Visio planifiée le ${new Date(iso).toLocaleString('fr-FR')}`, action_date: new Date().toISOString() },
       });
@@ -479,10 +498,10 @@ export default function ProspectDetail() {
           <p className="text-slate-500">{prospect.nom_dirigeant}</p>
         </div>
         <div className="flex items-center gap-2">
-          <Badge className={`${prospect.statut_gagne_perdu === 'gagne' ? 'bg-emerald-100 text-emerald-700 border-emerald-200' : prospect.statut_gagne_perdu === 'perdu' ? 'bg-red-100 text-red-700 border-red-200' : 'bg-blue-100 text-blue-700 border-blue-200'}`}>
+          <Badge className={`rounded-lg ${prospect.statut_gagne_perdu === 'gagne' ? 'bg-emerald-100 text-emerald-700 border-emerald-200' : prospect.statut_gagne_perdu === 'perdu' ? 'bg-red-100 text-red-700 border-red-200' : 'bg-blue-100 text-blue-700 border-blue-200'}`}>
             {prospect.statut_gagne_perdu.toUpperCase()}
           </Badge>
-          <Badge className="border-slate-200 bg-slate-100 text-slate-700">{(prospect.montant_potentiel || 0).toLocaleString('fr-FR')} €</Badge>
+          <Badge className="bg-slate-100 text-slate-700 border-slate-200 rounded-lg">{(prospect.montant_potentiel || 0).toLocaleString('fr-FR')} €</Badge>
         </div>
       </div>
 
@@ -558,11 +577,11 @@ export default function ProspectDetail() {
                 <>
                   <div className="flex items-center gap-2">
                     {prospect.monday_sync_status === 'synced' ? (
-                      <Badge className="border-emerald-200 bg-emerald-50 text-emerald-700"><CheckCircle2 className="w-3.5 h-3.5" /> Synchronisé</Badge>
+                      <Badge className="bg-emerald-50 text-emerald-700 border-emerald-200 rounded-lg gap-1"><CheckCircle2 className="w-3.5 h-3.5" /> Synchronisé</Badge>
                     ) : prospect.monday_sync_status === 'error' ? (
-                      <Badge className="border-red-200 bg-red-50 text-red-700"><AlertTriangle className="w-3.5 h-3.5" /> Transmission échouée</Badge>
+                      <Badge className="bg-red-50 text-red-700 border-red-200 rounded-lg gap-1"><AlertTriangle className="w-3.5 h-3.5" /> Transmission échouée</Badge>
                     ) : (
-                      <Badge className="border-amber-200 bg-amber-50 text-amber-700"><Clock3 className="w-3.5 h-3.5" /> En attente</Badge>
+                      <Badge className="bg-amber-50 text-amber-700 border-amber-200 rounded-lg gap-1"><Clock3 className="w-3.5 h-3.5" /> En attente</Badge>
                     )}
                     {syncingMonday && <span className="text-xs text-slate-400">Synchronisation...</span>}
                   </div>
@@ -898,7 +917,7 @@ const ActionRow = memo(function ActionRow({ action: a, formatDate }: { action: C
           <div className="flex items-center gap-2">
             <span className="text-sm font-medium text-slate-900">{actionTypeLabels[a.action_type] || a.action_type}</span>
             {(a.action_type === 'appel' || a.action_type === 'relance') && (
-              <Badge className={`shrink-0 text-[10px] ${a.appel_repondu ? 'bg-emerald-100 text-emerald-700 border-emerald-200' : 'bg-red-100 text-red-600 border-red-200'}`}>
+              <Badge className={`text-[10px] rounded-md ${a.appel_repondu ? 'bg-emerald-100 text-emerald-700 border-emerald-200' : 'bg-red-100 text-red-600 border-red-200'}`}>
                 {a.appel_repondu ? 'Répondu' : 'Non répondu'}
               </Badge>
             )}

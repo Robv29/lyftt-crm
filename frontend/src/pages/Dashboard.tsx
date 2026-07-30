@@ -46,6 +46,7 @@ import {
   Download,
   AlertTriangle,
   CheckCircle2,
+  Target,
 } from 'lucide-react';
 
 type PeriodKey = 'today' | 'week' | 'month' | 'prev_month' | 'year';
@@ -282,7 +283,11 @@ export default function Dashboard() {
     let trend: 'up' | 'down' | 'stable' = 'stable';
     if (currentRate > previousRate + 0.5) trend = 'up';
     else if (currentRate < previousRate - 0.5) trend = 'down';
-    return { totalAppels, appelsRepondus, refus, signatures, visios, currentRate, previousRate, trend };
+    // Taux de transformation Visio -> Signature : sur la meme periode, combien
+    // de visios distinctes se sont transformees en signature (independant du
+    // taux appels -> signature deja affiche par "Transformation" ci-dessus).
+    const visioSignatureRate = visios > 0 ? (signatures / visios) * 100 : 0;
+    return { totalAppels, appelsRepondus, refus, signatures, visios, currentRate, previousRate, trend, visioSignatureRate };
   }, [actions, selectedPeriod]);
 
   const prospectsToCallbackAll = useMemo(() => {
@@ -643,12 +648,21 @@ export default function Dashboard() {
             ))}
           </div>
 
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-3">
             <StatBox icon={Phone} value={periodStats.totalAppels} label="Appels" gradient="from-teal-50 to-teal-100/50" iconBg="bg-teal-100" iconColor="text-[#5A9BA3]" />
             <StatBox icon={PhoneCall} value={periodStats.appelsRepondus} label="Répondus" gradient="from-emerald-50 to-emerald-100/50" iconBg="bg-emerald-100" iconColor="text-emerald-600" valueColor="text-emerald-600" />
             <StatBox icon={XCircle} value={periodStats.refus} label="Refus" gradient="from-red-50 to-red-100/50" iconBg="bg-red-100" iconColor="text-red-600" valueColor="text-red-600" />
             <StatBox icon={FileSignature} value={periodStats.signatures} label="Signatures" gradient="from-emerald-50 to-emerald-100/50" iconBg="bg-emerald-100" iconColor="text-emerald-600" valueColor="text-emerald-600" />
             <StatBox icon={Video} value={periodStats.visios} label="Visios" gradient="from-purple-50 to-purple-100/50" iconBg="bg-purple-100" iconColor="text-purple-600" valueColor="text-purple-600" />
+            <StatBox
+              icon={Target}
+              value={`${periodStats.visioSignatureRate.toFixed(0)}%`}
+              label="Visio → Signature"
+              gradient="from-indigo-50 to-indigo-100/50"
+              iconBg="bg-indigo-100"
+              iconColor="text-indigo-600"
+              valueColor="text-indigo-600"
+            />
 
             {/* Conversion rate */}
             <div className={`rounded-2xl p-4 text-center ${
@@ -768,7 +782,7 @@ export default function Dashboard() {
 
 // Extracted components to prevent re-renders
 function StatBox({ icon: Icon, value, label, gradient, iconBg, iconColor, valueColor }: {
-  icon: React.ElementType; value: number; label: string; gradient: string; iconBg: string; iconColor: string; valueColor?: string;
+  icon: React.ElementType; value: number | string; label: string; gradient: string; iconBg: string; iconColor: string; valueColor?: string;
 }) {
   return (
     <div className={`bg-gradient-to-br ${gradient} rounded-2xl p-4 text-center`}>

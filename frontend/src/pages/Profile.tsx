@@ -164,77 +164,26 @@ const RARITY: Record<
   },
 };
 
-const TROPHY_SHEETS: Record<
-  TrophyCollection,
-  { src: string; count: number; ratio: number }
-> = {
-  closing: {
-    src: '/assets/trophies-closing.jpg',
-    count: 4,
-    ratio: 1200 / 600,
-  },
-  revenue: {
-    src: '/assets/trophies-revenue.jpg',
-    count: 6,
-    ratio: 1200 / 589,
-  },
-  regularity: {
-    src: '/assets/trophies-regularity.jpg',
-    count: 4,
-    ratio: 1100 / 600,
-  },
-  special: {
-    src: '/assets/trophies-special.jpg',
-    count: 5,
-    ratio: 1167 / 600,
-  },
-};
-
-const TROPHY_ART_INDEX: Record<string, number> = {
-  closing_1: 0,
-  closing_25: 1,
-  closing_75: 2,
-  closing_150: 3,
-  revenue_25: 0,
-  revenue_50: 1,
-  revenue_80: 2,
-  revenue_120: 3,
-  revenue_160: 4,
-  revenue_250: 5,
-  regularity_3: 0,
-  regularity_6: 1,
-  regularity_9: 2,
-  regularity_12: 3,
-  special_number_one: 0,
-  special_speed_runner: 1,
-  special_overdrive: 2,
-  special_recordman: 3,
-  special_goat: 4,
-};
-
-const TROPHY_ART_FRAMES: Record<
-  string,
-  { scale: number; translateX?: number; translateY?: number }
-> = {
-  closing_1: { scale: 1.08, translateY: 4 },
-  closing_25: { scale: 1.05, translateY: 3 },
-  closing_75: { scale: 1 },
-  closing_150: { scale: 0.92, translateY: -2 },
-  revenue_25: { scale: 1.12, translateY: 7 },
-  revenue_50: { scale: 1.1, translateY: 6 },
-  revenue_80: { scale: 1.06, translateY: 5 },
-  revenue_120: { scale: 1.01, translateY: 3 },
-  revenue_160: { scale: 0.97, translateY: 1 },
-  revenue_250: { scale: 0.9, translateY: -3 },
-  regularity_3: { scale: 1.12, translateY: 7 },
-  regularity_6: { scale: 1.08, translateY: 5 },
-  regularity_9: { scale: 1.01, translateY: 2 },
-  regularity_12: { scale: 0.9, translateY: -3 },
-  special_number_one: { scale: 1.18, translateY: 9 },
-  special_speed_runner: { scale: 1.12, translateY: 7 },
-  special_overdrive: { scale: 1.06, translateY: 5 },
-  special_recordman: { scale: 0.96 },
-  special_goat: { scale: 0.86, translateY: -4 },
+const TROPHY_ART: Record<string, string> = {
+  closing_1: '/assets/trophies/closing-1.jpg',
+  closing_25: '/assets/trophies/closing-25.jpg',
+  closing_75: '/assets/trophies/closing-75.jpg',
+  closing_150: '/assets/trophies/closing-150.jpg',
+  revenue_25: '/assets/trophies/revenue-25.jpg',
+  revenue_50: '/assets/trophies/revenue-50.jpg',
+  revenue_80: '/assets/trophies/revenue-80.jpg',
+  revenue_120: '/assets/trophies/revenue-120.jpg',
+  revenue_160: '/assets/trophies/revenue-160.jpg',
+  revenue_250: '/assets/trophies/revenue-250.jpg',
+  regularity_3: '/assets/trophies/regularity-3.jpg',
+  regularity_6: '/assets/trophies/regularity-6.jpg',
+  regularity_9: '/assets/trophies/regularity-9.jpg',
+  regularity_12: '/assets/trophies/regularity-12.jpg',
+  special_number_one: '/assets/trophies/special-number-one.jpg',
+  special_speed_runner: '/assets/trophies/special-speed-runner.jpg',
+  special_overdrive: '/assets/trophies/special-overdrive.jpg',
+  special_recordman: '/assets/trophies/special-recordman.jpg',
+  special_goat: '/assets/trophies/special-goat.jpg',
 };
 
 const formatNumber = (value: number) =>
@@ -557,10 +506,7 @@ function AvatarSelector({
 
 function Cup({ trophy }: { trophy: CommercialTrophy }) {
   const rarity = RARITY[trophy.rarity];
-  const sheet = TROPHY_SHEETS[trophy.collection];
-  const artIndex = TROPHY_ART_INDEX[trophy.code] ?? 0;
-  const frame = TROPHY_ART_FRAMES[trophy.code] ?? { scale: 1 };
-  const cellRatio = sheet.ratio / sheet.count;
+  const artSrc = TROPHY_ART[trophy.code];
 
   return (
     <div className="profile-trophy-stage relative flex h-32 w-[112px] shrink-0 items-center justify-center sm:h-44 sm:w-40">
@@ -580,24 +526,15 @@ function Cup({ trophy }: { trophy: CommercialTrophy }) {
             : 'drop-shadow(0 16px 11px rgba(0,0,0,.55)) grayscale(1) saturate(.15) brightness(.38) contrast(1.25)',
         }}
       >
-        <div
-          className="relative h-[94%] overflow-hidden"
-          style={{
-            aspectRatio: `${cellRatio}`,
-            transform: `translate(${frame.translateX ?? 0}px, ${frame.translateY ?? 0}px) scale(${frame.scale})`,
-            transformOrigin: '50% 88%',
-          }}
-        >
+        <div className="relative flex h-[96%] w-full items-center justify-center overflow-hidden">
           <img
-            src={sheet.src}
+            src={artSrc}
             alt=""
             aria-hidden="true"
             draggable={false}
-            className="absolute inset-y-0 h-full max-w-none select-none"
-            style={{
-              width: `${sheet.count * 100}%`,
-              left: `-${artIndex * 100}%`,
-            }}
+            loading="lazy"
+            decoding="async"
+            className="h-full w-full select-none object-contain object-center"
           />
         </div>
       </div>

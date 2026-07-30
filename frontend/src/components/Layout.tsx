@@ -12,7 +12,6 @@ import {
   UserCog,
   ShieldAlert,
   MapPin,
-  Sparkles,
   TrendingUp,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -39,10 +38,10 @@ export default function Layout({ children }: LayoutProps) {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 to-teal-50">
+      <div className="min-h-screen flex items-center justify-center bg-[#f4f7f7]">
         <div className="flex flex-col items-center gap-4">
-          <div className="relative">
-            <img src="/assets/lyftt-logo.png" alt="LYFTT" className="w-16 h-16 rounded-2xl animate-pulse" />
+          <div className="rounded-2xl border border-[#d9e5e6] bg-white p-2 shadow-[0_12px_30px_-20px_rgba(15,40,48,.35)]">
+            <img src="/assets/lyftt-logo.png" alt="LYFTT" className="h-14 w-14 rounded-xl animate-pulse" />
           </div>
           <div className="flex items-center gap-2">
             <div className="w-2 h-2 rounded-full bg-[#6AABB4] animate-bounce" style={{ animationDelay: '0ms' }} />
@@ -56,15 +55,15 @@ export default function Layout({ children }: LayoutProps) {
 
   if (!user) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-[#1a3a4a] via-[#1e4a5a] to-[#2a5a6a] relative overflow-hidden">
+      <div className="min-h-screen flex items-center justify-center bg-[#07151e] relative overflow-hidden">
         {/* Background decoration */}
         <div className="absolute inset-0 overflow-hidden">
           <div className="absolute -top-40 -right-40 w-80 h-80 bg-[#6AABB4]/15 rounded-full blur-3xl" />
           <div className="absolute -bottom-40 -left-40 w-80 h-80 bg-[#5A9BA3]/15 rounded-full blur-3xl" />
           <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-[#6AABB4]/5 rounded-full blur-3xl" />
         </div>
-        <div className="relative bg-white/95 glass rounded-3xl shadow-2xl p-10 max-w-md w-full text-center space-y-6 animate-scale-in mx-4">
-          <img src="https://mgx-backend-cdn.metadl.com/generate/images/1020992/2026-04-13/3c2b958e-d0a4-4fa0-93e0-46e55475cd08.png" alt="LYFTT" className="w-20 h-20 rounded-2xl mx-auto shadow-lg shadow-[#6AABB4]/25" />
+        <div className="relative bg-white/95 glass rounded-2xl border border-white/70 shadow-2xl p-10 max-w-md w-full text-center space-y-6 animate-scale-in mx-4">
+          <img src="/assets/lyftt-logo.png" alt="LYFTT" className="w-20 h-20 rounded-2xl mx-auto shadow-lg shadow-[#6AABB4]/20" />
           <div>
             <h1 className="text-3xl font-bold text-slate-900 tracking-tight">LYFTT CRM</h1>
             <p className="text-slate-500 mt-2">
@@ -73,7 +72,7 @@ export default function Layout({ children }: LayoutProps) {
           </div>
           <Button
             onClick={login}
-            className="w-full bg-gradient-to-r from-[#5A9BA3] to-[#6AABB4] hover:from-[#4A8B93] hover:to-[#5A9BA4] text-white py-3 text-lg rounded-xl shadow-lg shadow-[#6AABB4]/25 transition-all duration-300 hover:shadow-xl hover:shadow-[#6AABB4]/30 hover:-translate-y-0.5"
+            className="w-full py-3 text-base rounded-lg"
           >
             Se connecter
           </Button>
@@ -113,7 +112,7 @@ export default function Layout({ children }: LayoutProps) {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-teal-50/30 flex">
+    <div className="min-h-screen bg-[#f4f7f7] flex">
       {/* Mobile overlay */}
       {sidebarOpen && (
         <div
@@ -124,17 +123,18 @@ export default function Layout({ children }: LayoutProps) {
 
       {/* Sidebar */}
       <aside
-        className={`fixed lg:static inset-y-0 left-0 z-50 w-[260px] bg-gradient-to-b from-[#1a3a4a] via-[#1e4a5a] to-[#1a3a4a] text-white transform transition-transform duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] ${
+        className={`fixed lg:static inset-y-0 left-0 z-50 w-[252px] overflow-hidden border-r border-[#d6b35b]/15 bg-[linear-gradient(180deg,#07151e_0%,#0a2028_58%,#07151e_100%)] text-white shadow-[10px_0_35px_-30px_rgba(3,12,18,.8)] transform transition-transform duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] ${
           sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
         }`}
       >
+        <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-[#d6b35b]/70 to-transparent" />
         {/* Logo */}
-        <div className="flex items-center justify-between p-5 border-b border-white/10">
+        <div className="flex items-center justify-between p-5 border-b border-white/[0.07]">
           <div className="flex items-center gap-3">
-            <img src="https://mgx-backend-cdn.metadl.com/generate/images/1020992/2026-04-13/cd3e5413-7995-4bb0-95fb-38792f5cde9c.png" alt="LYFTT" className="w-10 h-10 rounded-xl shadow-lg shadow-[#6AABB4]/20" />
+            <img src="/assets/lyftt-logo.png" alt="LYFTT" className="w-10 h-10 rounded-xl ring-1 ring-white/10" />
             <div>
-              <span className="text-lg font-bold tracking-tight">LYFTT</span>
-              <span className="text-xs text-[#6AABB4]/70 block -mt-0.5">CRM Platform</span>
+              <span className="text-lg font-bold tracking-tight text-white">LYFTT</span>
+              <span className="text-[11px] text-white/40 block -mt-0.5 tracking-wide">CRM commercial</span>
             </div>
           </div>
           <button
@@ -157,15 +157,14 @@ export default function Layout({ children }: LayoutProps) {
                 key={item.path}
                 to={item.path}
                 onClick={() => setSidebarOpen(false)}
-                className={`flex items-center gap-3 px-4 py-2.5 rounded-xl transition-all duration-200 group ${
+                className={`relative flex items-center gap-3 px-4 py-2.5 rounded-lg transition-colors duration-150 group ${
                   isActive
-                    ? 'bg-gradient-to-r from-[#5A9BA3]/90 to-[#6AABB4]/90 text-white shadow-lg shadow-[#6AABB4]/20'
-                    : 'text-slate-400 hover:bg-white/5 hover:text-white'
+                    ? 'bg-white/[0.075] text-white ring-1 ring-inset ring-white/[0.07]'
+                    : 'text-white/50 hover:bg-white/[0.04] hover:text-white/85'
                 }`}
               >
-                <item.icon className={`w-[18px] h-[18px] transition-transform duration-200 ${
-                  isActive ? '' : 'group-hover:scale-110'
-                }`} />
+                {isActive && <span className="absolute inset-y-2 left-0 w-[2px] rounded-r-full bg-[#d6b35b]" />}
+                <item.icon className={`w-[18px] h-[18px] ${isActive ? 'text-[#79b9c1]' : ''}`} />
                 <span className="font-medium text-sm">{item.label}</span>
               </Link>
             );
@@ -173,9 +172,9 @@ export default function Layout({ children }: LayoutProps) {
         </nav>
 
         {/* User section */}
-        <div className="p-3 border-t border-white/10 mt-auto">
-          <div className="flex items-center gap-3 px-3 py-2.5 mb-1 rounded-xl bg-white/5">
-            <div className="w-9 h-9 bg-gradient-to-br from-[#5A9BA3] to-[#6AABB4] rounded-lg flex items-center justify-center ring-2 ring-white/10">
+        <div className="p-3 border-t border-white/[0.07] mt-auto">
+          <div className="flex items-center gap-3 px-3 py-2.5 mb-1 rounded-lg bg-white/[0.045] ring-1 ring-inset ring-white/[0.05]">
+            <div className="w-9 h-9 bg-[#5A9BA3] rounded-lg flex items-center justify-center ring-1 ring-white/10">
               <User className="w-4 h-4 text-white" />
             </div>
             <div className="flex-1 min-w-0">
@@ -193,7 +192,7 @@ export default function Layout({ children }: LayoutProps) {
           </div>
           <button
             onClick={logout}
-            className="flex items-center gap-3 px-4 py-2.5 w-full text-slate-500 hover:text-red-400 transition-all duration-200 rounded-xl hover:bg-red-500/5"
+            className="flex items-center gap-3 px-4 py-2.5 w-full text-white/35 hover:text-red-300 transition-colors duration-150 rounded-lg hover:bg-red-500/[0.06]"
           >
             <LogOut className="w-4 h-4" />
             <span className="text-sm font-medium">Déconnexion</span>
@@ -204,7 +203,7 @@ export default function Layout({ children }: LayoutProps) {
       {/* Main content */}
       <div className="flex-1 flex flex-col min-w-0">
         {/* Mobile top bar */}
-        <header className="bg-white/80 glass border-b border-slate-200/60 px-5 py-3.5 flex items-center gap-4 lg:hidden sticky top-0 z-30">
+        <header className="bg-white/90 glass border-b border-[#d9e5e6] px-5 py-3.5 flex items-center gap-4 lg:hidden sticky top-0 z-30">
           <button
             onClick={() => setSidebarOpen(true)}
             className="text-slate-600 hover:text-slate-900 transition-colors p-1"
@@ -212,12 +211,12 @@ export default function Layout({ children }: LayoutProps) {
             <Menu className="w-5 h-5" />
           </button>
           <div className="flex items-center gap-2">
-            <img src="https://mgx-backend-cdn.metadl.com/generate/images/1020992/2026-04-13/73359514-17f3-4757-a994-7581e4f71021.png" alt="LYFTT" className="w-7 h-7 rounded-lg" />
-            <h1 className="text-base font-bold text-slate-900">LYFTT CRM</h1>
+            <img src="/assets/lyftt-logo.png" alt="LYFTT" className="w-7 h-7 rounded-lg" />
+            <h1 className="text-base font-bold text-[#16313a]">LYFTT CRM</h1>
           </div>
         </header>
 
-        <main className="flex-1 p-4 sm:p-6 lg:p-8 overflow-auto smooth-scroll">
+        <main className="crm-workspace flex-1 p-4 sm:p-6 lg:p-8 overflow-auto smooth-scroll">
           <div className="animate-page-enter">
             {children}
           </div>

@@ -223,7 +223,7 @@ export default function Attributions() {
                 ))}
               </SelectContent>
             </Select>
-            <Button onClick={handleAdd} disabled={!effectiveSelectedUser || !selectedCity} className="gap-2 bg-gradient-to-r from-[#5A9BA3] to-[#6AABB4] hover:from-[#4A8B93] hover:to-[#5A9BA4] text-white rounded-xl shadow-md shadow-[#6AABB4]/20">
+            <Button onClick={handleAdd} disabled={!effectiveSelectedUser || !selectedCity} className="gap-2">
               <Plus className="w-4 h-4" /> Attribuer
             </Button>
           </div>

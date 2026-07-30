@@ -271,11 +271,7 @@ export default function Dashboard() {
     const appelsRepondus = fa.filter((a) => (a.action_type === 'appel' || a.action_type === 'relance') && a.appel_repondu).length;
     const refus = fa.filter((a) => a.action_type === 'status_change' && a.to_status === 'Refus / Perdu').length;
     const signatures = fa.filter((a) => a.action_type === 'status_change' && a.to_status === 'Signature').length;
-    // Compte des visios DISTINCTES (par prospect), pas des actions "visio"
-    // brutes : reprogrammer 2 fois le même rendez-vous (changement de date/
-    // heure) crée 3 lignes commercial_actions pour un seul RDV réel — sans
-    // dédoublonnage, le KPI comptait ce genre de cas comme 3 visios.
-    const visios = new Set(fa.filter((a) => a.action_type === 'visio').map((a) => a.prospect_id)).size;
+    const visios = fa.filter((a) => a.action_type === 'visio').length;
     const currentRate = computeConversionRate(actions, start, end);
     const { start: ps, end: pe } = getPreviousDateRange(selectedPeriod);
     const previousRate = computeConversionRate(actions, ps, pe);
@@ -469,22 +465,21 @@ export default function Dashboard() {
         <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto">
           <button
             onClick={openSpeedRun}
-            className="group relative flex-1 sm:flex-none inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2 font-bold text-white bg-gradient-to-r from-amber-400 via-orange-500 to-pink-500 shadow-[0_0_25px_rgba(251,146,60,0.45)] hover:shadow-[0_0_35px_rgba(251,146,60,0.7)] hover:scale-[1.03] active:scale-95 transition-all"
+            className="group flex-1 sm:flex-none inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-[#b99046]/30 bg-[#102a33] px-4 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-[#173741] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-[#6AABB4]/20"
           >
-            <span className="absolute inset-0 rounded-xl bg-white/20 opacity-0 group-hover:opacity-100 animate-pulse" />
-            <Zap className="w-4 h-4 relative shrink-0" fill="white" />
-            <span className="relative tracking-wide">Speed Run</span>
+            <Zap className="w-4 h-4 shrink-0 text-[#e0bd69]" fill="currentColor" />
+            <span>Speed Run</span>
           </button>
           <Button
             onClick={handleExportExcel}
             disabled={allProspects.length === 0}
-            className="flex-1 sm:flex-none rounded-xl bg-gradient-to-r from-[#5A9BA3] to-[#6AABB4] hover:from-[#4A8B93] hover:to-[#5A9BA4] text-white shadow-md shadow-[#6AABB4]/20"
+            className="flex-1 sm:flex-none"
           >
             <Download className="w-4 h-4 mr-2 shrink-0" /> Exporter Excel
           </Button>
           {commercialNames.length > 0 && (
             <Select value={selectedCommercial} onValueChange={setSelectedCommercial}>
-              <SelectTrigger className="w-full sm:w-56 rounded-xl border-slate-200 bg-white shadow-sm">
+              <SelectTrigger className="w-full sm:w-56">
                 <UserCircle className="w-4 h-4 mr-2 text-[#6AABB4] shrink-0" />
                 <SelectValue placeholder="Sélectionner un commercial" />
               </SelectTrigger>
@@ -816,27 +811,20 @@ function RelanceDateRow({ prospect: p, overdue = false }: { prospect: Prospect; 
   const dt = p.date_relance_planifiee ? new Date(p.date_relance_planifiee) : null;
   const heure = dt ? dt.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) : '--:--';
   const jour = dt ? dt.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' }) : '';
-  // Trois cas particuliers en plus de la relance standard (teal), par ordre de
-  // priorité : en retard (rouge) > lapin posé à une visio (ambre) > rappel de
-  // confirmation avant visio programmé auto J-1, ou fiche encore au statut
-  // "Visio" pour compat avec les anciennes relances créées avant ce marquage
-  // explicite (violet) > standard (teal).
-  const isLapin = p.type_relance_planifiee === 'lapin';
-  const isVisioFollowup = p.type_relance_planifiee === 'confirmation_visio' || p.statut_avancement === 'Visio';
+  // Relance créée depuis "Mes visios passées" : le prospect reste au statut
+  // "Visio" (pas de changement d'étape), ce qui permet de la distinguer
+  // visuellement (violet) des relances NRP/classiques (teal / rouge si en retard).
+  const isVisioFollowup = p.statut_avancement === 'Visio';
   const rowClass = overdue
     ? 'border-red-200 bg-red-50/70 hover:bg-red-50'
-    : isLapin
-      ? 'border-amber-200 bg-amber-50/70 hover:bg-amber-50'
-      : isVisioFollowup
-        ? 'border-purple-200 bg-purple-50/70 hover:bg-purple-50'
-        : 'border-slate-100 hover:border-[#6AABB4]/40 hover:bg-gradient-to-r hover:from-teal-50/50 hover:to-cyan-50/30';
+    : isVisioFollowup
+      ? 'border-purple-200 bg-purple-50/70 hover:bg-purple-50'
+      : 'border-slate-100 hover:border-[#6AABB4]/40 hover:bg-gradient-to-r hover:from-teal-50/50 hover:to-cyan-50/30';
   const badgeClass = overdue
     ? 'bg-red-500 text-white'
-    : isLapin
-      ? 'bg-amber-500 text-white'
-      : isVisioFollowup
-        ? 'bg-purple-500 text-white'
-        : 'bg-[#5A9BA3]/10 text-[#5A9BA3]';
+    : isVisioFollowup
+      ? 'bg-purple-500 text-white'
+      : 'bg-[#5A9BA3]/10 text-[#5A9BA3]';
   return (
     <Link
       to={`/prospects/${p.id}`}
@@ -845,8 +833,7 @@ function RelanceDateRow({ prospect: p, overdue = false }: { prospect: Prospect; 
       <div className="w-16 shrink-0 text-center">
         <span className={`inline-block px-2 py-1 rounded-lg text-sm font-bold tabular-nums ${badgeClass}`}>{heure}</span>
         {overdue && <p className="text-[10px] font-bold text-red-600 mt-0.5">{jour} en retard</p>}
-        {!overdue && isLapin && <p className="text-[10px] font-bold text-amber-600 mt-0.5">🐇 Lapin</p>}
-        {!overdue && !isLapin && isVisioFollowup && <p className="text-[10px] font-bold text-purple-600 mt-0.5">{p.type_relance_planifiee === 'confirmation_visio' ? 'Confirmation visio' : 'Visio'}</p>}
+        {!overdue && isVisioFollowup && <p className="text-[10px] font-bold text-purple-600 mt-0.5">Visio</p>}
       </div>
       <div className="min-w-0 flex-1">
         <p className="text-sm font-semibold text-slate-900 truncate group-hover:text-[#5A9BA3] transition-colors">{p.nom_societe}</p>

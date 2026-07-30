@@ -276,40 +276,46 @@ export default function AdminUsers() {
       {/* Stats */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <Card>
-          <CardContent className="pt-6">
+          <CardContent className="p-5 sm:p-6">
             <div className="flex items-center gap-4">
-              <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center">
+              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-blue-100">
                 <Users className="w-6 h-6 text-blue-600" />
               </div>
-              <div>
-                <p className="text-2xl font-bold">{users.length}</p>
-                <p className="text-sm text-slate-500">Total utilisateurs</p>
+              <div className="flex min-h-12 min-w-0 flex-col justify-center">
+                <p className="text-2xl font-bold leading-none">{users.length}</p>
+                <p className="mt-1.5 truncate text-sm leading-5 text-slate-500">
+                  Total utilisateurs
+                </p>
               </div>
             </div>
           </CardContent>
         </Card>
         <Card>
-          <CardContent className="pt-6">
+          <CardContent className="p-5 sm:p-6">
             <div className="flex items-center gap-4">
-              <div className="w-12 h-12 bg-amber-100 rounded-xl flex items-center justify-center">
+              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-amber-100">
                 <ShieldCheck className="w-6 h-6 text-amber-600" />
               </div>
-              <div>
-                <p className="text-2xl font-bold">{adminCount}</p>
-                <p className="text-sm text-slate-500">Administrateurs</p>
+              <div className="flex min-h-12 min-w-0 flex-col justify-center">
+                <p className="text-2xl font-bold leading-none">{adminCount}</p>
+                <p className="mt-1.5 truncate text-sm leading-5 text-slate-500">
+                  Administrateurs
+                </p>
               </div>
             </div>
           </CardContent>
         </Card>
         <Card>
-          <CardContent className="pt-6">
+          <CardContent className="p-5 sm:p-6">
             <div className="flex items-center gap-4">
-              <div className="w-12 h-12 bg-emerald-100 rounded-xl flex items-center justify-center">
+              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-emerald-100">
                 <Briefcase className="w-6 h-6 text-emerald-600" />
               </div>
-              <div>
-                <p className="text-2xl font-bold">{commercialCount}</p>
-                <p className="text-sm text-slate-500">Commerciaux</p>
+              <div className="flex min-h-12 min-w-0 flex-col justify-center">
+                <p className="text-2xl font-bold leading-none">{commercialCount}</p>
+                <p className="mt-1.5 truncate text-sm leading-5 text-slate-500">
+                  Commerciaux
+                </p>
               </div>
             </div>
           </CardContent>

@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { client } from '../lib/api';
+import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -39,6 +40,10 @@ import {
   Briefcase,
   CheckCircle2,
   XCircle,
+  Mail,
+  Send,
+  Loader2,
+  AlertTriangle,
 } from 'lucide-react';
 import ErrorState from '../components/ErrorState';
 
@@ -50,6 +55,19 @@ interface UserRole {
   last_name: string | null;
   role: string;
   is_active: boolean;
+}
+
+interface ReportLogEntry {
+  id: number;
+  user_role_id: number | null;
+  period_type: 'week' | 'month';
+  period_start: string;
+  period_end: string;
+  email_to: string | null;
+  status: 'success' | 'error' | 'skipped';
+  error_detail: string | null;
+  coaching_message: string | null;
+  sent_at: string;
 }
 
 export default function AdminUsers() {
@@ -143,6 +161,59 @@ export default function AdminUsers() {
       toast.error(detail);
     }
   };
+
+  // --- Rapports de performance (topo hebdo / mensuel par mail) ---------
+  const [reportLogs, setReportLogs] = useState<ReportLogEntry[]>([]);
+  const [logsLoading, setLogsLoading] = useState(true);
+  const [sendingPeriod, setSendingPeriod] = useState<'week' | 'month' | null>(null);
+
+  const fetchReportLogs = useCallback(async () => {
+    try {
+      setLogsLoading(true);
+      const { data, error } = await supabase
+        .from('performance_reports_log')
+        .select('*')
+        .order('sent_at', { ascending: false })
+        .limit(20);
+      if (error) throw error;
+      setReportLogs((data as ReportLogEntry[]) || []);
+    } catch (err) {
+      console.error('Failed to fetch report logs:', err);
+    } finally {
+      setLogsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchReportLogs();
+  }, [fetchReportLogs]);
+
+  const handleSendReport = async (period: 'week' | 'month') => {
+    try {
+      setSendingPeriod(period);
+      const { data, error } = await supabase.rpc('send_performance_reports', {
+        p_period: period,
+      });
+      if (error) throw error;
+      const result = data as { sent: number; errors: number };
+      if (result.errors > 0 && result.sent === 0) {
+        toast.error(
+          `Aucun envoi (${result.errors} erreur${result.errors > 1 ? 's' : ''}). Vérifie la clé Resend (secret "resend_api_key" dans Supabase Vault).`
+        );
+      } else if (result.errors > 0) {
+        toast.warning(`${result.sent} mail(s) envoyé(s), ${result.errors} erreur(s).`);
+      } else {
+        toast.success(`${result.sent} mail(s) envoyé(s) avec succès.`);
+      }
+      fetchReportLogs();
+    } catch (err: any) {
+      toast.error(err?.message || "Erreur lors de l'envoi des rapports");
+    } finally {
+      setSendingPeriod(null);
+    }
+  };
+
+  const usersById = new Map(users.map((u) => [u.id, u]));
 
   const adminCount = users.filter((u) => u.role === 'admin').length;
   const commercialCount = users.filter((u) => u.role === 'commercial').length;
@@ -395,6 +466,112 @@ export default function AdminUsers() {
                       </TableCell>
                     </TableRow>
                   ))}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Rapports de performance automatiques */}
+      <Card>
+        <CardHeader>
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div>
+              <CardTitle className="flex items-center gap-2">
+                <Mail className="w-4 h-4 text-slate-500" />
+                Rapports de performance
+              </CardTitle>
+              <p className="text-sm text-slate-500 mt-1">
+                Topo chiffres + coaching (consignes, warning, félicitations) envoyé à chaque commercial depuis robin.vergnes@lyftt.fr.
+                Automatique tous les lundis (semaine) et le 1er du mois (mois précédent) — déclenchement manuel possible ici.
+              </p>
+            </div>
+            <div className="flex gap-2 shrink-0">
+              <Button
+                variant="outline"
+                onClick={() => handleSendReport('week')}
+                disabled={sendingPeriod !== null}
+              >
+                {sendingPeriod === 'week' ? (
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                ) : (
+                  <Send className="w-4 h-4 mr-2" />
+                )}
+                Topo hebdo
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => handleSendReport('month')}
+                disabled={sendingPeriod !== null}
+              >
+                {sendingPeriod === 'month' ? (
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                ) : (
+                  <Send className="w-4 h-4 mr-2" />
+                )}
+                Topo mensuel
+              </Button>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent>
+          {logsLoading ? (
+            <div className="flex items-center justify-center py-8">
+              <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600" />
+            </div>
+          ) : reportLogs.length === 0 ? (
+            <div className="text-center py-8 text-slate-500 text-sm">
+              Aucun envoi pour l&apos;instant.
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Commercial</TableHead>
+                    <TableHead>Période</TableHead>
+                    <TableHead>Message</TableHead>
+                    <TableHead>Statut</TableHead>
+                    <TableHead className="text-right">Envoyé le</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {reportLogs.map((log) => {
+                    const u = log.user_role_id ? usersById.get(log.user_role_id) : undefined;
+                    return (
+                      <TableRow key={log.id}>
+                        <TableCell className="font-medium">
+                          {u ? `${u.first_name || ''} ${u.last_name || ''}`.trim() : log.email_to || '—'}
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant="outline" className="font-normal">
+                            {log.period_type === 'week' ? 'Semaine' : 'Mois'} du{' '}
+                            {new Date(log.period_start).toLocaleDateString('fr-FR')}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="max-w-[320px] truncate text-slate-500 text-sm">
+                          {log.status === 'error' ? log.error_detail : log.coaching_message}
+                        </TableCell>
+                        <TableCell>
+                          {log.status === 'success' ? (
+                            <span className="flex items-center gap-1 text-emerald-600 text-sm">
+                              <CheckCircle2 className="w-4 h-4" />
+                              Envoyé
+                            </span>
+                          ) : (
+                            <span className="flex items-center gap-1 text-red-500 text-sm">
+                              <AlertTriangle className="w-4 h-4" />
+                              Erreur
+                            </span>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-right text-slate-500 text-sm">
+                          {new Date(log.sent_at).toLocaleString('fr-FR')}
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
                 </TableBody>
               </Table>
             </div>

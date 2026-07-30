@@ -573,60 +573,64 @@ export default function PerformanceCA() {
   if (errorP) return <ErrorState message="Erreur de chargement des données." />;
 
   const cardShell = isDark
-    ? 'border-white/10 bg-[#080d1a] text-white'
-    : 'border-slate-200 bg-white shadow-sm text-slate-900';
-  const textMuted = isDark ? 'text-white/55' : 'text-slate-500';
-  const textMuted2 = isDark ? 'text-white/40' : 'text-slate-400';
+    ? 'border-[#b99046]/25 bg-[#050a13]/95 text-white shadow-[0_24px_60px_rgba(0,0,0,.24)]'
+    : 'border-[#b99046]/25 bg-white shadow-sm text-slate-900';
+  const textMuted = isDark ? 'text-[#c6cedc]/65' : 'text-slate-500';
+  const textMuted2 = isDark ? 'text-[#c6cedc]/45' : 'text-slate-400';
 
   return (
     <div
       className={`-m-4 min-h-[calc(100vh-3.5rem)] space-y-3 p-4 transition-colors sm:-m-6 sm:p-5 lg:-m-8 lg:min-h-screen lg:p-6 ${
         isDark
-          ? 'bg-[radial-gradient(circle_at_75%_0%,rgba(91,33,182,.12),transparent_28%),linear-gradient(135deg,#030713_0%,#06101f_55%,#030713_100%)] text-white'
-          : 'bg-[radial-gradient(circle_at_75%_0%,rgba(91,33,182,.08),transparent_28%),linear-gradient(135deg,#f8fafc_0%,#eef4f8_55%,#f8fafc_100%)] text-slate-950'
+          ? 'bg-[radial-gradient(circle_at_78%_0%,rgba(90,155,163,.14),transparent_30%),radial-gradient(circle_at_16%_12%,rgba(185,144,70,.09),transparent_24%),linear-gradient(135deg,#02050c_0%,#050b15_55%,#02050c_100%)] text-white'
+          : 'bg-[radial-gradient(circle_at_75%_0%,rgba(90,155,163,.10),transparent_30%),linear-gradient(135deg,#fbfcfd_0%,#eef4f6_55%,#fbfcfd_100%)] text-slate-950'
       }`}
     >
       {/* HEADER */}
       <header
         className={`flex flex-col gap-4 border-b pb-4 transition-colors xl:flex-row xl:items-center xl:justify-between ${
-          isDark ? 'border-white/[0.08] text-white' : 'border-slate-200 text-slate-900'
+          isDark ? 'border-[#b99046]/20 text-white' : 'border-[#b99046]/25 text-slate-900'
         }`}
       >
         <div className="flex items-center gap-3">
-          <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full border ${isDark ? 'border-amber-300/20 bg-amber-300/[0.04]' : 'border-amber-300/40 bg-amber-50'}`}>
-            <Crosshair className="h-5 w-5 text-amber-400" />
+          <div className={`flex h-11 w-11 shrink-0 rotate-45 items-center justify-center border ${isDark ? 'border-[#b99046]/55 bg-[#07101d]' : 'border-[#b99046]/45 bg-white'}`}>
+            <Crosshair className="h-5 w-5 -rotate-45 text-[#d6b35b]" />
           </div>
           <div>
-            <h1 className="text-xl font-black tracking-[-0.035em] md:text-[26px]">PERFORMANCE CA</h1>
+            <div className="mb-1 flex items-center gap-2 font-display text-[8px] font-bold uppercase tracking-[0.22em] text-[#d6b35b] sm:text-[9px] sm:tracking-[0.3em]">
+              <span className="h-1.5 w-1.5 rotate-45 border border-[#f1d488] bg-[#b99046]/35" />
+              Saison commerciale
+            </div>
+            <h1 className={`font-display text-xl font-bold uppercase tracking-[0.045em] md:text-[28px] ${isDark ? 'text-[#f4e6bc]' : 'text-slate-900'}`}>Performance CA</h1>
             <p className={`mt-0.5 text-sm ${textMuted}`}>
-              Atteignez vos objectifs et débloquez de nouveaux niveaux.
+              Pilotez votre ascension et débloquez de nouveaux rangs.
             </p>
           </div>
         </div>
         <div className="flex w-full flex-wrap items-center gap-2 xl:w-auto xl:justify-end">
           <button
             onClick={() => setTab('apercu')}
-            className={`flex h-12 flex-1 items-center justify-center gap-2 rounded-xl px-4 text-xs font-bold uppercase tracking-wide transition hover:-translate-y-0.5 sm:flex-none ${
+            className={`flex h-12 flex-1 items-center justify-center gap-2 border px-4 font-display text-[10px] font-bold uppercase tracking-[0.1em] transition hover:-translate-y-0.5 sm:flex-none ${
               tab === 'apercu'
-                ? 'border border-violet-400 bg-violet-500/10 text-violet-200 shadow-[0_0_22px_rgba(139,92,246,.28),inset_0_0_18px_rgba(139,92,246,.08)]'
-                : isDark ? 'border border-white/10 bg-white/[0.035] hover:bg-white/[0.07]' : 'border border-slate-200 bg-white hover:bg-slate-50'
+                ? 'border-[#d6b35b]/70 bg-[linear-gradient(135deg,rgba(90,155,163,.24),rgba(185,144,70,.12))] text-[#f4e6bc] shadow-[0_0_24px_rgba(90,155,163,.14),inset_0_0_18px_rgba(214,179,91,.05)]'
+                : isDark ? 'border-[#b99046]/20 bg-[#07101d]/80 text-white/65 hover:border-[#b99046]/45 hover:text-[#f4e6bc]' : 'border-slate-200 bg-white hover:border-[#b99046]/35 hover:bg-slate-50'
             }`}
           >
             <Home className="h-4 w-4" /> Aperçu du mois
           </button>
           <button
             onClick={() => setTab('paiements')}
-            className={`flex h-12 flex-1 items-center justify-center gap-2 rounded-xl px-4 text-xs font-semibold uppercase tracking-wide transition hover:-translate-y-0.5 sm:flex-none ${
+            className={`flex h-12 flex-1 items-center justify-center gap-2 border px-4 font-display text-[10px] font-bold uppercase tracking-[0.1em] transition hover:-translate-y-0.5 sm:flex-none ${
               tab === 'paiements'
-                ? 'border border-violet-400 bg-violet-500/10 text-violet-200 shadow-[0_0_22px_rgba(139,92,246,.28),inset_0_0_18px_rgba(139,92,246,.08)]'
-                : isDark ? 'border border-white/10 bg-white/[0.035] hover:bg-white/[0.07]' : 'border border-slate-200 bg-white hover:bg-slate-50'
+                ? 'border-[#d6b35b]/70 bg-[linear-gradient(135deg,rgba(90,155,163,.24),rgba(185,144,70,.12))] text-[#f4e6bc] shadow-[0_0_24px_rgba(90,155,163,.14),inset_0_0_18px_rgba(214,179,91,.05)]'
+                : isDark ? 'border-[#b99046]/20 bg-[#07101d]/80 text-white/65 hover:border-[#b99046]/45 hover:text-[#f4e6bc]' : 'border-slate-200 bg-white hover:border-[#b99046]/35 hover:bg-slate-50'
             }`}
           >
             <Receipt className="h-4 w-4" /> Suivi paiements clients
           </button>
           {isAdmin && tab === 'apercu' && (
             <Select value={heroCommercialId} onValueChange={setHeroCommercialId}>
-              <SelectTrigger className={`h-12 w-full rounded-xl text-xs sm:w-[190px] ${isDark ? 'border-white/10 bg-white/[0.035] text-white' : 'border-slate-200 bg-white'}`}>
+              <SelectTrigger className={`h-12 w-full rounded-none text-xs sm:w-[190px] ${isDark ? 'border-[#b99046]/25 bg-[#07101d]/85 text-[#f4e6bc]' : 'border-[#b99046]/25 bg-white'}`}>
                 <SelectValue placeholder="Tous les commerciaux" />
               </SelectTrigger>
               <SelectContent>
@@ -641,17 +645,17 @@ export default function PerformanceCA() {
             onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
             aria-label="Changer le thème"
             title={tab === 'paiements' ? "S'applique à l'onglet Aperçu du mois" : 'Changer le thème'}
-            className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border transition hover:-translate-y-0.5 ${
-              isDark ? 'border-white/10 bg-white/[0.035]' : 'border-slate-200 bg-white shadow-sm'
+            className={`flex h-12 w-12 shrink-0 items-center justify-center border transition hover:-translate-y-0.5 ${
+              isDark ? 'border-[#b99046]/25 bg-[#07101d]/85' : 'border-[#b99046]/25 bg-white shadow-sm'
             }`}
           >
-            {theme === 'dark' ? <Sun className="h-5 w-5 text-amber-400" /> : <Moon className="h-5 w-5 text-violet-600" />}
+            {theme === 'dark' ? <Sun className="h-5 w-5 text-[#f1d488]" /> : <Moon className="h-5 w-5 text-[#5A9BA3]" />}
           </button>
           <button
             type="button"
             aria-label="Plus d'options"
-            className={`hidden h-12 w-12 shrink-0 items-center justify-center rounded-xl border transition hover:-translate-y-0.5 sm:flex ${
-              isDark ? 'border-white/10 bg-white/[0.035]' : 'border-slate-200 bg-white shadow-sm'
+            className={`hidden h-12 w-12 shrink-0 items-center justify-center border transition hover:-translate-y-0.5 sm:flex ${
+              isDark ? 'border-[#b99046]/25 bg-[#07101d]/85' : 'border-[#b99046]/25 bg-white shadow-sm'
             }`}
           >
             <MoreHorizontal className="h-5 w-5 opacity-70" />
@@ -869,12 +873,15 @@ export default function PerformanceCA() {
         <>
           {/* HERO GAMIFIÉ */}
           <div
-            className={`relative overflow-hidden rounded-[24px] border ${
+            className={`relative overflow-hidden border sm:[clip-path:polygon(1.5%_0,98.5%_0,100%_7%,100%_93%,98.5%_100%,1.5%_100%,0_93%,0_7%)] ${
               isDark
-                ? 'border-white/[0.10] bg-[#050a17] text-white shadow-[0_24px_70px_rgba(0,0,0,.28)]'
-                : 'border-slate-200 bg-white text-slate-900 shadow-[0_20px_60px_rgba(15,23,42,.10)]'
+                ? 'border-[#b99046]/45 bg-[#030711] text-white shadow-[0_34px_90px_rgba(0,0,0,.42)]'
+                : 'border-[#b99046]/35 bg-white text-slate-900 shadow-[0_20px_60px_rgba(15,23,42,.10)]'
             }`}
           >
+            <div className="pointer-events-none absolute inset-x-[8%] top-0 z-20 h-px bg-gradient-to-r from-transparent via-[#f1d488]/80 to-transparent" />
+            <div className="pointer-events-none absolute left-3 top-3 z-20 h-5 w-5 border-l border-t border-[#d6b35b]/65 sm:left-5 sm:top-5" />
+            <div className="pointer-events-none absolute bottom-3 right-3 z-20 h-5 w-5 border-b border-r border-[#d6b35b]/65 sm:bottom-5 sm:right-5" />
             <MountainScene
               dark={isDark}
               progress={
@@ -886,13 +893,13 @@ export default function PerformanceCA() {
 
             {/* Le mois reste dans le hero comme sur la maquette de référence. */}
             <div
-              className={`absolute right-4 top-4 z-20 flex h-10 items-center gap-1 rounded-xl border pl-3 pr-1.5 backdrop-blur-xl sm:right-5 sm:top-4 ${
-                isDark ? 'border-white/15 bg-[#020611]/70' : 'border-slate-200 bg-white/85'
+              className={`absolute right-4 top-4 z-30 flex h-10 items-center gap-1 border pl-3 pr-1.5 backdrop-blur-xl sm:right-6 sm:top-5 ${
+                isDark ? 'border-[#b99046]/35 bg-[#02050c]/90 text-[#f4e6bc]' : 'border-[#b99046]/30 bg-white/90'
               }`}
             >
-              <CalendarDays className="h-4 w-4 shrink-0 opacity-70" />
+              <CalendarDays className="h-4 w-4 shrink-0 text-[#d6b35b]" />
               <Select value={String(selectedMonthIdx)} onValueChange={setMonthPart}>
-                <SelectTrigger className={`h-8 w-[104px] rounded-lg border-0 px-2 text-xs shadow-none ${isDark ? 'text-white' : ''}`}>
+                <SelectTrigger className={`h-8 w-[104px] rounded-none border-0 px-2 text-xs shadow-none ${isDark ? 'text-[#f4e6bc]' : ''}`}>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -902,7 +909,7 @@ export default function PerformanceCA() {
                 </SelectContent>
               </Select>
               <Select value={selectedYear} onValueChange={setYearPart}>
-                <SelectTrigger className={`h-8 w-[68px] rounded-lg border-0 px-2 text-xs shadow-none ${isDark ? 'text-white' : ''}`}>
+                <SelectTrigger className={`h-8 w-[68px] rounded-none border-0 px-2 text-xs shadow-none ${isDark ? 'text-[#f4e6bc]' : ''}`}>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -923,13 +930,13 @@ export default function PerformanceCA() {
               {/* progression principale */}
               <div className="flex min-w-0 flex-col justify-center">
                 <div className="flex items-center gap-2">
-                  <span className={`text-xs font-semibold uppercase tracking-[0.08em] ${isDark ? 'text-white/75' : 'text-slate-600'}`}>
+                  <span className={`font-display text-[10px] font-bold uppercase tracking-[0.18em] ${isDark ? 'text-[#d6b35b]' : 'text-[#8a6a2f]'}`}>
                     {viewMode === 'global' ? 'CA PROBABLE ÉQUIPE' : 'CA PROBABLE'}
                   </span>
-                  <Info className="h-4 w-4 opacity-60" />
+                  <Info className="h-4 w-4 text-[#5A9BA3]" />
                 </div>
                 <div className="mt-1 flex flex-wrap items-end gap-4">
-                  <strong className="text-[44px] font-black leading-none tracking-[-0.045em] sm:text-[56px] xl:text-[62px]">
+                  <strong className={`font-display text-[42px] font-bold leading-none tracking-[-0.025em] sm:text-[54px] xl:text-[62px] ${isDark ? 'text-[#f4e6bc]' : 'text-slate-950'}`}>
                     {eur(performance.probable)}
                   </strong>
                 </div>
@@ -937,32 +944,32 @@ export default function PerformanceCA() {
                 {viewMode === 'commercial' && performance.currentLevel && performance.nextLevel ? (
                   <>
                     <div className="mt-6 flex items-center gap-4">
-                      <div className={`h-4 min-w-0 flex-1 overflow-hidden rounded-full ring-1 ${isDark ? 'bg-black/55 ring-white/25' : 'bg-slate-200 ring-black/5'}`}>
+                      <div className={`h-3 min-w-0 flex-1 overflow-hidden border p-[2px] ${isDark ? 'border-[#b99046]/30 bg-black/55' : 'border-[#b99046]/25 bg-slate-200'}`}>
                         <div
-                          className="relative h-full rounded-full bg-gradient-to-r from-violet-700 via-purple-500 to-fuchsia-300 shadow-[0_0_24px_rgba(192,132,252,.72)] transition-all duration-700"
+                          className="relative h-full bg-gradient-to-r from-[#5A9BA3] via-[#70d4df] to-[#f1d488] shadow-[0_0_22px_rgba(106,171,180,.55)] transition-all duration-700"
                           style={{ width: `${Math.max(performance.levelProgress ?? 0, 4)}%` }}
                         >
-                          <div className="absolute right-0 top-1/2 h-7 w-7 -translate-y-1/2 translate-x-1/2 rounded-full bg-white/90 blur-md" />
+                          <div className="absolute right-0 top-1/2 h-6 w-6 -translate-y-1/2 translate-x-1/2 rounded-full bg-[#f1d488]/80 blur-md" />
                         </div>
                       </div>
                       <div className="shrink-0 text-right">
-                        <div className="text-2xl font-black text-violet-200">{Math.round(performance.levelProgress ?? 0)}%</div>
-                        <div className={`text-[10px] ${isDark ? 'text-white/55' : 'text-slate-500'}`}>du niveau actuel</div>
+                        <div className="font-display text-2xl font-bold text-[#f1d488]">{Math.round(performance.levelProgress ?? 0)}%</div>
+                        <div className={`text-[10px] uppercase tracking-wider ${isDark ? 'text-white/50' : 'text-slate-500'}`}>du niveau actuel</div>
                       </div>
                     </div>
                     <div className="mt-4 flex justify-between gap-4 text-xs sm:text-sm">
                       <div>
-                        <div className={`font-semibold uppercase ${isDark ? 'text-white/90' : 'text-slate-700'}`}>Niveau {performance.currentLevel.level}</div>
+                        <div className={`font-display text-[11px] font-bold uppercase tracking-[0.12em] ${isDark ? 'text-[#f4e6bc]' : 'text-slate-700'}`}>Niveau {performance.currentLevel.level}</div>
                         <div className={`mt-1 ${isDark ? 'text-white/55' : 'text-slate-500'}`}>{eur(performance.currentLevel.amount)}</div>
                       </div>
                       <div className="text-right">
-                        <div className={`font-semibold uppercase ${isDark ? 'text-white/90' : 'text-slate-700'}`}>Niveau {performance.nextLevel.level}</div>
+                        <div className={`font-display text-[11px] font-bold uppercase tracking-[0.12em] ${isDark ? 'text-[#f4e6bc]' : 'text-slate-700'}`}>Niveau {performance.nextLevel.level}</div>
                         <div className={`mt-1 ${isDark ? 'text-white/55' : 'text-slate-500'}`}>{eur(performance.nextLevel.amount)}</div>
                       </div>
                     </div>
                     {performance.currentLevel.level < performance.nextLevel.level ? (
-                      <div className={`mt-5 hidden w-fit items-center gap-2 rounded-xl border px-3 py-2 text-xs sm:inline-flex ${isDark ? 'border-violet-400/20 bg-[#050816]/60 text-white/75' : 'border-violet-100 bg-white/75'}`}>
-                        <Zap className="h-4 w-4 text-violet-500" />
+                      <div className={`mt-5 hidden w-fit items-center gap-2 border px-3 py-2 text-xs sm:inline-flex ${isDark ? 'border-[#b99046]/30 bg-[#07101d]/75 text-white/75' : 'border-[#b99046]/25 bg-white/75'}`}>
+                        <Zap className="h-4 w-4 text-[#d6b35b]" />
                         Encore <strong>{eur(performance.remainingToNextLevel ?? 0)}</strong> pour débloquer le niveau {performance.nextLevel.level}
                       </div>
                     ) : (
@@ -974,13 +981,13 @@ export default function PerformanceCA() {
                 ) : (
                   <>
                     <div className="mt-6 flex items-center gap-4">
-                      <div className={`h-4 flex-1 overflow-hidden rounded-full ring-1 ${isDark ? 'bg-black/55 ring-white/25' : 'bg-slate-200 ring-black/5'}`}>
+                      <div className={`h-3 flex-1 overflow-hidden border p-[2px] ${isDark ? 'border-[#b99046]/30 bg-black/55' : 'border-[#b99046]/25 bg-slate-200'}`}>
                         <div
-                          className="h-full rounded-full bg-gradient-to-r from-[#5A9BA3] via-[#6AABB4] to-violet-500 shadow-[0_0_25px_rgba(106,171,180,.55)] transition-all duration-700"
+                          className="h-full bg-gradient-to-r from-[#5A9BA3] via-[#6AABB4] to-[#f1d488] shadow-[0_0_25px_rgba(106,171,180,.48)] transition-all duration-700"
                           style={{ width: `${Math.max(performance.progressPercent, 4)}%` }}
                         />
                       </div>
-                      <div className="text-2xl font-black text-[#87d1dc]">{Math.round(performance.progressPercent)}%</div>
+                      <div className="font-display text-2xl font-bold text-[#f1d488]">{Math.round(performance.progressPercent)}%</div>
                     </div>
                     <div className="mt-4 flex justify-between text-sm">
                       <div>
@@ -997,15 +1004,17 @@ export default function PerformanceCA() {
               </div>
 
               {/* restant — 3e zone du hero, empilée sous les deux autres sur tablette */}
-              <div className={`relative flex min-h-[176px] flex-col justify-center overflow-hidden rounded-[18px] border p-5 backdrop-blur-xl md:col-span-2 md:min-h-[154px] xl:col-span-1 xl:min-h-[190px] ${
+              <div className={`relative flex min-h-[176px] flex-col justify-center overflow-hidden border p-5 backdrop-blur-xl md:col-span-2 md:min-h-[154px] xl:col-span-1 xl:min-h-[190px] ${
                 isDark
-                  ? 'border-white/20 bg-[#030815]/78 shadow-[0_18px_45px_rgba(0,0,0,.30)]'
-                  : 'border-slate-200 bg-white/88 shadow-lg'
+                  ? 'border-[#b99046]/35 bg-[#02050c]/82 shadow-[0_18px_45px_rgba(0,0,0,.34)]'
+                  : 'border-[#b99046]/30 bg-white/90 shadow-lg'
               }`}>
-                <Crosshair className="absolute right-5 top-1/2 h-16 w-16 -translate-y-1/2 text-violet-400/85 drop-shadow-[0_0_14px_rgba(139,92,246,.55)]" />
+                <div className="absolute right-4 top-4 h-4 w-4 border-r border-t border-[#d6b35b]/60" />
+                <div className="absolute bottom-4 left-4 h-4 w-4 border-b border-l border-[#d6b35b]/35" />
+                <Crosshair className="absolute right-5 top-1/2 h-16 w-16 -translate-y-1/2 text-[#6AABB4]/75 drop-shadow-[0_0_16px_rgba(106,171,180,.45)]" />
                 <div className="relative z-10 max-w-[205px]">
-                  <span className={`text-xs font-semibold uppercase tracking-[0.06em] ${isDark ? 'text-white/80' : 'text-slate-600'}`}>Restant à atteindre</span>
-                  <strong className="mt-2 block text-[34px] font-black leading-none tracking-[-0.035em]">{eur(performance.remaining)}</strong>
+                  <span className={`font-display text-[9px] font-bold uppercase tracking-[0.16em] ${isDark ? 'text-[#d6b35b]' : 'text-[#8a6a2f]'}`}>Restant à atteindre</span>
+                  <strong className={`mt-2 block font-display text-[32px] font-bold leading-none tracking-[-0.02em] ${isDark ? 'text-[#f4e6bc]' : ''}`}>{eur(performance.remaining)}</strong>
                   <div className={`mt-4 text-sm leading-6 ${isDark ? 'text-white/75' : 'text-slate-600'}`}>
                     {performance.remaining <= 0 && performance.objectifCa > 0 ? (
                       <span className="flex items-center gap-2 font-semibold text-emerald-400"><Trophy className="w-5 h-5" /> Objectif atteint ce mois !</span>
@@ -1081,14 +1090,14 @@ export default function PerformanceCA() {
 
           {/* Rattrapage — uniquement sur le mois en cours */}
           {isMoisCourant && (
-            <section className={`rounded-[24px] border p-5 ${cardShell}`}>
-              <h2 className="text-sm font-black uppercase tracking-wide flex items-center gap-2"><Flame className="w-4 h-4 text-orange-500" /> Rattrapage du mois</h2>
+            <section className={`border p-5 ${cardShell}`}>
+              <h2 className={`flex items-center gap-2 font-display text-[10px] font-bold uppercase tracking-[0.16em] ${isDark ? 'text-[#f4e6bc]' : 'text-slate-800'}`}><Flame className="h-4 w-4 text-orange-500" /> Rattrapage du mois</h2>
               <div className="mt-4 grid gap-3 lg:grid-cols-2 xl:grid-cols-4">
                 {rattrapageRows.length === 0 ? (
                   <p className={`text-sm ${textMuted2}`}>Aucun objectif défini ce mois-ci.</p>
                 ) : (
                   rattrapageRows.map((r) => (
-                    <div key={r.user.id} className={`rounded-2xl border p-4 ${isDark ? 'border-white/[0.07] bg-white/[0.025]' : 'border-slate-200 bg-slate-50'}`}>
+                    <div key={r.user.id} className={`border p-4 ${isDark ? 'border-[#b99046]/18 bg-[#07101d]/65' : 'border-slate-200 bg-slate-50'}`}>
                       <div className="font-bold">{r.user.first_name} {r.user.last_name}</div>
                       {r.ecart <= 0 ? (
                         <div className="mt-3 text-sm font-semibold text-emerald-500 flex items-center gap-1"><Trophy className="w-4 h-4" /> Objectif atteint</div>
@@ -1106,14 +1115,14 @@ export default function PerformanceCA() {
           )}
 
           {/* Classement — trié par CA probable / objectif, toujours toute l'équipe */}
-          <section className={`rounded-[24px] border p-5 ${cardShell}`}>
-            <h2 className="text-sm font-black uppercase tracking-wide flex items-center gap-2"><Trophy className="w-4 h-4 text-amber-500" /> Classement</h2>
+          <section className={`border p-5 ${cardShell}`}>
+            <h2 className={`flex items-center gap-2 font-display text-[10px] font-bold uppercase tracking-[0.16em] ${isDark ? 'text-[#f4e6bc]' : 'text-slate-800'}`}><Trophy className="h-4 w-4 text-[#d6b35b]" /> Classement</h2>
             <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
               {classement.map((r, idx) => (
-                <div key={r.user.id} className={`rounded-2xl border p-4 ${r.user.id === userRole?.id ? 'border-violet-400/30 bg-violet-500/10' : isDark ? 'border-white/[0.07] bg-white/[0.025]' : 'border-slate-200 bg-slate-50'}`}>
+                <div key={r.user.id} className={`border p-4 ${r.user.id === userRole?.id ? 'border-[#d6b35b]/45 bg-[#b99046]/10' : isDark ? 'border-[#b99046]/18 bg-[#07101d]/65' : 'border-slate-200 bg-slate-50'}`}>
                   <div className="flex items-center justify-between">
                     <div className="font-bold">{idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : `${idx + 1}.`} {r.user.first_name} {r.user.last_name}</div>
-                    <strong className="text-violet-400">{r.objectivePercentProbable === null ? '—' : `${Math.round(r.objectivePercentProbable)}%`}</strong>
+                    <strong className="font-display text-[#d6b35b]">{r.objectivePercentProbable === null ? '—' : `${Math.round(r.objectivePercentProbable)}%`}</strong>
                   </div>
                   <div className={`mt-2 text-xs ${textMuted2}`}>{eur(r.probable)} / {eur(r.objectifCa)}</div>
                 </div>
@@ -1123,9 +1132,9 @@ export default function PerformanceCA() {
 
           {/* Détail par commercial — admin uniquement, toujours l'équipe complète */}
           {isAdmin && (
-            <section className={`overflow-hidden rounded-[24px] border ${cardShell}`}>
+            <section className={`overflow-hidden border ${cardShell}`}>
               <div className="px-5 py-4">
-                <h2 className="text-sm font-black uppercase tracking-wide">Détail par commercial</h2>
+                <h2 className={`font-display text-[10px] font-bold uppercase tracking-[0.16em] ${isDark ? 'text-[#f4e6bc]' : 'text-slate-800'}`}>Détail par commercial</h2>
               </div>
               <div className="overflow-x-auto">
                 <table className="w-full min-w-[1000px] text-sm">
@@ -1188,7 +1197,7 @@ export default function PerformanceCA() {
                             </div>
                           )}
                         </td>
-                        <td className="px-5 py-4 text-right font-semibold text-purple-500">{eur(r.commission)}</td>
+                        <td className="px-5 py-4 text-right font-semibold text-[#d6b35b]">{eur(r.commission)}</td>
                       </tr>
                     ))}
                     {rows.length === 0 && (
@@ -1240,12 +1249,12 @@ function MountainScene({ dark, progress }: { dark: boolean; progress: number }) 
       />
       <div className={`absolute inset-0 ${
         dark
-          ? 'bg-[linear-gradient(90deg,rgba(2,6,18,.84)_0%,rgba(3,8,24,.55)_39%,rgba(3,8,24,.08)_69%,rgba(2,6,18,.38)_100%)]'
-          : 'bg-[linear-gradient(90deg,rgba(255,255,255,.96)_0%,rgba(248,250,252,.76)_42%,rgba(255,255,255,.18)_70%,rgba(255,255,255,.62)_100%)]'
+          ? 'bg-[linear-gradient(90deg,rgba(2,5,12,.94)_0%,rgba(3,10,20,.72)_38%,rgba(3,14,25,.14)_69%,rgba(2,5,12,.48)_100%)]'
+          : 'bg-[linear-gradient(90deg,rgba(255,255,255,.97)_0%,rgba(248,250,252,.79)_42%,rgba(255,255,255,.20)_70%,rgba(255,255,255,.64)_100%)]'
       }`} />
-      <div className={`absolute inset-x-0 bottom-0 h-24 ${dark ? 'bg-gradient-to-t from-[#040915] to-transparent' : 'bg-gradient-to-t from-white/80 to-transparent'}`} />
+      <div className={`absolute inset-x-0 bottom-0 h-24 ${dark ? 'bg-gradient-to-t from-[#02050c] to-transparent' : 'bg-gradient-to-t from-white/80 to-transparent'}`} />
       <div
-        className="absolute hidden h-4 w-4 -translate-x-1/2 -translate-y-1/2 rounded-full border-[3px] border-violet-300 bg-white shadow-[0_0_9px_3px_rgba(168,85,247,.85)] transition-all duration-700 lg:block"
+        className="absolute hidden h-4 w-4 -translate-x-1/2 -translate-y-1/2 rotate-45 border-[3px] border-[#f1d488] bg-[#5A9BA3] shadow-[0_0_10px_3px_rgba(106,171,180,.72)] transition-all duration-700 lg:block"
         style={{ left: `${markerX}%`, top: `${markerY}%` }}
       />
     </div>
@@ -1257,12 +1266,13 @@ function MountainScene({ dark, progress }: { dark: boolean; progress: number }) 
 function TeamBadge({ progress }: { progress: number }) {
   return (
     <div className="flex items-center justify-center">
-      <div className="relative flex h-[190px] w-[170px] flex-col items-center justify-center overflow-hidden rounded-[28px] border border-[#6AABB4]/35 bg-[#050a18]/78 text-center shadow-[0_18px_46px_rgba(0,0,0,.32)] backdrop-blur-xl md:h-[222px] md:w-[192px]">
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_36%,rgba(106,171,180,.30),transparent_52%)]" />
-        <ShieldCheck className="relative z-10 h-7 w-7 text-[#87d1dc]" />
-        <div className="relative z-10 mt-3 text-[10px] font-black uppercase tracking-[0.2em] text-[#87d1dc]">Performance équipe</div>
-        <div className="relative z-10 mt-2 text-[58px] font-black leading-none tracking-[-0.06em] text-white md:text-[68px]">{Math.round(progress)}%</div>
-        <div className="relative z-10 mt-3 text-xs text-white/65">de l'objectif collectif</div>
+      <div className="relative flex h-[190px] w-[170px] flex-col items-center justify-center overflow-hidden border border-[#b99046]/55 bg-[#030711]/86 text-center shadow-[0_22px_56px_rgba(0,0,0,.4)] backdrop-blur-xl [clip-path:polygon(12%_0,88%_0,100%_12%,100%_88%,88%_100%,12%_100%,0_88%,0_12%)] md:h-[222px] md:w-[192px]">
+        <div className="absolute inset-[5px] border border-[#5A9BA3]/25 [clip-path:inherit]" />
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_36%,rgba(106,171,180,.28),transparent_52%)]" />
+        <ShieldCheck className="relative z-10 h-7 w-7 text-[#d6b35b]" />
+        <div className="relative z-10 mt-3 font-display text-[9px] font-bold uppercase tracking-[0.18em] text-[#d6b35b]">Performance équipe</div>
+        <div className="relative z-10 mt-2 font-display text-[56px] font-bold leading-none tracking-[-0.035em] text-[#f4e6bc] md:text-[66px]">{Math.round(progress)}%</div>
+        <div className="relative z-10 mt-3 text-xs text-[#c6cedc]/70">de l'objectif collectif</div>
       </div>
     </div>
   );
@@ -1275,12 +1285,12 @@ function RankCard({ level, name, stars }: { level: number; name?: string; stars:
     <div className="flex items-center justify-center">
       <div className="relative h-[194px] w-[170px] md:h-[238px] md:w-[210px]">
         {/* Ailes métalliques : géométrie pure, légère et responsive. */}
-        <div className="absolute left-[-2px] top-[52px] h-[96px] w-[50px] -rotate-[7deg] bg-gradient-to-br from-amber-100/80 via-violet-400/50 to-slate-950 [clip-path:polygon(100%_0,35%_20%,78%_34%,12%_48%,72%_61%,27%_78%,100%_100%)] md:left-[-8px] md:top-[60px] md:h-[116px] md:w-[62px]" />
-        <div className="absolute right-[-2px] top-[52px] h-[96px] w-[50px] rotate-[7deg] bg-gradient-to-bl from-amber-100/80 via-violet-400/50 to-slate-950 [clip-path:polygon(0_0,65%_20%,22%_34%,88%_48%,28%_61%,73%_78%,0_100%)] md:right-[-8px] md:top-[60px] md:h-[116px] md:w-[62px]" />
-        <div className="absolute inset-x-[22px] inset-y-0 bg-gradient-to-b from-amber-100 via-violet-400 to-violet-950 p-[2px] shadow-[0_0_26px_rgba(139,92,246,.48)] [clip-path:polygon(50%_0,94%_13%,91%_68%,77%_87%,50%_100%,23%_87%,9%_68%,6%_13%)] md:inset-x-[25px]">
-          <div className="flex h-full w-full flex-col items-center justify-center bg-[radial-gradient(circle_at_50%_40%,rgba(124,58,237,.50),transparent_48%),linear-gradient(180deg,#11102a_0%,#070918_62%,#140d2d_100%)] [clip-path:polygon(50%_1%,93%_14%,90%_67%,76%_86%,50%_98%,24%_86%,10%_67%,7%_14%)]">
-            <div className="text-[9px] font-black uppercase tracking-[0.14em] text-violet-100 md:text-[10px]">Niveau actuel</div>
-            <div className="mt-1 bg-gradient-to-b from-white via-violet-200 to-violet-500 bg-clip-text text-[60px] font-black leading-none tracking-[-0.08em] text-transparent drop-shadow-[0_0_14px_rgba(167,139,250,.55)] md:text-[78px]">
+        <div className="absolute left-[-2px] top-[52px] h-[96px] w-[50px] -rotate-[7deg] bg-gradient-to-br from-[#f4e6bc] via-[#b99046]/75 to-[#07101d] [clip-path:polygon(100%_0,35%_20%,78%_34%,12%_48%,72%_61%,27%_78%,100%_100%)] md:left-[-8px] md:top-[60px] md:h-[116px] md:w-[62px]" />
+        <div className="absolute right-[-2px] top-[52px] h-[96px] w-[50px] rotate-[7deg] bg-gradient-to-bl from-[#f4e6bc] via-[#b99046]/75 to-[#07101d] [clip-path:polygon(0_0,65%_20%,22%_34%,88%_48%,28%_61%,73%_78%,0_100%)] md:right-[-8px] md:top-[60px] md:h-[116px] md:w-[62px]" />
+        <div className="absolute inset-x-[22px] inset-y-0 bg-gradient-to-b from-[#f4e6bc] via-[#b99046] to-[#5A9BA3] p-[2px] shadow-[0_0_30px_rgba(106,171,180,.34)] [clip-path:polygon(50%_0,94%_13%,91%_68%,77%_87%,50%_100%,23%_87%,9%_68%,6%_13%)] md:inset-x-[25px]">
+          <div className="flex h-full w-full flex-col items-center justify-center bg-[radial-gradient(circle_at_50%_40%,rgba(90,155,163,.35),transparent_48%),linear-gradient(180deg,#101b28_0%,#030711_62%,#07101d_100%)] [clip-path:polygon(50%_1%,93%_14%,90%_67%,76%_86%,50%_98%,24%_86%,10%_67%,7%_14%)]">
+            <div className="font-display text-[8px] font-bold uppercase tracking-[0.14em] text-[#d6b35b] md:text-[9px]">Niveau actuel</div>
+            <div className="mt-1 bg-gradient-to-b from-white via-[#f4e6bc] to-[#d6b35b] bg-clip-text font-display text-[58px] font-bold leading-none tracking-[-0.045em] text-transparent drop-shadow-[0_0_14px_rgba(214,179,91,.4)] md:text-[74px]">
               {String(level).padStart(2, '0')}
             </div>
             <div className="mt-3 flex gap-2">
@@ -1290,7 +1300,7 @@ function RankCard({ level, name, stars }: { level: number; name?: string; stars:
             </div>
           </div>
         </div>
-        <div className="absolute left-1/2 top-[-3px] h-7 w-7 -translate-x-1/2 rotate-45 border border-amber-100/80 bg-gradient-to-br from-white via-violet-300 to-violet-700 shadow-[0_0_16px_rgba(167,139,250,.7)] md:h-8 md:w-8">
+        <div className="absolute left-1/2 top-[-3px] h-7 w-7 -translate-x-1/2 rotate-45 border border-[#f4e6bc]/80 bg-gradient-to-br from-white via-[#d6b35b] to-[#5A9BA3] shadow-[0_0_16px_rgba(106,171,180,.55)] md:h-8 md:w-8">
           <div className="absolute inset-[7px] rounded-full bg-white/90 shadow-[0_0_7px_white]" />
         </div>
         {name && <span className="sr-only">{name}</span>}
@@ -1314,15 +1324,19 @@ function LevelProgression({
   const nextMilestone = milestones.find((milestone) => levelProgress < milestone) ?? 100;
 
   return (
-    <section className={`overflow-hidden rounded-[20px] border ${dark ? 'border-white/10 bg-[#050b18]/92 text-white shadow-[0_18px_48px_rgba(0,0,0,.18)]' : 'border-slate-200 bg-white shadow-sm text-slate-900'}`}>
+    <section className={`overflow-hidden border ${dark ? 'border-[#b99046]/25 bg-[#050a13]/95 text-white shadow-[0_18px_48px_rgba(0,0,0,.22)]' : 'border-[#b99046]/25 bg-white shadow-sm text-slate-900'}`}>
       <div className="p-4 pb-3 sm:px-5">
-        <h2 className="mb-3 text-xs font-bold uppercase tracking-wide">Progression des niveaux</h2>
+        <div className="mb-4 flex items-center gap-3">
+          <span className="h-2 w-2 rotate-45 border border-[#f1d488] bg-[#b99046]/25" />
+          <h2 className={`font-display text-[10px] font-bold uppercase tracking-[0.18em] ${dark ? 'text-[#f4e6bc]' : 'text-slate-800'}`}>Progression des niveaux</h2>
+          <div className="h-px flex-1 bg-gradient-to-r from-[#b99046]/45 to-transparent" />
+        </div>
         <div className="relative overflow-x-auto pb-2 [scrollbar-width:thin]">
           <div className="min-w-[920px]">
           <div className="relative flex items-start justify-between">
-              <div className={`absolute left-5 right-5 top-[18px] h-[3px] rounded-full ${dark ? 'bg-white/20' : 'bg-slate-200'}`} />
+              <div className={`absolute left-5 right-5 top-[18px] h-[2px] ${dark ? 'bg-[#b99046]/20' : 'bg-slate-200'}`} />
               <div
-                className="absolute left-5 top-[18px] h-[3px] rounded-full bg-lime-400 shadow-[0_0_10px_rgba(163,230,53,.55)]"
+                className="absolute left-5 top-[18px] h-[2px] bg-gradient-to-r from-[#5A9BA3] to-[#f1d488] shadow-[0_0_10px_rgba(106,171,180,.45)]"
                 style={{ width: `calc(${clamp((currentIndex / (LEVELS.length - 1)) * 100, 0, 100)}% - 20px)` }}
               />
             {LEVELS.map((level, index) => {
@@ -1331,17 +1345,17 @@ function LevelProgression({
               const locked = index > currentIndex;
               return (
                   <div key={level.level} className="relative z-10 flex w-[82px] flex-col items-center text-center">
-                    {current && <span className="absolute -top-4 h-0 w-0 border-x-[6px] border-t-[8px] border-x-transparent border-t-violet-300" />}
+                    {current && <span className="absolute -top-4 h-0 w-0 border-x-[6px] border-t-[8px] border-x-transparent border-t-[#f1d488]" />}
                   <div
-                      className={`flex h-9 w-9 items-center justify-center rounded-full border-2 text-xs font-bold ${
-                        done ? 'border-lime-300 bg-[#183113] text-lime-200 shadow-[0_0_14px_rgba(163,230,53,.32)]'
-                          : current ? 'scale-110 border-violet-300 bg-[#281249] text-white shadow-[0_0_20px_rgba(168,85,247,.72)]'
-                          : dark ? 'border-white/25 bg-[#10131a] text-white/45' : 'border-slate-300 bg-slate-50 text-slate-400'
+                      className={`flex h-9 w-9 rotate-45 items-center justify-center border-2 text-xs font-bold ${
+                        done ? 'border-[#6AABB4] bg-[#102b31] text-[#a9f4f8] shadow-[0_0_14px_rgba(106,171,180,.28)]'
+                          : current ? 'scale-110 border-[#f1d488] bg-[#3a2b12] text-[#f4e6bc] shadow-[0_0_20px_rgba(214,179,91,.42)]'
+                          : dark ? 'border-[#b99046]/25 bg-[#07101d] text-white/40' : 'border-slate-300 bg-slate-50 text-slate-400'
                     }`}
                   >
-                      {done ? <Check className="h-4 w-4" /> : locked ? <Lock className="h-3.5 w-3.5" /> : level.level}
+                      <span className="-rotate-45">{done ? <Check className="h-4 w-4" /> : locked ? <Lock className="h-3.5 w-3.5" /> : level.level}</span>
                   </div>
-                    <div className={`mt-2 text-[10px] font-bold uppercase ${current ? 'text-violet-300' : ''}`}>Niveau {level.level}</div>
+                    <div className={`mt-2 font-display text-[9px] font-bold uppercase tracking-[0.08em] ${current ? 'text-[#f1d488]' : ''}`}>Niveau {level.level}</div>
                     <div className={`mt-0.5 text-[10px] ${dark ? 'text-white/55' : 'text-slate-400'}`}>{eur(level.amount)}</div>
                 </div>
               );
@@ -1351,7 +1365,7 @@ function LevelProgression({
         </div>
       </div>
 
-      <div className={`grid grid-cols-2 border-t sm:grid-cols-4 ${dark ? 'border-white/[0.08] bg-[#07101d]/82' : 'border-slate-200 bg-slate-50/80'}`}>
+      <div className={`grid grid-cols-2 border-t sm:grid-cols-4 ${dark ? 'border-[#b99046]/15 bg-[#030711]/72' : 'border-slate-200 bg-slate-50/80'}`}>
         {milestones.map((milestone, index) => {
           const reached = levelProgress >= milestone;
           const active = !reached && milestone === nextMilestone;
@@ -1359,22 +1373,22 @@ function LevelProgression({
             <div
               key={milestone}
               className={`flex min-h-[68px] items-center justify-center gap-3 px-3 py-3 ${
-                index > 0 ? dark ? 'border-l border-white/[0.08]' : 'border-l border-slate-200' : ''
+                index > 0 ? dark ? 'border-l border-[#b99046]/15' : 'border-l border-slate-200' : ''
               }`}
             >
-              <div className={`flex h-10 w-10 items-center justify-center rounded-[12px] border ${
+              <div className={`flex h-10 w-10 rotate-45 items-center justify-center border ${
                 reached
-                  ? 'border-lime-300/50 bg-lime-400/15 text-lime-300'
+                  ? 'border-[#6AABB4]/60 bg-[#5A9BA3]/15 text-[#a9f4f8]'
                   : active
-                    ? 'border-violet-300/50 bg-violet-500/20 text-violet-200 shadow-[0_0_16px_rgba(168,85,247,.30)]'
+                    ? 'border-[#f1d488]/60 bg-[#b99046]/15 text-[#f1d488] shadow-[0_0_16px_rgba(214,179,91,.24)]'
                     : dark
-                      ? 'border-white/20 bg-white/[0.04] text-white/45'
+                      ? 'border-[#b99046]/20 bg-[#07101d] text-white/40'
                       : 'border-slate-300 bg-white text-slate-400'
               }`}>
-                {reached ? <Check className="h-5 w-5" /> : active ? <Star className="h-4 w-4" /> : <Lock className="h-4 w-4" />}
+                <span className="-rotate-45">{reached ? <Check className="h-5 w-5" /> : active ? <Star className="h-4 w-4" /> : <Lock className="h-4 w-4" />}</span>
               </div>
               <div>
-                <div className={`text-sm font-bold ${reached ? 'text-lime-300' : active ? 'text-violet-300' : ''}`}>{milestone}%</div>
+                <div className={`font-display text-sm font-bold ${reached ? 'text-[#a9f4f8]' : active ? 'text-[#f1d488]' : ''}`}>{milestone}%</div>
                 <div className={`text-[10px] ${dark ? 'text-white/50' : 'text-slate-500'}`}>du niveau</div>
               </div>
             </div>
@@ -1390,23 +1404,27 @@ function LevelProgression({
 function TeamProgression({ dark, progress }: { dark: boolean; progress: number }) {
   const milestones = [25, 50, 75, 100];
   return (
-    <section className={`rounded-[20px] border p-4 ${dark ? 'border-white/10 bg-[#080d1a] text-white' : 'border-slate-200 bg-white shadow-sm text-slate-900'}`}>
-      <h2 className="mb-3 text-xs font-bold uppercase tracking-wide">Progression de l'équipe vers l'objectif</h2>
+    <section className={`border p-4 ${dark ? 'border-[#b99046]/25 bg-[#050a13]/95 text-white' : 'border-[#b99046]/25 bg-white shadow-sm text-slate-900'}`}>
+      <div className="mb-4 flex items-center gap-3">
+        <span className="h-2 w-2 rotate-45 border border-[#f1d488] bg-[#b99046]/25" />
+        <h2 className={`font-display text-[10px] font-bold uppercase tracking-[0.16em] ${dark ? 'text-[#f4e6bc]' : 'text-slate-800'}`}>Progression de l'équipe vers l'objectif</h2>
+        <div className="h-px flex-1 bg-gradient-to-r from-[#b99046]/45 to-transparent" />
+      </div>
       <div className="flex items-center gap-3">
         {milestones.map((milestone, index) => {
           const reached = progress >= milestone;
           return (
             <div key={milestone} className="flex flex-1 items-center gap-3">
               <div className="flex flex-col items-center gap-1.5 shrink-0">
-                <div className={`flex h-8 w-8 items-center justify-center rounded-full border-2 font-bold text-xs ${
-                  reached ? 'border-[#6AABB4] bg-[#6AABB4] text-white' : dark ? 'border-white/15 bg-[#101827] text-white/40' : 'border-slate-300 bg-slate-50 text-slate-400'
+                <div className={`flex h-8 w-8 rotate-45 items-center justify-center border-2 font-bold text-xs ${
+                  reached ? 'border-[#6AABB4] bg-[#17343a] text-[#a9f4f8]' : dark ? 'border-[#b99046]/25 bg-[#07101d] text-white/40' : 'border-slate-300 bg-slate-50 text-slate-400'
                 }`}>
-                  {reached ? <Check className="h-4 w-4" /> : <Lock className="h-3 w-3" />}
+                  <span className="-rotate-45">{reached ? <Check className="h-4 w-4" /> : <Lock className="h-3 w-3" />}</span>
                 </div>
                 <div className="text-[10px] font-bold">{milestone}%</div>
               </div>
               {index < milestones.length - 1 && (
-                <div className={`h-[2px] flex-1 rounded-full ${progress >= milestone ? 'bg-[#6AABB4]' : dark ? 'bg-white/10' : 'bg-slate-200'}`} />
+                <div className={`h-[2px] flex-1 ${progress >= milestone ? 'bg-gradient-to-r from-[#5A9BA3] to-[#f1d488]' : dark ? 'bg-[#b99046]/15' : 'bg-slate-200'}`} />
               )}
             </div>
           );
@@ -1430,22 +1448,24 @@ function KpiCard({
   accent: 'violet' | 'blue' | 'amber' | 'green';
 }) {
   const styles = {
-    violet: { icon: 'border-violet-400/30 bg-violet-500/20 text-violet-300', bar: 'bg-gradient-to-r from-violet-700 to-fuchsia-300', stroke: '#c084fc' },
+    violet: { icon: 'border-[#d6b35b]/35 bg-[#b99046]/12 text-[#f1d488]', bar: 'bg-gradient-to-r from-[#5A9BA3] to-[#f1d488]', stroke: '#d6b35b' },
     blue: { icon: 'border-blue-400/30 bg-blue-500/20 text-blue-300', bar: 'bg-gradient-to-r from-blue-700 to-sky-300', stroke: '#60a5fa' },
     amber: { icon: 'border-amber-400/30 bg-amber-400/15 text-amber-300', bar: 'bg-gradient-to-r from-amber-700 to-amber-300', stroke: '#fbbf24' },
-    green: { icon: 'border-lime-400/25 bg-lime-400/15 text-lime-300', bar: 'bg-gradient-to-r from-lime-700 to-lime-300', stroke: '#a3e635' },
+    green: { icon: 'border-emerald-400/25 bg-emerald-400/12 text-emerald-300', bar: 'bg-gradient-to-r from-emerald-700 to-emerald-300', stroke: '#34d399' },
   }[accent];
   return (
-    <div className={`group relative min-h-[160px] overflow-hidden rounded-[18px] border p-4 transition duration-300 hover:-translate-y-0.5 ${
+    <div className={`group relative min-h-[160px] overflow-hidden border p-4 transition duration-300 hover:-translate-y-0.5 ${
       dark
-        ? 'border-white/10 bg-[#070c18]/95 text-white shadow-[0_16px_38px_rgba(0,0,0,.16)] hover:border-white/20'
-        : 'border-slate-200 bg-white text-slate-800 shadow-sm hover:shadow-lg'
+        ? 'border-[#b99046]/22 bg-[#050a13]/95 text-white shadow-[0_16px_38px_rgba(0,0,0,.2)] hover:border-[#b99046]/45'
+        : 'border-[#b99046]/22 bg-white text-slate-800 shadow-sm hover:border-[#b99046]/45 hover:shadow-lg'
     }`}>
+      <div className="pointer-events-none absolute left-0 top-0 h-9 w-9 border-l border-t border-[#b99046]/30 transition group-hover:border-[#d6b35b]/60" />
+      <div className="pointer-events-none absolute bottom-0 right-0 h-9 w-9 border-b border-r border-[#5A9BA3]/25 transition group-hover:border-[#6AABB4]/55" />
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-center gap-3">
-          <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border shadow-[inset_0_0_18px_rgba(255,255,255,.04)] ${styles.icon}`}>{icon}</div>
+          <div className={`flex h-11 w-11 shrink-0 rotate-45 items-center justify-center border shadow-[inset_0_0_18px_rgba(255,255,255,.04)] ${styles.icon}`}><span className="-rotate-45">{icon}</span></div>
           <div className="flex items-center gap-2">
-            <span className="text-xs font-bold uppercase tracking-[0.03em]">{title}</span>
+            <span className={`font-display text-[9px] font-bold uppercase tracking-[0.12em] ${dark ? 'text-[#f4e6bc]' : ''}`}>{title}</span>
             <Info className="h-3.5 w-3.5 opacity-40" />
           </div>
         </div>
@@ -1456,13 +1476,13 @@ function KpiCard({
           </div>
         )}
       </div>
-      <div className="mt-3 text-[32px] font-black leading-none tracking-[-0.04em]">{value}</div>
+      <div className={`mt-3 font-display text-[30px] font-bold leading-none tracking-[-0.02em] ${dark ? 'text-[#f4e6bc]' : ''}`}>{value}</div>
       <div className={`mt-1 text-xs ${dark ? 'text-white/45' : 'text-slate-500'}`}>{subtitle}</div>
       {series ? (
         <KpiSparkline dark={dark} series={series} stroke={styles.stroke} id={`${accent}-${title.replace(/\s+/g, '-').toLowerCase()}`} />
       ) : progress !== undefined ? (
-        <div className={`mt-6 h-2 overflow-hidden rounded-full ${dark ? 'bg-white/10' : 'bg-slate-100'}`}>
-          <div className={`h-full rounded-full shadow-[0_0_12px_currentColor] ${styles.bar}`} style={{ width: `${clamp(progress, 0, 100)}%` }} />
+        <div className={`mt-6 h-2 overflow-hidden border p-px ${dark ? 'border-[#b99046]/20 bg-black/35' : 'border-slate-200 bg-slate-100'}`}>
+          <div className={`h-full shadow-[0_0_12px_currentColor] ${styles.bar}`} style={{ width: `${clamp(progress, 0, 100)}%` }} />
         </div>
       ) : null}
     </div>
@@ -1555,10 +1575,14 @@ function RevenueChart({
     : [];
 
   return (
-    <div className={`overflow-hidden rounded-[18px] border p-4 sm:p-5 ${dark ? 'border-white/10 bg-[#050b18]/95 text-white shadow-[0_16px_42px_rgba(0,0,0,.16)]' : 'border-slate-200 bg-white shadow-sm text-slate-900'}`}>
-      <h3 className="text-sm font-black">ÉVOLUTION DU CA PROBABLE</h3>
+    <div className={`overflow-hidden border p-4 sm:p-5 ${dark ? 'border-[#b99046]/22 bg-[#050a13]/95 text-white shadow-[0_16px_42px_rgba(0,0,0,.2)]' : 'border-[#b99046]/22 bg-white shadow-sm text-slate-900'}`}>
+      <div className="flex items-center gap-3">
+        <span className="h-2 w-2 rotate-45 border border-[#f1d488] bg-[#b99046]/25" />
+        <h3 className={`font-display text-[10px] font-bold uppercase tracking-[0.16em] ${dark ? 'text-[#f4e6bc]' : ''}`}>Évolution du CA probable</h3>
+        <div className="h-px flex-1 bg-gradient-to-r from-[#b99046]/40 to-transparent" />
+      </div>
       <div className={`mt-2 flex flex-wrap gap-4 text-[11px] ${dark ? 'text-white/40' : 'text-slate-500'}`}>
-        <span className="flex items-center gap-1.5"><span className="h-[2px] w-4 bg-violet-500" /> CA probable</span>
+        <span className="flex items-center gap-1.5"><span className="h-[2px] w-4 bg-[#d6b35b]" /> CA probable</span>
         <span className="flex items-center gap-1.5"><span className="h-[2px] w-4 bg-[#5A9BA3]" /> CA confirmé</span>
         <span className="flex items-center gap-1.5"><span className="h-[2px] w-4 bg-blue-500" /> CA encaissé</span>
         <span className="flex items-center gap-1.5"><span className="h-[2px] w-4 border-t border-dashed border-slate-400" /> Objectif</span>
@@ -1576,22 +1600,22 @@ function RevenueChart({
           <svg className="absolute bottom-4 left-[64px] right-0 h-[256px] w-[calc(100%-64px)] overflow-visible" viewBox="0 0 900 290" preserveAspectRatio="none">
             <defs>
               <linearGradient id="revenue-area-gradient" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="#8B5CF6" stopOpacity={dark ? 0.34 : 0.22} />
-                <stop offset="100%" stopColor="#8B5CF6" stopOpacity="0" />
+                <stop offset="0%" stopColor="#d6b35b" stopOpacity={dark ? 0.28 : 0.18} />
+                <stop offset="100%" stopColor="#d6b35b" stopOpacity="0" />
               </linearGradient>
             </defs>
             {probableAreaPath && <path d={probableAreaPath} fill="url(#revenue-area-gradient)" />}
-            {probablePath && <path d={probablePath} fill="none" stroke="#A855F7" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />}
+            {probablePath && <path d={probablePath} fill="none" stroke="#d6b35b" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />}
             {series.confirme.length > 0 && <path d={pathFor(series.confirme)} fill="none" stroke="#5A9BA3" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" opacity=".9" vectorEffect="non-scaling-stroke" />}
             {series.encaisse.length > 0 && <path d={pathFor(series.encaisse)} fill="none" stroke="#3B82F6" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" opacity=".9" vectorEffect="non-scaling-stroke" />}
             {objectif > 0 && <path d={`M0 ${objY} L900 ${objY}`} fill="none" stroke="#CBD5E1" strokeWidth="2" strokeDasharray="9 9" opacity="0.65" vectorEffect="non-scaling-stroke" />}
             {levelMarkers.map(({ level, point }) => (
               <g key={level}>
-                <circle cx={toX(point.day)} cy={toY(point.cumul)} r="8" fill={dark ? '#090d1b' : '#ffffff'} stroke="#C4B5FD" strokeWidth="3" vectorEffect="non-scaling-stroke" />
+                <circle cx={toX(point.day)} cy={toY(point.cumul)} r="8" fill={dark ? '#050a13' : '#ffffff'} stroke="#d6b35b" strokeWidth="3" vectorEffect="non-scaling-stroke" />
                 <text
                   x={toX(point.day)}
                   y={toY(point.cumul) - 16}
-                  fill={dark ? '#DDD6FE' : '#6D28D9'}
+                  fill={dark ? '#f4e6bc' : '#8a6a2f'}
                   fontSize="12"
                   fontWeight="700"
                   textAnchor="middle"
@@ -1625,23 +1649,26 @@ function MonthlySummary({
   lastUpdatedLabel: string | null;
 }) {
   const rows = [
-    { label: 'CA probable', value: probable, percent: objectif > 0 ? (probable / objectif) * 100 : 0, color: 'bg-violet-500' },
+    { label: 'CA probable', value: probable, percent: objectif > 0 ? (probable / objectif) * 100 : 0, color: 'bg-gradient-to-r from-[#5A9BA3] to-[#d6b35b]' },
     { label: 'CA confirmé', value: confirme, percent: objectif > 0 ? (confirme / objectif) * 100 : 0, color: 'bg-[#5A9BA3]' },
     { label: 'CA encaissé', value: encaisse, percent: objectif > 0 ? (encaisse / objectif) * 100 : 0, color: 'bg-blue-500' },
     { label: 'Objectif', value: objectif, percent: 100, color: 'bg-amber-400' },
     { label: 'Commission payée', value: commission, percent: null as number | null, color: 'bg-emerald-500' },
   ];
   return (
-    <div className={`rounded-[18px] border p-4 sm:p-5 ${dark ? 'border-white/10 bg-[#050b18]/95 text-white shadow-[0_16px_42px_rgba(0,0,0,.16)]' : 'border-slate-200 bg-white shadow-sm text-slate-900'}`}>
-      <h3 className="text-sm font-black">RÉCAPITULATIF DU MOIS</h3>
+    <div className={`border p-4 sm:p-5 ${dark ? 'border-[#b99046]/22 bg-[#050a13]/95 text-white shadow-[0_16px_42px_rgba(0,0,0,.2)]' : 'border-[#b99046]/22 bg-white shadow-sm text-slate-900'}`}>
+      <div className="flex items-center gap-3">
+        <span className="h-2 w-2 rotate-45 border border-[#f1d488] bg-[#b99046]/25" />
+        <h3 className={`font-display text-[10px] font-bold uppercase tracking-[0.16em] ${dark ? 'text-[#f4e6bc]' : ''}`}>Récapitulatif du mois</h3>
+      </div>
       <div className="mt-6 space-y-5">
         {rows.map((row) => {
           const width = row.percent === null ? Math.min((row.value / (objectif || 1)) * 100, 100) : clamp(row.percent, 0, 100);
           return (
             <div key={row.label} className="grid grid-cols-[92px_minmax(55px,1fr)_76px_38px] items-center gap-2 text-xs sm:grid-cols-[108px_minmax(70px,1fr)_88px_42px] sm:gap-3 sm:text-sm">
               <span className={dark ? 'text-white/65' : 'text-slate-600'}>{row.label}</span>
-              <div className={`h-2 overflow-hidden rounded-full ${dark ? 'bg-white/[0.08]' : 'bg-slate-100'}`}>
-                <div className={`h-full rounded-full ${row.color}`} style={{ width: `${width}%` }} />
+              <div className={`h-2 overflow-hidden border p-px ${dark ? 'border-[#b99046]/15 bg-black/30' : 'border-slate-200 bg-slate-100'}`}>
+                <div className={`h-full ${row.color}`} style={{ width: `${width}%` }} />
               </div>
               <strong className="text-right">{eur(row.value)}</strong>
               <span className={`text-right ${dark ? 'text-white/45' : 'text-slate-500'}`}>{row.percent === null ? '—' : `${Math.round(row.percent)}%`}</span>

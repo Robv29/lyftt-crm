@@ -262,6 +262,60 @@
     transform: translateX(120%) skewX(-20deg);
   }
 
+  .profile-real-trophy {
+    transform-origin: 50% 84%;
+    transform: translateY(0) rotateX(0deg);
+    transition:
+      transform .75s cubic-bezier(.16, 1, .3, 1),
+      filter .75s ease;
+  }
+
+  .profile-trophy-card:hover .profile-real-trophy,
+  .profile-trophy-card:focus-visible .profile-real-trophy {
+    transform: translateY(-5px) rotateX(2deg) scale(1.035);
+  }
+
+  .profile-trophy-aura {
+    opacity: .44;
+    transform-origin: center;
+    transition: opacity .65s ease, filter .65s ease;
+  }
+
+  .profile-trophy-card:hover .profile-trophy-aura,
+  .profile-trophy-card:focus-visible .profile-trophy-aura {
+    opacity: .82;
+    filter: saturate(1.22);
+  }
+
+  .profile-cup-specular {
+    transform-origin: center;
+    transition: opacity .55s ease, transform .8s cubic-bezier(.16, 1, .3, 1);
+  }
+
+  .profile-trophy-card:hover .profile-cup-specular {
+    opacity: .78;
+    transform: translateX(7px);
+  }
+
+  .profile-trophy-stage::after {
+    content: '';
+    position: absolute;
+    left: 50%;
+    bottom: 2px;
+    width: 70%;
+    height: 8px;
+    transform: translateX(-50%);
+    border-radius: 50%;
+    background: rgba(0,0,0,.56);
+    filter: blur(5px);
+    transition: width .65s ease, opacity .65s ease;
+  }
+
+  .profile-trophy-card:hover .profile-trophy-stage::after {
+    width: 58%;
+    opacity: .72;
+  }
+
   @keyframes profileReveal {
     from {
       opacity: 0;
@@ -303,7 +357,11 @@
     }
 
     .profile-trophy-card,
-    .profile-trophy-card::after {
+    .profile-trophy-card::after,
+    .profile-real-trophy,
+    .profile-trophy-aura,
+    .profile-cup-specular,
+    .profile-trophy-stage::after {
       transition: none !important;
     }
   }

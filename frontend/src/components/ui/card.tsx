@@ -5,15 +5,26 @@ import { cn } from '@/lib/utils';
 const Card = React.forwardRef<
   HTMLDivElement,
   React.HTMLAttributes<HTMLDivElement>
->(({ className, ...props }, ref) => (
+>(({ className, children, ...props }, ref) => (
   <div
     ref={ref}
+    data-slot="card"
     className={cn(
-      'rounded-xl border border-[#dce7e8] bg-card text-card-foreground shadow-[0_1px_2px_rgba(15,40,48,.035),0_10px_28px_-22px_rgba(15,40,48,.28)]',
+      'group/crm-card relative isolate overflow-hidden rounded-xl border border-[#dce7e8] bg-card text-card-foreground shadow-[0_1px_2px_rgba(15,40,48,.035),0_10px_28px_-22px_rgba(15,40,48,.28)] transition-[border-color,box-shadow] duration-300 hover:border-[#cbdcde] hover:shadow-[0_2px_5px_rgba(15,40,48,.04),0_18px_38px_-28px_rgba(15,40,48,.34)]',
       className
     )}
     {...props}
-  />
+  >
+    <span
+      aria-hidden="true"
+      className="pointer-events-none absolute inset-x-0 top-0 z-[1] h-px bg-gradient-to-r from-[#6AABB4]/45 via-[#6AABB4]/10 to-[#d6b35b]/25"
+    />
+    <span
+      aria-hidden="true"
+      className="pointer-events-none absolute right-5 top-0 z-[2] h-2 w-2 -translate-y-1/2 rotate-45 border border-[#b99046]/30 bg-card shadow-[0_0_10px_rgba(185,144,70,.12)]"
+    />
+    {children}
+  </div>
 ));
 Card.displayName = 'Card';
 

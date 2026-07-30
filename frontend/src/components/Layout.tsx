@@ -187,7 +187,7 @@ export default function Layout({ children }: LayoutProps) {
                   : user.name || 'Commercial'}
               </p>
               {isAdmin && (
-                <Badge variant="secondary" className="text-[10px] px-1.5 py-0 bg-amber-500/20 text-amber-300 border-0 mt-0.5">
+                <Badge variant="secondary" className="mt-1 border-0 bg-amber-500/20 px-2 py-1 text-[9px] text-amber-300 sm:text-[10px]">
                   Admin
                 </Badge>
               )}

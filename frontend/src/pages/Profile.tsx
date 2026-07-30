@@ -164,6 +164,84 @@ const RARITY: Record<
   },
 };
 
+const TROPHY_MATERIALS: Record<
+  TrophyRarity,
+  {
+    light: string;
+    mid: string;
+    dark: string;
+    edge: string;
+    base: string;
+    plaque: string;
+    jewel: string;
+  }
+> = {
+  bronze: {
+    light: '#f2b17d',
+    mid: '#a95732',
+    dark: '#3b1a15',
+    edge: '#ffd0a1',
+    base: '#24120f',
+    plaque: '#bd6b40',
+    jewel: '#ef8c4b',
+  },
+  silver: {
+    light: '#ffffff',
+    mid: '#a7bac8',
+    dark: '#394957',
+    edge: '#eaf7ff',
+    base: '#202b36',
+    plaque: '#c7d6df',
+    jewel: '#8ed8ef',
+  },
+  gold: {
+    light: '#fff4ad',
+    mid: '#d79b2f',
+    dark: '#624016',
+    edge: '#fff7c6',
+    base: '#2d210e',
+    plaque: '#e8b84f',
+    jewel: '#f8db76',
+  },
+  epic: {
+    light: '#f7e9ff',
+    mid: '#a86fe3',
+    dark: '#392354',
+    edge: '#f4d6ff',
+    base: '#21152d',
+    plaque: '#c396ed',
+    jewel: '#c26dff',
+  },
+  legendary: {
+    light: '#ffd38a',
+    mid: '#e06624',
+    dark: '#42170c',
+    edge: '#ffe4ae',
+    base: '#1d0d09',
+    plaque: '#ef873b',
+    jewel: '#ffb03a',
+  },
+  mythic: {
+    light: '#ecfeff',
+    mid: '#61c8db',
+    dark: '#173e54',
+    edge: '#ffffff',
+    base: '#071b26',
+    plaque: '#9cebf1',
+    jewel: '#6ff2ff',
+  },
+};
+
+const LOCKED_TROPHY_MATERIAL = {
+  light: '#77828d',
+  mid: '#414b56',
+  dark: '#171d25',
+  edge: '#8d98a2',
+  base: '#111720',
+  plaque: '#56616b',
+  jewel: '#65717c',
+};
+
 const formatNumber = (value: number) =>
   new Intl.NumberFormat('fr-FR').format(Math.round(value));
 const formatEuro = (value: number) => `${formatNumber(value)} €`;
@@ -482,63 +560,308 @@ function AvatarSelector({
   );
 }
 
+function TrophyEmblem({
+  collection,
+  fill,
+  edge,
+}: {
+  collection: TrophyCollection;
+  fill: string;
+  edge: string;
+}) {
+  if (collection === 'closing') {
+    return (
+      <g>
+        <path d="M58 70 82 94M82 70 58 94" stroke={edge} strokeWidth="4.2" strokeLinecap="round" />
+        <path d="m55 67 6 1-5 5-4-1Z" fill={fill} stroke={edge} strokeWidth="1.2" />
+        <path d="m85 67-6 1 5 5 4-1Z" fill={fill} stroke={edge} strokeWidth="1.2" />
+      </g>
+    );
+  }
+
+  if (collection === 'revenue') {
+    return (
+      <path
+        d="m70 66 13 13-13 19-13-19Z"
+        fill={fill}
+        stroke={edge}
+        strokeWidth="1.8"
+      />
+    );
+  }
+
+  if (collection === 'regularity') {
+    return (
+      <path
+        d="m70 66 4.4 9 9.9 1.4-7.2 7 1.7 9.8-8.8-4.6-8.8 4.6 1.7-9.8-7.2-7 9.9-1.4Z"
+        fill={fill}
+        stroke={edge}
+        strokeWidth="1.5"
+      />
+    );
+  }
+
+  return (
+    <path
+      d="M55 89 52 69l10 8 8-14 8 14 10-8-3 20Z"
+      fill={fill}
+      stroke={edge}
+      strokeWidth="1.8"
+      strokeLinejoin="round"
+    />
+  );
+}
+
 function Cup({ trophy }: { trophy: CommercialTrophy }) {
   const rarity = RARITY[trophy.rarity];
+  const material = trophy.unlocked
+    ? TROPHY_MATERIALS[trophy.rarity]
+    : LOCKED_TROPHY_MATERIAL;
+  const id = trophy.code.replace(/[^a-z0-9]/gi, '-');
+  const rarityRank = ['bronze', 'silver', 'gold', 'epic', 'legendary', 'mythic'].indexOf(
+    trophy.rarity
+  );
+  const ornate = rarityRank >= 3;
+  const sovereign = rarityRank >= 4;
+
   return (
-    <div className="relative flex h-24 w-24 shrink-0 items-center justify-center sm:h-32 sm:w-32">
+    <div className="profile-trophy-stage relative flex h-28 w-[108px] shrink-0 items-center justify-center sm:h-40 sm:w-36">
       <div
-        className={`absolute inset-2 rotate-45 border transition duration-500 group-hover:rotate-[50deg] ${
-          trophy.unlocked ? '' : 'border-slate-700/40 bg-slate-900/35'
-        }`}
-        style={
-          trophy.unlocked
-            ? {
-                borderColor: rarity.border,
-                background: `radial-gradient(circle, ${rarity.soft}, rgba(3,7,17,.4) 70%)`,
-                boxShadow: `0 0 42px ${rarity.glow}`,
-              }
-            : undefined
-        }
+        className="profile-trophy-aura absolute left-1/2 top-[46%] h-[72%] w-[78%] -translate-x-1/2 -translate-y-1/2 rounded-full blur-2xl"
+        style={{ background: trophy.unlocked ? rarity.glow : 'rgba(71,85,105,.13)' }}
       />
-      <div
-        className={`absolute inset-5 -rotate-45 border ${
-          trophy.unlocked ? '' : 'border-slate-700/35'
+
+      <svg
+        viewBox="0 0 140 170"
+        aria-hidden="true"
+        className={`profile-real-trophy relative h-full w-full overflow-visible ${
+          trophy.unlocked ? '' : 'saturate-[.45]'
         }`}
-        style={trophy.unlocked ? { borderColor: rarity.border } : undefined}
-      />
-      {trophy.unlocked && (
-        <>
-          <span
-            className="profile-rarity-pulse absolute inset-8 rounded-full blur-2xl"
-            style={{ background: rarity.glow }}
-          />
-          <Star
-            className="absolute -top-1 h-4 w-4"
-            style={{ color: rarity.color, fill: rarity.color }}
-          />
-        </>
-      )}
-      <Trophy
-        strokeWidth={1.25}
-        className={`relative h-14 w-14 transition duration-500 group-hover:scale-110 sm:h-[76px] sm:w-[76px] ${
-          trophy.unlocked ? '' : 'text-slate-700 grayscale'
-        }`}
-        style={
-          trophy.unlocked
-            ? {
-                color: rarity.color,
-                filter: `drop-shadow(0 0 14px ${rarity.glow})`,
-              }
-            : undefined
-        }
-      />
+        style={{
+          filter: trophy.unlocked
+            ? `drop-shadow(0 18px 13px rgba(0,0,0,.58)) drop-shadow(0 0 12px ${rarity.glow})`
+            : 'drop-shadow(0 16px 11px rgba(0,0,0,.5))',
+        }}
+      >
+        <defs>
+          <linearGradient id={`${id}-metal`} x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0%" stopColor={material.dark} />
+            <stop offset="18%" stopColor={material.mid} />
+            <stop offset="38%" stopColor={material.light} />
+            <stop offset="53%" stopColor={material.edge} />
+            <stop offset="67%" stopColor={material.mid} />
+            <stop offset="100%" stopColor={material.dark} />
+          </linearGradient>
+          <linearGradient id={`${id}-bowl`} x1="0" y1="0" x2=".8" y2="1">
+            <stop offset="0%" stopColor={material.edge} />
+            <stop offset="23%" stopColor={material.light} />
+            <stop offset="58%" stopColor={material.mid} />
+            <stop offset="100%" stopColor={material.dark} />
+          </linearGradient>
+          <linearGradient id={`${id}-base`} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor={material.mid} />
+            <stop offset="22%" stopColor={material.base} />
+            <stop offset="100%" stopColor="#030609" />
+          </linearGradient>
+          <radialGradient id={`${id}-jewel`} cx="35%" cy="24%" r="75%">
+            <stop offset="0%" stopColor="#ffffff" />
+            <stop offset="22%" stopColor={material.edge} />
+            <stop offset="58%" stopColor={material.jewel} />
+            <stop offset="100%" stopColor={material.dark} />
+          </radialGradient>
+          <linearGradient id={`${id}-shine`} x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0%" stopColor="#ffffff" stopOpacity="0" />
+            <stop offset="48%" stopColor="#ffffff" stopOpacity="0" />
+            <stop offset="55%" stopColor="#ffffff" stopOpacity=".72" />
+            <stop offset="62%" stopColor="#ffffff" stopOpacity="0" />
+            <stop offset="100%" stopColor="#ffffff" stopOpacity="0" />
+          </linearGradient>
+          <filter id={`${id}-inner-shadow`}>
+            <feGaussianBlur in="SourceAlpha" stdDeviation="1.6" result="blur" />
+            <feOffset dy="2" result="offsetBlur" />
+            <feComposite in="offsetBlur" in2="SourceAlpha" operator="out" result="inverse" />
+            <feFlood floodColor="#000000" floodOpacity=".72" result="color" />
+            <feComposite in="color" in2="inverse" operator="in" result="shadow" />
+            <feComposite in="shadow" in2="SourceGraphic" operator="over" />
+          </filter>
+        </defs>
+
+        <ellipse cx="70" cy="160" rx="43" ry="7" fill="#000" opacity=".5" />
+
+        {sovereign && (
+          <g opacity={trophy.unlocked ? 0.9 : 0.42}>
+            <path
+              d="M37 109C20 97 13 78 17 57M103 109c17-12 24-31 20-52"
+              fill="none"
+              stroke={`url(#${id}-metal)`}
+              strokeWidth="4.2"
+              strokeLinecap="round"
+            />
+            {[0, 1, 2, 3].map((leaf) => (
+              <g key={leaf}>
+                <ellipse
+                  cx={25 - leaf * 2.2}
+                  cy={94 - leaf * 12}
+                  rx="4"
+                  ry="8"
+                  fill={`url(#${id}-metal)`}
+                  transform={`rotate(${-35 - leaf * 4} ${25 - leaf * 2.2} ${94 - leaf * 12})`}
+                />
+                <ellipse
+                  cx={115 + leaf * 2.2}
+                  cy={94 - leaf * 12}
+                  rx="4"
+                  ry="8"
+                  fill={`url(#${id}-metal)`}
+                  transform={`rotate(${35 + leaf * 4} ${115 + leaf * 2.2} ${94 - leaf * 12})`}
+                />
+              </g>
+            ))}
+          </g>
+        )}
+
+        {ornate && (
+          <g>
+            <path
+              d="M43 33 50 18l10 10 10-18 10 18 10-10 7 15Z"
+              fill={`url(#${id}-metal)`}
+              stroke={material.edge}
+              strokeWidth=".9"
+            />
+            <circle
+              cx="70"
+              cy="23"
+              r={sovereign ? 7 : 5}
+              fill={`url(#${id}-jewel)`}
+              stroke={material.edge}
+              strokeWidth="1.2"
+            />
+          </g>
+        )}
+
+        <path
+          d="M39 45C18 38 11 50 15 67c4 18 18 28 34 25"
+          fill="none"
+          stroke={`url(#${id}-metal)`}
+          strokeWidth={sovereign ? 8 : 6.5}
+          strokeLinecap="round"
+        />
+        <path
+          d="M101 45c21-7 28 5 24 22-4 18-18 28-34 25"
+          fill="none"
+          stroke={`url(#${id}-metal)`}
+          strokeWidth={sovereign ? 8 : 6.5}
+          strokeLinecap="round"
+        />
+        <path
+          d="M35 41h70l-5.6 38.5C96 97 83.8 108 70 111 56.2 108 44 97 40.6 79.5Z"
+          fill={`url(#${id}-bowl)`}
+          stroke={material.edge}
+          strokeWidth="1.3"
+          filter={`url(#${id}-inner-shadow)`}
+        />
+        <path
+          d="M36 42c10 8 58 8 68 0"
+          fill="none"
+          stroke="#ffffff"
+          strokeOpacity=".44"
+          strokeWidth="2"
+        />
+        <ellipse
+          cx="70"
+          cy="41"
+          rx="36"
+          ry="7"
+          fill={material.dark}
+          stroke={material.edge}
+          strokeWidth="1.4"
+        />
+        <ellipse cx="70" cy="39.5" rx="30" ry="3.5" fill="#02050a" opacity=".72" />
+        <path
+          className="profile-cup-specular"
+          d="M49 50c1 21 7 37 18 47"
+          fill="none"
+          stroke="#fff"
+          strokeWidth="4"
+          strokeLinecap="round"
+          opacity=".44"
+        />
+
+        <circle
+          cx="70"
+          cy="80"
+          r={sovereign ? 20 : 17}
+          fill={material.base}
+          stroke={material.edge}
+          strokeWidth="1.5"
+          opacity=".94"
+        />
+        <circle
+          cx="70"
+          cy="80"
+          r={sovereign ? 16 : 13}
+          fill={`url(#${id}-jewel)`}
+          stroke={material.dark}
+          strokeWidth="1"
+        />
+        <TrophyEmblem
+          collection={trophy.collection}
+          fill={material.mid}
+          edge={material.edge}
+        />
+
+        <path
+          d="M64 108h12l3 25H61Z"
+          fill={`url(#${id}-metal)`}
+          stroke={material.dark}
+          strokeWidth="1"
+        />
+        <path
+          d="M55 129h30l7 10H48Z"
+          fill={`url(#${id}-metal)`}
+          stroke={material.dark}
+          strokeWidth="1"
+        />
+        <path
+          d="M42 138h56l7 21H35Z"
+          fill={`url(#${id}-base)`}
+          stroke={material.edge}
+          strokeWidth="1.2"
+        />
+        <path
+          d="M47 143h46l-2 10H49Z"
+          fill={material.plaque}
+          stroke={material.edge}
+          strokeWidth=".8"
+        />
+        <text
+          x="70"
+          y="151"
+          textAnchor="middle"
+          fill={trophy.unlocked ? material.dark : '#202832'}
+          fontFamily="Cinzel, Georgia, serif"
+          fontSize="6.7"
+          fontWeight="700"
+          letterSpacing="1.2"
+        >
+          LYFTT
+        </text>
+
+        <path
+          className="profile-cup-specular"
+          d="M20 0h19l48 170H68Z"
+          fill={`url(#${id}-shine)`}
+          opacity=".28"
+        />
+      </svg>
+
       {!trophy.unlocked && (
-        <span className="absolute bottom-1 right-1 flex h-7 w-7 items-center justify-center rotate-45 border border-slate-600/35 bg-[#070c16] sm:h-9 sm:w-9">
+        <span className="absolute bottom-1 right-0 flex h-7 w-7 items-center justify-center rotate-45 border border-slate-500/45 bg-[#070c16]/95 shadow-[0_8px_20px_rgba(0,0,0,.5)] sm:h-9 sm:w-9">
           <LockKeyhole className="h-3.5 w-3.5 -rotate-45 text-slate-600 sm:h-4 sm:w-4" />
         </span>
       )}
       {trophy.dynamic && trophy.unlocked && (
-        <span className="absolute -right-1 -top-1 flex h-7 w-7 items-center justify-center rotate-45 border border-cyan-300/45 bg-cyan-400/10 text-cyan-200 shadow-[0_0_20px_rgba(34,211,238,.35)] sm:h-9 sm:w-9">
+        <span className="absolute right-0 top-2 flex h-7 w-7 items-center justify-center rotate-45 border border-cyan-200/65 bg-cyan-400/15 text-cyan-100 shadow-[0_0_24px_rgba(34,211,238,.5)] sm:h-9 sm:w-9">
           <Zap className="h-3.5 w-3.5 -rotate-45 sm:h-4 sm:w-4" />
         </span>
       )}
@@ -557,7 +880,7 @@ function TrophyCard({ trophy, index }: { trophy: CommercialTrophy; index: number
         <article
           tabIndex={0}
           aria-label={`${trophy.name}. ${progressLabel(trophy)}`}
-          className={`profile-trophy-card profile-reveal group relative min-h-[218px] overflow-hidden border p-[1px] transition duration-500 hover:-translate-y-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#d6b35b]/70 sm:min-h-[330px] sm:hover:-translate-y-2 ${
+          className={`profile-trophy-card profile-reveal group relative min-h-[230px] overflow-hidden border p-[1px] transition duration-500 hover:-translate-y-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#d6b35b]/70 sm:min-h-[374px] sm:hover:-translate-y-2 ${
             trophy.unlocked
               ? 'border-[#b99046]/35'
               : 'border-white/[0.065] grayscale-[.45]'
@@ -576,8 +899,10 @@ function TrophyCard({ trophy, index }: { trophy: CommercialTrophy; index: number
           <span className="absolute right-2 top-2 h-8 w-8 border-r border-t border-[#d6b35b]/35" />
           <span className="absolute bottom-2 left-2 h-8 w-8 border-b border-l border-[#d6b35b]/25" />
           <span className="absolute bottom-2 right-2 h-8 w-8 border-b border-r border-[#d6b35b]/25" />
+          <div className="pointer-events-none absolute inset-x-[14%] top-[5%] h-[42%] rounded-full border border-white/[0.045] bg-[radial-gradient(circle,rgba(255,255,255,.045),transparent_68%)]" />
+          <div className="pointer-events-none absolute bottom-[42%] left-1/2 h-px w-[72%] -translate-x-1/2 bg-gradient-to-r from-transparent via-[#d6b35b]/25 to-transparent" />
 
-          <div className="relative grid h-full grid-cols-[96px_minmax(0,1fr)] items-center gap-3 px-3 py-4 text-left sm:flex sm:flex-col sm:px-5 sm:py-6 sm:text-center">
+          <div className="relative grid h-full grid-cols-[108px_minmax(0,1fr)] items-center gap-3 px-3 py-4 text-left sm:flex sm:flex-col sm:px-5 sm:py-5 sm:text-center">
             <Cup trophy={trophy} />
             <div className="flex min-w-0 flex-col sm:w-full sm:flex-1 sm:items-center">
               <div className="flex max-w-full items-center gap-2">

@@ -615,31 +615,25 @@ export default function Dashboard() {
 
       {/* General KPIs */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <Card className="border-0 shadow-sm rounded-2xl overflow-hidden">
-          <CardContent className="p-6 relative">
-            <div className="absolute top-0 right-0 w-24 h-24 bg-gradient-to-bl from-teal-100/50 to-transparent rounded-bl-full" />
-            <div className="flex items-center justify-between relative">
-              <div>
-                <p className="text-sm font-medium text-slate-500">Prospects actifs</p>
-                <p className="text-3xl font-bold text-slate-900 mt-1 tracking-tight">{activeProspects}</p>
-              </div>
-              <div className="w-12 h-12 bg-gradient-to-br from-teal-100 to-teal-200 rounded-2xl flex items-center justify-center">
-                <TrendingUp className="w-6 h-6 text-[#5A9BA3]" />
-              </div>
+        <Card className="border-0 shadow-sm rounded-2xl">
+          <CardContent className="p-6 flex items-center justify-between gap-4">
+            <div className="min-w-0">
+              <p className="text-sm font-medium text-slate-500">Prospects actifs</p>
+              <p className="text-3xl font-bold text-slate-900 mt-1 tracking-tight">{activeProspects}</p>
+            </div>
+            <div className="w-11 h-11 shrink-0 bg-teal-50 rounded-xl flex items-center justify-center">
+              <TrendingUp className="w-5 h-5 text-[#5A9BA3]" />
             </div>
           </CardContent>
         </Card>
-        <Card className="border-0 shadow-sm rounded-2xl overflow-hidden">
-          <CardContent className="p-6 relative">
-            <div className="absolute top-0 right-0 w-24 h-24 bg-gradient-to-bl from-emerald-100/50 to-transparent rounded-bl-full" />
-            <div className="flex items-center justify-between relative">
-              <div>
-                <p className="text-sm font-medium text-slate-500">Deals gagnés</p>
-                <p className="text-3xl font-bold text-emerald-600 mt-1 tracking-tight">{wonDeals}</p>
-              </div>
-              <div className="w-12 h-12 bg-gradient-to-br from-emerald-100 to-emerald-200 rounded-2xl flex items-center justify-center">
-                <FileSignature className="w-6 h-6 text-emerald-600" />
-              </div>
+        <Card className="border-0 shadow-sm rounded-2xl">
+          <CardContent className="p-6 flex items-center justify-between gap-4">
+            <div className="min-w-0">
+              <p className="text-sm font-medium text-slate-500">Deals gagnés</p>
+              <p className="text-3xl font-bold text-emerald-600 mt-1 tracking-tight">{wonDeals}</p>
+            </div>
+            <div className="w-11 h-11 shrink-0 bg-emerald-50 rounded-xl flex items-center justify-center">
+              <FileSignature className="w-5 h-5 text-emerald-600" />
             </div>
           </CardContent>
         </Card>

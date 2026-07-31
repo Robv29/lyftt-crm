@@ -346,6 +346,19 @@ export default function Dashboard() {
     });
   }, [relancesDate, selectedCommercial, resolveCommercialFor]);
 
+  // Confirmations RDV Visio : uniquement les relances de type
+  // "confirmation_visio" (rappel auto J-1 avant un rendez-vous visio), à part
+  // de la carte générique "Relance date" pour les repérer d'un coup d'œil.
+  // Toutes les échéances actives sont listées (pas seulement celles du jour),
+  // triées par date de rappel croissante ; en retard en tête.
+  const confirmationsVisio = useMemo(() => {
+    const now = new Date();
+    return prospects
+      .filter((p) => p.statut_gagne_perdu === 'actif' && p.type_relance_planifiee === 'confirmation_visio' && !!p.date_relance_planifiee)
+      .sort((a, b) => new Date(a.date_relance_planifiee).getTime() - new Date(b.date_relance_planifiee).getTime())
+      .map((p) => ({ p, overdue: new Date(p.date_relance_planifiee) < now }));
+  }, [prospects]);
+
   // Conseil du jour : nombre d'appels/jour recommandé pour rattraper l'objectif
   // CA du mois, basé sur le taux de transformation ANNUEL réel du commercial
   // sélectionné (signatures/appels sur les 12 derniers mois) et son panier
@@ -698,6 +711,24 @@ export default function Dashboard() {
         </CardContent>
       </Card>
 
+      {/* Confirmations RDV Visio : rappels J-1 auto, à part de la relance générique */}
+      {confirmationsVisio.length > 0 && (
+        <Card className="border-0 shadow-sm rounded-2xl">
+          <CardHeader>
+            <CardTitle className="text-lg font-semibold text-slate-900 flex items-center gap-2">
+              <Video className="w-5 h-5 text-purple-500" /> Confirmations RDV Visio
+              <Badge className="bg-purple-50 text-purple-600 border-purple-200 rounded-lg text-xs font-bold">{confirmationsVisio.length}</Badge>
+            </CardTitle>
+            <p className="text-xs text-slate-400 mt-1">Rappels de confirmation programmés automatiquement 24h avant chaque visio</p>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-2 max-h-[360px] overflow-y-auto pr-1">
+              {confirmationsVisio.map(({ p, overdue }) => <VisioConfirmRow key={p.id} prospect={p} overdue={overdue} />)}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Deux colonnes de relance : NRP (appels non répondus) + Relances datées du jour */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Relance NRP */}
@@ -836,6 +867,30 @@ function RelanceDateRow({ prospect: p, overdue = false }: { prospect: Prospect; 
         <p className="text-xs text-slate-500 mt-0.5 truncate">{p.nom_dirigeant || p.telephone || p.zone_geographique}</p>
       </div>
       <span className="text-xs text-slate-500 shrink-0">{p.statut_avancement}</span>
+    </Link>
+  );
+}
+
+function VisioConfirmRow({ prospect: p, overdue = false }: { prospect: Prospect; overdue?: boolean }) {
+  const rappelDt = p.date_relance_planifiee ? new Date(p.date_relance_planifiee) : null;
+  const visioDt = p.date_visio ? new Date(p.date_visio) : null;
+  const fmt = (d: Date | null) => d ? d.toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '--';
+  return (
+    <Link
+      to={`/prospects/${p.id}`}
+      className={`block p-3 rounded-xl border transition-colors group ${overdue ? 'border-red-200 bg-red-50/70 hover:bg-red-50' : 'border-purple-200 bg-purple-50/60 hover:bg-purple-50'}`}
+    >
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <p className="text-sm font-semibold text-slate-900 truncate group-hover:text-purple-600 transition-colors">{p.nom_societe}</p>
+          <p className="text-xs text-slate-500 mt-0.5 truncate">{p.nom_dirigeant || p.telephone}</p>
+        </div>
+        <Badge className={`text-[10px] shrink-0 ${overdue ? 'bg-red-500 text-white' : 'bg-purple-500 text-white'}`}>{overdue ? 'En retard' : 'À confirmer'}</Badge>
+      </div>
+      <div className="mt-2 space-y-0.5">
+        <p className="text-xs text-purple-700 font-semibold">Rappel : {fmt(rappelDt)}</p>
+        <p className="text-xs text-slate-500">RDV visio : {fmt(visioDt)}</p>
+      </div>
     </Link>
   );
 }

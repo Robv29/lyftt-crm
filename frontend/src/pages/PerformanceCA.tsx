@@ -1384,14 +1384,16 @@ function LevelProgression({
               return (
                   <div key={level.level} className="relative z-10 flex w-[82px] flex-col items-center text-center">
                     {current && <span className="absolute -top-4 h-0 w-0 border-x-[6px] border-t-[8px] border-x-transparent border-t-[#f1d488]" />}
-                  <div
-                      className={`flex h-9 w-9 rotate-45 items-center justify-center border-2 text-xs font-bold ${
-                        done ? 'border-[#6AABB4] bg-[#102b31] text-[#a9f4f8] shadow-[0_0_14px_rgba(106,171,180,.28)]'
-                          : current ? 'scale-110 border-[#f1d488] bg-[#3a2b12] text-[#f4e6bc] shadow-[0_0_20px_rgba(214,179,91,.42)]'
-                          : dark ? 'border-[#b99046]/25 bg-[#07101d] text-white/40' : 'border-slate-300 bg-slate-50 text-slate-400'
-                    }`}
-                  >
-                      <span className="-rotate-45">{done ? <Check className="h-4 w-4" /> : locked ? <Lock className="h-3.5 w-3.5" /> : level.level}</span>
+                  <div className="flex h-9 w-9 shrink-0 items-center justify-center">
+                    <div
+                        className={`flex h-[24px] w-[24px] rotate-45 items-center justify-center border-2 text-xs font-bold ${
+                          done ? 'border-[#6AABB4] bg-[#102b31] text-[#a9f4f8] shadow-[0_0_14px_rgba(106,171,180,.28)]'
+                            : current ? 'scale-110 border-[#f1d488] bg-[#3a2b12] text-[#f4e6bc] shadow-[0_0_20px_rgba(214,179,91,.42)]'
+                            : dark ? 'border-[#b99046]/25 bg-[#07101d] text-white/40' : 'border-slate-300 bg-slate-50 text-slate-400'
+                      }`}
+                    >
+                        <span className="-rotate-45">{done ? <Check className="h-3 w-3" /> : locked ? <Lock className="h-2.5 w-2.5" /> : level.level}</span>
+                    </div>
                   </div>
                     <div className={`mt-2 font-display text-[9px] font-bold uppercase tracking-[0.08em] ${current ? 'text-[#f1d488]' : ''}`}>Niveau {level.level}</div>
                     <div className={`mt-0.5 text-[10px] ${dark ? 'text-white/55' : 'text-slate-400'}`}>{eur(level.amount)}</div>
@@ -1454,10 +1456,12 @@ function TeamProgression({ dark, progress }: { dark: boolean; progress: number }
           return (
             <div key={milestone} className="flex flex-1 items-center gap-3">
               <div className="flex flex-col items-center gap-1.5 shrink-0">
-                <div className={`flex h-8 w-8 rotate-45 items-center justify-center border-2 font-bold text-xs ${
-                  reached ? 'border-[#6AABB4] bg-[#17343a] text-[#a9f4f8]' : dark ? 'border-[#b99046]/25 bg-[#07101d] text-white/40' : 'border-slate-300 bg-slate-50 text-slate-400'
-                }`}>
-                  <span className="-rotate-45">{reached ? <Check className="h-4 w-4" /> : <Lock className="h-3 w-3" />}</span>
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center">
+                  <div className={`flex h-[22px] w-[22px] rotate-45 items-center justify-center border-2 font-bold text-xs ${
+                    reached ? 'border-[#6AABB4] bg-[#17343a] text-[#a9f4f8]' : dark ? 'border-[#b99046]/25 bg-[#07101d] text-white/40' : 'border-slate-300 bg-slate-50 text-slate-400'
+                  }`}>
+                    <span className="-rotate-45">{reached ? <Check className="h-3 w-3" /> : <Lock className="h-2.5 w-2.5" />}</span>
+                  </div>
                 </div>
                 <div className="text-[10px] font-bold">{milestone}%</div>
               </div>
@@ -1501,7 +1505,9 @@ function KpiCard({
       <div className="pointer-events-none absolute bottom-0 right-0 h-9 w-9 border-b border-r border-[#5A9BA3]/25 transition group-hover:border-[#6AABB4]/55" />
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-center gap-3">
-          <div className={`flex h-11 w-11 shrink-0 rotate-45 items-center justify-center border shadow-[inset_0_0_18px_rgba(255,255,255,.04)] ${styles.icon}`}><span className="-rotate-45">{icon}</span></div>
+          <div className="flex h-11 w-11 shrink-0 items-center justify-center">
+            <div className={`flex h-[30px] w-[30px] rotate-45 items-center justify-center border shadow-[inset_0_0_18px_rgba(255,255,255,.04)] ${styles.icon}`}><span className="-rotate-45">{icon}</span></div>
+          </div>
           <div className="flex items-center gap-2">
             <span className={`font-display text-[9px] font-bold uppercase tracking-[0.12em] ${dark ? 'text-[#f4e6bc]' : ''}`}>{title}</span>
             <Info className="h-3.5 w-3.5 opacity-40" />

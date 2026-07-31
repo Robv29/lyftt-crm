@@ -74,6 +74,7 @@ const actionTypeLabels: Record<string, string> = {
   relance_planifiee: 'Relance planifiée',
   demande_documents: 'Demande de documents', signature: 'Signature',
   refus: 'Refus', status_change: 'Changement de statut',
+  visio_reprogrammee: 'Visio reprogrammée',
 };
 
 type ProspectFormFields = {
@@ -419,6 +420,11 @@ export default function ProspectDetail() {
   const handleLogVisio = useCallback(async (dateTimeLocal?: string, noteOverride?: string) => {
     if (!prospect) return;
     const iso = dateTimeLocal ? new Date(dateTimeLocal).toISOString() : new Date().toISOString();
+    // Reprogrammation d'un rdv déjà en attente (statut encore "Visio" + une
+    // date déjà posée) VS première prise de rendez-vous : dans le premier
+    // cas on ne relogue pas une action "visio" (sinon le KPI Dashboard et le
+    // rapport hebdo comptent 2 visios pour un seul rendez-vous déplacé).
+    const isReschedule = prospect.statut_avancement === 'Visio' && !!prospect.date_visio;
     // Un rendez-vous confirmé programme automatiquement son propre rappel de
     // confirmation 24h avant (violet) — remplace l'ancien effacement pur et
     // simple de la relance planifiée.
@@ -432,12 +438,22 @@ export default function ProspectDetail() {
     try {
       await client.entities.prospects.update({ id: String(prospect.id), data: { ...visioPatch, date_relance_planifiee: reminder?.date_relance_planifiee ?? null } });
       await client.entities.commercial_actions.create({
-        data: { prospect_id: prospect.id, action_type: 'visio', appel_repondu: false, from_status: prospect.statut_avancement, to_status: 'Visio', notes: noteOverride || actionNote || `Visio planifiée le ${new Date(iso).toLocaleString('fr-FR')}`, action_date: new Date().toISOString() },
+        data: {
+          prospect_id: prospect.id,
+          action_type: isReschedule ? 'visio_reprogrammee' : 'visio',
+          appel_repondu: false,
+          from_status: prospect.statut_avancement,
+          to_status: 'Visio',
+          notes: noteOverride || actionNote || (isReschedule
+            ? `Visio reprogrammée : nouvel horaire ${new Date(iso).toLocaleString('fr-FR')}`
+            : `Visio planifiée le ${new Date(iso).toLocaleString('fr-FR')}`),
+          action_date: new Date().toISOString(),
+        },
       });
       invalidateActions(prospect.id);
       setActionNote('');
       setMoneyId((n) => n + 1);
-      toast.success('🎉 Visio enregistrée !');
+      toast.success(isReschedule ? '🔁 Visio reprogrammée' : '🎉 Visio enregistrée !');
     } catch { invalidateProspects(); toast.error("Erreur lors de l'enregistrement"); }
     setShowCallDialog(false);
     setCallStep('result');

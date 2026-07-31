@@ -714,15 +714,14 @@ export default function Dashboard() {
       {/* Confirmations RDV Visio : rappels J-1 auto, à part de la relance générique */}
       {confirmationsVisio.length > 0 && (
         <Card className="border-0 shadow-sm rounded-2xl">
-          <CardHeader>
-            <CardTitle className="text-lg font-semibold text-slate-900 flex items-center gap-2">
-              <Video className="w-5 h-5 text-purple-500" /> Confirmations RDV Visio
-              <Badge className="bg-purple-50 text-purple-600 border-purple-200 rounded-lg text-xs font-bold">{confirmationsVisio.length}</Badge>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-semibold text-slate-900 flex items-center gap-1.5">
+              <Video className="w-4 h-4 text-purple-500" /> Confirmations RDV Visio
+              <Badge className="bg-purple-50 text-purple-600 border-purple-200 rounded-md text-[10px] font-bold px-1.5 py-0">{confirmationsVisio.length}</Badge>
             </CardTitle>
-            <p className="text-xs text-slate-400 mt-1">Rappels de confirmation programmés automatiquement 24h avant chaque visio</p>
           </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-2 max-h-[360px] overflow-y-auto pr-1">
+          <CardContent className="pt-0">
+            <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-1.5 max-h-[180px] overflow-y-auto pr-1">
               {confirmationsVisio.map(({ p, overdue }) => <VisioConfirmRow key={p.id} prospect={p} overdue={overdue} />)}
             </div>
           </CardContent>
@@ -872,25 +871,16 @@ function RelanceDateRow({ prospect: p, overdue = false }: { prospect: Prospect; 
 }
 
 function VisioConfirmRow({ prospect: p, overdue = false }: { prospect: Prospect; overdue?: boolean }) {
-  const rappelDt = p.date_relance_planifiee ? new Date(p.date_relance_planifiee) : null;
   const visioDt = p.date_visio ? new Date(p.date_visio) : null;
   const fmt = (d: Date | null) => d ? d.toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '--';
   return (
     <Link
       to={`/prospects/${p.id}`}
-      className={`block p-3 rounded-xl border transition-colors group ${overdue ? 'border-red-200 bg-red-50/70 hover:bg-red-50' : 'border-purple-200 bg-purple-50/60 hover:bg-purple-50'}`}
+      title={`Rappel avant RDV du ${fmt(visioDt)}`}
+      className={`block px-2 py-1.5 rounded-lg border transition-colors group ${overdue ? 'border-red-200 bg-red-50/70 hover:bg-red-50' : 'border-purple-200 bg-purple-50/60 hover:bg-purple-50'}`}
     >
-      <div className="flex items-start justify-between gap-2">
-        <div className="min-w-0">
-          <p className="text-sm font-semibold text-slate-900 truncate group-hover:text-purple-600 transition-colors">{p.nom_societe}</p>
-          <p className="text-xs text-slate-500 mt-0.5 truncate">{p.nom_dirigeant || p.telephone}</p>
-        </div>
-        <Badge className={`text-[10px] shrink-0 ${overdue ? 'bg-red-500 text-white' : 'bg-purple-500 text-white'}`}>{overdue ? 'En retard' : 'À confirmer'}</Badge>
-      </div>
-      <div className="mt-2 space-y-0.5">
-        <p className="text-xs text-purple-700 font-semibold">Rappel : {fmt(rappelDt)}</p>
-        <p className="text-xs text-slate-500">RDV visio : {fmt(visioDt)}</p>
-      </div>
+      <p className="text-xs font-semibold text-slate-900 truncate group-hover:text-purple-600 transition-colors">{p.nom_societe}</p>
+      <p className={`text-[10px] font-semibold mt-0.5 ${overdue ? 'text-red-600' : 'text-purple-600'}`}>{overdue ? 'En retard · ' : ''}RDV {fmt(visioDt)}</p>
     </Link>
   );
 }

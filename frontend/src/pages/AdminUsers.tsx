@@ -487,7 +487,7 @@ export default function AdminUsers() {
                 Rapports de performance
               </CardTitle>
               <p className="text-sm text-slate-500 mt-1">
-                Topo chiffres + coaching (consignes, warning, félicitations) envoyé à chaque commercial depuis robin.vergnes@lyftt.fr.
+                Topo chiffres + coaching (consignes, warning, félicitations) envoyé à chaque commercial depuis robin@vgs-autos.fr.
                 Automatique tous les lundis (semaine) et le 1er du mois (mois précédent) — déclenchement manuel possible ici.
               </p>
             </div>

@@ -754,7 +754,7 @@ export default function PerformanceCA() {
                   )}
                   <Card className="border-0 shadow-sm rounded-2xl">
                   <CardContent className="p-5 space-y-3">
-                    <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div className="flex flex-wrap items-center justify-between gap-3">
                       <div>
                         <div className="flex items-center gap-1.5">
                           <p className="font-semibold text-slate-800">{p.nom_societe}</p>

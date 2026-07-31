@@ -64,7 +64,7 @@ interface ReportLogEntry {
   period_start: string;
   period_end: string;
   email_to: string | null;
-  status: 'success' | 'error' | 'skipped';
+  status: 'success' | 'error' | 'skipped' | 'pending';
   error_detail: string | null;
   coaching_message: string | null;
   sent_at: string;
@@ -195,17 +195,21 @@ export default function AdminUsers() {
         p_period: period,
       });
       if (error) throw error;
-      const result = data as { sent: number; errors: number };
-      if (result.errors > 0 && result.sent === 0) {
+      const result = data as { queued: number; errors: number };
+      if (result.errors > 0 && result.queued === 0) {
         toast.error(
-          `Aucun envoi (${result.errors} erreur${result.errors > 1 ? 's' : ''}). Vérifie la clé Resend (secret "resend_api_key" dans Supabase Vault).`
+          `Aucun envoi lancé (${result.errors} erreur${result.errors > 1 ? 's' : ''}). Vérifie la clé Resend (secret "resend_api_key" dans Supabase Vault).`
         );
-      } else if (result.errors > 0) {
-        toast.warning(`${result.sent} mail(s) envoyé(s), ${result.errors} erreur(s).`);
       } else {
-        toast.success(`${result.sent} mail(s) envoyé(s) avec succès.`);
+        toast.success(
+          `Envoi lancé pour ${result.queued} commercial${result.queued > 1 ? 's' : ''}. Le statut réel (Resend) apparaît ci-dessous sous 1 minute.`
+        );
       }
       fetchReportLogs();
+      // L'envoi est asynchrone (Resend répond via pg_net, reconcilié par un
+      // cron chaque minute) : on rafraîchit l'historique à quelques reprises
+      // pour faire apparaître le vrai statut sans que Robin ait à recharger.
+      [4000, 15000, 35000, 65000].forEach((delay) => setTimeout(fetchReportLogs, delay));
     } catch (err: any) {
       toast.error(err?.message || "Erreur lors de l'envoi des rapports");
     } finally {
@@ -551,13 +555,22 @@ export default function AdminUsers() {
                           </Badge>
                         </TableCell>
                         <TableCell className="max-w-[320px] truncate text-slate-500 text-sm">
-                          {log.status === 'error' ? log.error_detail : log.coaching_message}
+                          {log.status === 'error'
+                            ? log.error_detail
+                            : log.status === 'pending'
+                              ? 'En attente de la réponse Resend...'
+                              : log.coaching_message}
                         </TableCell>
                         <TableCell>
                           {log.status === 'success' ? (
                             <span className="flex items-center gap-1 text-emerald-600 text-sm">
                               <CheckCircle2 className="w-4 h-4" />
                               Envoyé
+                            </span>
+                          ) : log.status === 'pending' ? (
+                            <span className="flex items-center gap-1 text-amber-500 text-sm">
+                              <Loader2 className="w-4 h-4 animate-spin" />
+                              En cours
                             </span>
                           ) : (
                             <span className="flex items-center gap-1 text-red-500 text-sm">

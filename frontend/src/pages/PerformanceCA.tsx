@@ -199,30 +199,33 @@ export default function PerformanceCA() {
   const buildRowsForMois = useCallback((moisStr: string) => {
     return commerciaux.map((u) => {
       // Un dossier est rattaché au mois de sa signature (date_signature) pour
-      // le probable/confirmé/encaissé "de ce mois" — c'est l'argent généré ce
-      // mois-là, quel que soit l'écran où on le regarde ensuite.
+      // le probable/confirmé "de ce mois" (reste à encaisser sur les deals
+      // signés ce mois-là). L'encaissé, lui, est calculé plus bas par date de
+      // règlement réelle, indépendamment du mois de signature.
       const deals = prospects.filter((p) => {
         if (p.signed_by_user_id !== u.id) return false;
         if (!p.date_signature) return false;
         return p.date_signature.slice(0, 7) === moisStr;
       });
 
-      let probable = 0, confirme = 0, encaisse = 0;
+      let probable = 0, confirme = 0;
       for (const p of deals) {
         const montantMax = Number(p.montant_potentiel) || 0;
         const paye = Math.min(paiementsByProspect.get(p.id) || 0, montantMax);
-        encaisse += paye;
         const restant = montantMax - paye;
         if (restant > 0) {
           if (p.statut_avancement === 'Envoyé à Mathilde') confirme += restant;
           else if (PROBABLE_STAGES.has(p.statut_avancement)) probable += restant;
         }
       }
-      const realise = probable + confirme + encaisse;
 
-      // La commission se calcule sur les RÈGLEMENTS reçus ce mois-ci (mois de
-      // paiement réel de chaque règlement), pas sur le mois de signature —
-      // chaque règlement génère sa part de commission dès qu'il est encaissé.
+      // CA encaissé + commission se basent tous les deux sur les RÈGLEMENTS
+      // reçus CE MOIS-CI (mois réel de chaque règlement via date_paiement),
+      // pas sur le mois de signature du dossier : un client signé en juin qui
+      // paie en août fait apparaître ce règlement dans l'encaissé d'août pour
+      // son commercial, même si le paiement n'est que partiel (pas 100% du
+      // montant total). C'est le pendant "argent réellement rentré" du
+      // probable/confirmé (qui eux restent groupés par mois de signature).
       const taux = Number(u.taux_commission) || 0;
       const paiementsDuMoisPourCeCommercial = paiements.filter((pmt) => {
         if (pmt.date_paiement.slice(0, 7) !== moisStr) return false;
@@ -231,6 +234,8 @@ export default function PerformanceCA() {
       });
       const assietteCommission = paiementsDuMoisPourCeCommercial.reduce((s, pmt) => s + Number(pmt.montant), 0);
       const commission = assietteCommission * (taux / 100);
+      const encaisse = assietteCommission;
+      const realise = probable + confirme + encaisse;
 
       const objectifRow = objectifs.find((o) => o.user_role_id === u.id && o.mois.slice(0, 7) === moisStr);
       const objectifCa = objectifRow?.objectif_ca ?? 0;

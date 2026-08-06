@@ -26,8 +26,10 @@ const MONTH_NAMES = [
   'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre',
 ];
 
-// Dossiers "gagnés" mais pas encore confirmés/transmis à Mathilde -> CA probable.
-const PROBABLE_STAGES = new Set(['Signature', 'Dossier complet']);
+// Tous les dossiers "gagnés" (peu importe l'étape avant règlement) -> CA probable.
+// La distinction "confirmé" (transmis à Mathilde) a été retirée : elle n'apportait rien
+// de plus exploitable que probable/encaissé.
+const PROBABLE_STAGES = new Set(['Signature', 'Dossier complet', 'Envoyé à Mathilde']);
 // Tous les dossiers "clients signés" (peu importe l'étape) pour l'onglet paiements.
 const WON_STAGES = new Set(['Signature', 'Dossier complet', 'Envoyé à Mathilde']);
 // Classement par statut de règlement pour l'onglet "Suivi paiements clients"
@@ -101,18 +103,17 @@ function growthPct(cur: number, prev: number): number | null {
   return Math.round(((cur - prev) / prev) * 100);
 }
 
-type RowAgg = { probable: number; confirme: number; encaisse: number; realise: number; objectifCa: number; commission: number };
+type RowAgg = { probable: number; encaisse: number; realise: number; objectifCa: number; commission: number };
 function aggregateRows(rowsArr: RowAgg[]): RowAgg {
   return rowsArr.reduce(
     (acc, r) => ({
       probable: acc.probable + r.probable,
-      confirme: acc.confirme + r.confirme,
       encaisse: acc.encaisse + r.encaisse,
       realise: acc.realise + r.realise,
       objectifCa: acc.objectifCa + r.objectifCa,
       commission: acc.commission + r.commission,
     }),
-    { probable: 0, confirme: 0, encaisse: 0, realise: 0, objectifCa: 0, commission: 0 }
+    { probable: 0, encaisse: 0, realise: 0, objectifCa: 0, commission: 0 }
   );
 }
 
@@ -193,14 +194,14 @@ export default function PerformanceCA() {
     return map;
   }, [paiements]);
 
-  // Calcule probable/confirmé/encaissé/objectif/commission pour un mois donné
+  // Calcule probable/encaissé/objectif/commission pour un mois donné
   // ('YYYY-MM'), par commercial. Factorisé pour pouvoir aussi calculer le mois
   // précédent (comparatif réel des KPI) sans dupliquer la logique.
   const buildRowsForMois = useCallback((moisStr: string) => {
     return commerciaux.map((u) => {
       // Un dossier est rattaché au mois de sa signature (date_signature) pour
-      // le probable/confirmé "de ce mois" (reste à encaisser sur les deals
-      // signés ce mois-là). L'encaissé, lui, est calculé plus bas par date de
+      // le probable "de ce mois" (reste à encaisser sur les deals signés ce
+      // mois-là). L'encaissé, lui, est calculé plus bas par date de
       // règlement réelle, indépendamment du mois de signature.
       const deals = prospects.filter((p) => {
         if (p.signed_by_user_id !== u.id) return false;
@@ -208,15 +209,12 @@ export default function PerformanceCA() {
         return p.date_signature.slice(0, 7) === moisStr;
       });
 
-      let probable = 0, confirme = 0;
+      let probable = 0;
       for (const p of deals) {
         const montantMax = Number(p.montant_potentiel) || 0;
         const paye = Math.min(paiementsByProspect.get(p.id) || 0, montantMax);
         const restant = montantMax - paye;
-        if (restant > 0) {
-          if (p.statut_avancement === 'Envoyé à Mathilde') confirme += restant;
-          else if (PROBABLE_STAGES.has(p.statut_avancement)) probable += restant;
-        }
+        if (restant > 0 && PROBABLE_STAGES.has(p.statut_avancement)) probable += restant;
       }
 
       // CA encaissé + commission se basent tous les deux sur les RÈGLEMENTS
@@ -225,7 +223,7 @@ export default function PerformanceCA() {
       // paie en août fait apparaître ce règlement dans l'encaissé d'août pour
       // son commercial, même si le paiement n'est que partiel (pas 100% du
       // montant total). C'est le pendant "argent réellement rentré" du
-      // probable/confirmé (qui eux restent groupés par mois de signature).
+      // probable (qui lui reste groupé par mois de signature).
       const taux = Number(u.taux_commission) || 0;
       const paiementsDuMoisPourCeCommercial = paiements.filter((pmt) => {
         if (pmt.date_paiement.slice(0, 7) !== moisStr) return false;
@@ -235,13 +233,13 @@ export default function PerformanceCA() {
       const assietteCommission = paiementsDuMoisPourCeCommercial.reduce((s, pmt) => s + Number(pmt.montant), 0);
       const commission = assietteCommission * (taux / 100);
       const encaisse = assietteCommission;
-      const realise = probable + confirme + encaisse;
+      const realise = probable + encaisse;
 
       const objectifRow = objectifs.find((o) => o.user_role_id === u.id && o.mois.slice(0, 7) === moisStr);
       const objectifCa = objectifRow?.objectif_ca ?? 0;
       // L'objectif et le classement sont pilotés par le CA probable. Le
-      // réalisé (probable + confirmé + encaissé) reste une lecture comptable
-      // utile, mais ne doit pas gonfler artificiellement l'avancement.
+      // réalisé (probable + encaissé) reste une lecture comptable utile, mais
+      // ne doit pas gonfler artificiellement l'avancement.
       const pct = objectifCa > 0 ? Math.round((probable / objectifCa) * 100) : null;
 
       const ecart = objectifCa - probable;
@@ -250,7 +248,7 @@ export default function PerformanceCA() {
 
       return {
         user: u,
-        probable, confirme, encaisse, realise,
+        probable, encaisse, realise,
         objectifCa, objectifId: objectifRow?.id,
         pct, dealsCount: deals.length,
         taux, commission, assietteCommission,
@@ -286,8 +284,8 @@ export default function PerformanceCA() {
   const joRestants = joursOuvresRestants();
 
   const performance = useMemo(() => {
-    const base: RowAgg = viewMode === 'global' ? teamTotals : (selectedRow ?? { probable: 0, confirme: 0, encaisse: 0, realise: 0, objectifCa: 0, commission: 0 });
-    const prevBase: RowAgg = viewMode === 'global' ? prevTeamTotals : (prevSelectedRow ?? { probable: 0, confirme: 0, encaisse: 0, realise: 0, objectifCa: 0, commission: 0 });
+    const base: RowAgg = viewMode === 'global' ? teamTotals : (selectedRow ?? { probable: 0, encaisse: 0, realise: 0, objectifCa: 0, commission: 0 });
+    const prevBase: RowAgg = viewMode === 'global' ? prevTeamTotals : (prevSelectedRow ?? { probable: 0, encaisse: 0, realise: 0, objectifCa: 0, commission: 0 });
     const progressPercent = base.objectifCa > 0 ? clamp((base.probable / base.objectifCa) * 100, 0, 100) : 0;
     const remaining = Math.max(base.objectifCa - base.probable, 0);
     const dailyNeeded = isMoisCourant && joRestants > 0 ? Math.ceil(remaining / joRestants) : remaining;
@@ -503,9 +501,9 @@ export default function PerformanceCA() {
 
   // Courbes réelles jour par jour du mois sélectionné pour la vue Aperçu
   // affichée (équipe complète, ou un seul commercial) — aucune donnée
-  // inventée. Le CA confirmé est daté par son passage réel "Envoyé à
-  // Mathilde" (date_envoi_mathilde) quand elle tombe dans le mois affiché,
-  // sinon par la date de signature.
+  // inventée. Un dossier "Envoyé à Mathilde" est daté par son passage réel
+  // (date_envoi_mathilde) quand elle tombe dans le mois affiché, sinon par la
+  // date de signature — les deux comptent dans le CA probable.
   const chartUserIds = useMemo(() => {
     if (viewMode === 'global') return new Set(commerciaux.map((u) => u.id));
     return new Set(selectedUserId != null ? [selectedUserId] : []);
@@ -515,25 +513,22 @@ export default function PerformanceCA() {
     const [y, m] = mois.split('-').map(Number);
     const lastDay = new Date(y, m, 0).getDate();
     const probableByDay = new Array(lastDay + 1).fill(0);
-    const confirmeByDay = new Array(lastDay + 1).fill(0);
     const encaisseByDay = new Array(lastDay + 1).fill(0);
     const commissionByDay = new Array(lastDay + 1).fill(0);
 
     for (const p of prospects) {
       if (!p.date_signature || p.date_signature.slice(0, 7) !== mois) continue;
       if (p.signed_by_user_id == null || !chartUserIds.has(p.signed_by_user_id)) continue;
+      if (!PROBABLE_STAGES.has(p.statut_avancement)) continue;
       const max = Number(p.montant_potentiel) || 0;
       const paye = Math.min(paiementsByProspect.get(p.id) || 0, max);
       const restant = max - paye;
       if (restant <= 0) continue;
-      if (p.statut_avancement === 'Envoyé à Mathilde') {
-        const evtDate = p.date_envoi_mathilde && p.date_envoi_mathilde.slice(0, 7) === mois ? p.date_envoi_mathilde : p.date_signature;
-        const day = Number(evtDate.slice(8, 10));
-        if (day >= 1 && day <= lastDay) confirmeByDay[day] += restant;
-      } else if (PROBABLE_STAGES.has(p.statut_avancement)) {
-        const day = Number(p.date_signature.slice(8, 10));
-        if (day >= 1 && day <= lastDay) probableByDay[day] += restant;
-      }
+      const evtDate = p.statut_avancement === 'Envoyé à Mathilde' && p.date_envoi_mathilde && p.date_envoi_mathilde.slice(0, 7) === mois
+        ? p.date_envoi_mathilde
+        : p.date_signature;
+      const day = Number(evtDate.slice(8, 10));
+      if (day >= 1 && day <= lastDay) probableByDay[day] += restant;
     }
 
     const tauxByUser = new Map(commerciaux.map((u) => [u.id, Number(u.taux_commission) || 0]));
@@ -549,18 +544,16 @@ export default function PerformanceCA() {
     }
 
     const probable: { day: number; cumul: number }[] = [];
-    const confirme: { day: number; cumul: number }[] = [];
     const encaisse: { day: number; cumul: number }[] = [];
     const commission: { day: number; cumul: number }[] = [];
-    let cp = 0, cc2 = 0, ce = 0, cco = 0;
+    let cp = 0, ce = 0, cco = 0;
     for (let d = 1; d <= lastDay; d++) {
-      cp += probableByDay[d]; cc2 += confirmeByDay[d]; ce += encaisseByDay[d]; cco += commissionByDay[d];
+      cp += probableByDay[d]; ce += encaisseByDay[d]; cco += commissionByDay[d];
       probable.push({ day: d, cumul: cp });
-      confirme.push({ day: d, cumul: cc2 });
       encaisse.push({ day: d, cumul: ce });
       commission.push({ day: d, cumul: cco });
     }
-    return { probable, confirme, encaisse, commission };
+    return { probable, encaisse, commission };
   }, [prospects, paiements, mois, chartUserIds, commerciaux, paiementsByProspect]);
 
   // Horodatage réel de dernière mise à jour des données (dernier prospect ou
@@ -1112,7 +1105,7 @@ export default function PerformanceCA() {
             />
           </div>
 
-          {/* Graphique réel + récapitulatif (CA confirmé toujours visible ici, jamais fusionné) */}
+          {/* Graphique réel + récapitulatif */}
           <div className="grid gap-4 xl:grid-cols-[1.25fr_.75fr]">
             <RevenueChart
               dark={isDark}
@@ -1123,7 +1116,6 @@ export default function PerformanceCA() {
             <MonthlySummary
               dark={isDark}
               probable={performance.probable}
-              confirme={performance.confirme}
               encaisse={performance.encaisse}
               objectif={performance.objectifCa}
               commission={performance.commission}
@@ -1185,7 +1177,6 @@ export default function PerformanceCA() {
                     <tr className={`text-left ${isDark ? 'text-white/40' : 'text-slate-400'}`}>
                       <th className="px-5 py-3 font-medium">Commercial</th>
                       <th className="px-5 py-3 font-medium text-right">CA probable</th>
-                      <th className="px-5 py-3 font-medium text-right">CA confirmé</th>
                       <th className="px-5 py-3 font-medium text-right">CA encaissé</th>
                       <th className="px-5 py-3 font-medium text-right">Objectif</th>
                       <th className="px-5 py-3 font-medium text-right">% atteint</th>
@@ -1201,7 +1192,6 @@ export default function PerformanceCA() {
                           <span className={`text-xs ml-1.5 ${textMuted2}`}>({r.dealsCount} dossier{r.dealsCount > 1 ? 's' : ''})</span>
                         </td>
                         <td className="px-5 py-4 text-right text-amber-500">{eur(r.probable)}</td>
-                        <td className="px-5 py-4 text-right text-[#6AABB4]">{eur(r.confirme)}</td>
                         <td className="px-5 py-4 text-right text-emerald-500 font-semibold">{eur(r.encaisse)}</td>
                         <td className="px-5 py-4 text-right">
                           {editingId === r.user.id ? (
@@ -1586,7 +1576,7 @@ function KpiSparkline({
   );
 }
 
-// Graphique réel à 3 courbes (probable / confirmé / encaissé) + objectif en
+// Graphique réel à 2 courbes (probable / encaissé) + objectif en
 // pointillé — dérivé des vraies signatures, transmissions à Mathilde et
 // règlements du mois affiché (jamais un tracé fixe).
 function RevenueChart({
@@ -1596,7 +1586,7 @@ function RevenueChart({
   showLevelMarkers,
 }: {
   dark: boolean;
-  series: { probable: DailyPoint[]; confirme: DailyPoint[]; encaisse: DailyPoint[] };
+  series: { probable: DailyPoint[]; encaisse: DailyPoint[] };
   objectif: number;
   showLevelMarkers: boolean;
 }) {
@@ -1604,7 +1594,6 @@ function RevenueChart({
   const maxVal = Math.max(
     objectif,
     series.probable[lastDay - 1]?.cumul || 0,
-    series.confirme[lastDay - 1]?.cumul || 0,
     series.encaisse[lastDay - 1]?.cumul || 0,
     1
   ) * 1.08;
@@ -1632,7 +1621,6 @@ function RevenueChart({
       </div>
       <div className={`mt-2 flex flex-wrap gap-4 text-[11px] ${dark ? 'text-white/40' : 'text-slate-500'}`}>
         <span className="flex items-center gap-1.5"><span className="h-[2px] w-4 bg-[#d6b35b]" /> CA probable</span>
-        <span className="flex items-center gap-1.5"><span className="h-[2px] w-4 bg-[#5A9BA3]" /> CA confirmé</span>
         <span className="flex items-center gap-1.5"><span className="h-[2px] w-4 bg-blue-500" /> CA encaissé</span>
         <span className="flex items-center gap-1.5"><span className="h-[2px] w-4 border-t border-dashed border-slate-400" /> Objectif</span>
       </div>
@@ -1655,7 +1643,6 @@ function RevenueChart({
             </defs>
             {probableAreaPath && <path d={probableAreaPath} fill="url(#revenue-area-gradient)" />}
             {probablePath && <path d={probablePath} fill="none" stroke="#d6b35b" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />}
-            {series.confirme.length > 0 && <path d={pathFor(series.confirme)} fill="none" stroke="#5A9BA3" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" opacity=".9" vectorEffect="non-scaling-stroke" />}
             {series.encaisse.length > 0 && <path d={pathFor(series.encaisse)} fill="none" stroke="#3B82F6" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" opacity=".9" vectorEffect="non-scaling-stroke" />}
             {objectif > 0 && <path d={`M0 ${objY} L900 ${objY}`} fill="none" stroke="#CBD5E1" strokeWidth="2" strokeDasharray="9 9" opacity="0.65" vectorEffect="non-scaling-stroke" />}
             {levelMarkers.map(({ level, point }) => (
@@ -1684,14 +1671,13 @@ function RevenueChart({
   );
 }
 
-// Récapitulatif du mois : les 3 CA (probable/confirmé/encaissé) + objectif +
+// Récapitulatif du mois : les 2 CA (probable/encaissé) + objectif +
 // commission, chacun avec sa vraie progression vs l'objectif.
 function MonthlySummary({
-  dark, probable, confirme, encaisse, objectif, commission, lastUpdatedLabel,
+  dark, probable, encaisse, objectif, commission, lastUpdatedLabel,
 }: {
   dark: boolean;
   probable: number;
-  confirme: number;
   encaisse: number;
   objectif: number;
   commission: number;
@@ -1699,7 +1685,6 @@ function MonthlySummary({
 }) {
   const rows = [
     { label: 'CA probable', value: probable, percent: objectif > 0 ? (probable / objectif) * 100 : 0, color: 'bg-gradient-to-r from-[#5A9BA3] to-[#d6b35b]' },
-    { label: 'CA confirmé', value: confirme, percent: objectif > 0 ? (confirme / objectif) * 100 : 0, color: 'bg-[#5A9BA3]' },
     { label: 'CA encaissé', value: encaisse, percent: objectif > 0 ? (encaisse / objectif) * 100 : 0, color: 'bg-blue-500' },
     { label: 'Objectif', value: objectif, percent: 100, color: 'bg-amber-400' },
     { label: 'Commission payée', value: commission, percent: null as number | null, color: 'bg-emerald-500' },

@@ -31,6 +31,7 @@ import {
   PhoneCall,
   PhoneOff,
   Video,
+  FileText,
   FileSignature,
   Zap,
   Clock,
@@ -358,6 +359,35 @@ export default function Dashboard() {
       .sort((a, b) => new Date(a.date_relance_planifiee).getTime() - new Date(b.date_relance_planifiee).getTime())
       .map((p) => ({ p, overdue: new Date(p.date_relance_planifiee) < now }));
   }, [prospects]);
+
+  // Demandes de documents en attente, groupées par commercial : tous les
+  // dossiers encore au statut "Demande de documents" (pas encore signés),
+  // avec la date du dernier appel à ce sujet à côté pour voir d'un coup
+  // d'œil qui n'a pas été relancé depuis longtemps. Tri du plus urgent
+  // (appel le plus ancien, ou jamais appelé) au plus récent.
+  const demandesDocsGrouped = useMemo(() => {
+    const enAttente = prospects.filter((p) => p.statut_avancement === 'Demande de documents' && p.statut_gagne_perdu === 'actif');
+    const map = new Map<string, Prospect[]>();
+    for (const p of enAttente) {
+      const name = resolveCommercialFor(p);
+      const arr = map.get(name) || [];
+      arr.push(p);
+      map.set(name, arr);
+    }
+    for (const arr of map.values()) {
+      arr.sort((a, b) => {
+        const da = a.date_dernier_appel ? new Date(a.date_dernier_appel).getTime() : 0;
+        const db = b.date_dernier_appel ? new Date(b.date_dernier_appel).getTime() : 0;
+        return da - db;
+      });
+    }
+    return Array.from(map.entries()).sort(([a], [b]) => {
+      if (a === 'Non attribué') return 1;
+      if (b === 'Non attribué') return -1;
+      return a.localeCompare(b, 'fr');
+    });
+  }, [prospects, resolveCommercialFor]);
+  const demandesDocsTotal = useMemo(() => demandesDocsGrouped.reduce((s, [, arr]) => s + arr.length, 0), [demandesDocsGrouped]);
 
   // Conseil du jour : nombre d'appels/jour recommandé pour rattraper l'objectif
   // CA du mois, basé sur le taux de transformation ANNUEL réel du commercial
@@ -728,6 +758,35 @@ export default function Dashboard() {
         </Card>
       )}
 
+      {/* Demandes de documents en attente, par commercial */}
+      {demandesDocsGrouped.length > 0 && (
+        <Card className="border-0 shadow-sm rounded-2xl">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-semibold text-slate-900 flex items-center gap-1.5">
+              <FileText className="w-4 h-4 text-amber-500" /> Demandes de documents en attente
+              <Badge className="bg-amber-50 text-amber-600 border-amber-200 rounded-md text-[10px] font-bold px-1.5 py-0">{demandesDocsTotal}</Badge>
+            </CardTitle>
+            <p className="text-xs text-slate-400 mt-1">Par commercial, avec la date du dernier appel à ce sujet</p>
+          </CardHeader>
+          <CardContent className="pt-0">
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4 max-h-[420px] overflow-y-auto pr-1">
+              {demandesDocsGrouped.map(([commercialName, items]) => (
+                <div key={commercialName}>
+                  <div className="flex items-center gap-1.5 mb-1.5 px-0.5">
+                    <UserCircle className="w-3.5 h-3.5 text-slate-400" />
+                    <span className="text-xs font-bold text-slate-500 uppercase tracking-wide">{commercialName}</span>
+                    <Badge className="bg-slate-100 text-slate-500 border-0 rounded-lg text-[10px] font-bold">{items.length}</Badge>
+                  </div>
+                  <div className="space-y-1.5">
+                    {items.map((p) => <DocRequestRow key={p.id} prospect={p} />)}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Deux colonnes de relance : NRP (appels non répondus) + Relances datées du jour */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Relance NRP */}
@@ -881,6 +940,23 @@ function VisioConfirmRow({ prospect: p, overdue = false }: { prospect: Prospect;
     >
       <p className="text-xs font-semibold text-slate-900 truncate group-hover:text-purple-600 transition-colors">{p.nom_societe}</p>
       <p className={`text-[10px] font-semibold mt-0.5 ${overdue ? 'text-red-600' : 'text-purple-600'}`}>{overdue ? 'En retard · ' : ''}RDV {fmt(visioDt)}</p>
+    </Link>
+  );
+}
+
+function DocRequestRow({ prospect: p }: { prospect: Prospect }) {
+  const lastCallDate = p.date_dernier_appel ? new Date(p.date_dernier_appel) : null;
+  const daysAgo = lastCallDate ? Math.floor((Date.now() - lastCallDate.getTime()) / 86400000) : null;
+  const stale = daysAgo === null || daysAgo >= 5;
+  return (
+    <Link
+      to={`/prospects/${p.id}`}
+      className={`flex items-center justify-between gap-2 px-2.5 py-2 rounded-lg border transition-colors group ${stale ? 'border-amber-200 bg-amber-50/60 hover:bg-amber-50' : 'border-slate-100 hover:border-[#6AABB4]/40 hover:bg-slate-50'}`}
+    >
+      <span className="text-xs font-medium text-slate-800 truncate group-hover:text-amber-700 transition-colors">{p.nom_societe}</span>
+      <span className={`text-[10px] font-semibold shrink-0 ${stale ? 'text-amber-700' : 'text-slate-400'}`}>
+        {daysAgo === null ? 'Jamais appelé' : daysAgo === 0 ? "Appelé aujourd'hui" : `Appelé il y a ${daysAgo}j`}
+      </span>
     </Link>
   );
 }

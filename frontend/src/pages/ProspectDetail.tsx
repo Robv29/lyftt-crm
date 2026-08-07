@@ -74,7 +74,7 @@ const actionTypeLabels: Record<string, string> = {
   relance_planifiee: 'Relance planifiée',
   demande_documents: 'Demande de documents', signature: 'Signature',
   refus: 'Refus', status_change: 'Changement de statut',
-  visio_reprogrammee: 'Visio reprogrammée',
+  visio_reprogrammee: 'Visio reprogrammée', note: 'Note',
 };
 
 type ProspectFormFields = {
@@ -113,7 +113,7 @@ export default function ProspectDetail() {
   const paiementsProspect = prospectId ? allPaiements.filter((pmt) => pmt.prospect_id === prospectId) : [];
   const totalPaye = paiementsProspect.reduce((s, pmt) => s + Number(pmt.montant), 0);
 
-  const [editNotes, setEditNotes] = useState('');
+  const [newNoteText, setNewNoteText] = useState('');
   const [actionNote, setActionNote] = useState('');
   const [showCallDialog, setShowCallDialog] = useState(false);
   const [callStep, setCallStep] = useState<'result' | 'followup'>('result');
@@ -125,17 +125,10 @@ export default function ProspectDetail() {
   const [confettiId, setConfettiId] = useState(0);
   const [moneyId, setMoneyId] = useState(0);
   const [saving, setSaving] = useState(false);
-  const [notesInitialized, setNotesInitialized] = useState(false);
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [editForm, setEditForm] = useState<ProspectFormFields>(emptyProspectForm);
   const [savingInfo, setSavingInfo] = useState(false);
   const [deleting, setDeleting] = useState(false);
-
-  // Initialize notes from prospect data
-  if (prospect && !notesInitialized) {
-    setEditNotes(prospect.notes || '');
-    setNotesInitialized(true);
-  }
 
   const updateProspectOptimistic = useCallback((updates: Partial<Prospect>) => {
     if (!prospectId) return;
@@ -144,16 +137,31 @@ export default function ProspectDetail() {
     );
   }, [prospectId, queryClient]);
 
-  const handleSaveNotes = useCallback(async () => {
-    if (!prospect) return;
+  // Une note est un événement du flux, au même titre qu'un appel ou un
+  // changement de statut : datée, jamais écrasée, jamais supprimable. On
+  // n'édite donc plus un champ "notes" unique sur la fiche — chaque note
+  // ajoutée devient une nouvelle ligne d'historique.
+  const handleAddNote = useCallback(async () => {
+    if (!prospect || !newNoteText.trim()) return;
     setSaving(true);
     try {
-      await client.entities.prospects.update({ id: String(prospect.id), data: { notes: editNotes } });
-      updateProspectOptimistic({ notes: editNotes });
-      toast.success('Notes sauvegardées');
-    } catch { toast.error('Erreur lors de la sauvegarde'); }
+      await client.entities.commercial_actions.create({
+        data: {
+          prospect_id: prospect.id,
+          action_type: 'note',
+          appel_repondu: false,
+          from_status: prospect.statut_avancement,
+          to_status: prospect.statut_avancement,
+          notes: newNoteText.trim(),
+          action_date: new Date().toISOString(),
+        },
+      });
+      invalidateActions(prospect.id);
+      setNewNoteText('');
+      toast.success('Note ajoutée');
+    } catch { toast.error("Erreur lors de l'ajout de la note"); }
     finally { setSaving(false); }
-  }, [prospect, editNotes, updateProspectOptimistic]);
+  }, [prospect, newNoteText, invalidateActions]);
 
   // Ouvre la fiche en édition : pré-remplit le formulaire avec les valeurs
   // actuelles (permet d'ajouter, modifier ou vider — donc "supprimer" — un
@@ -770,11 +778,21 @@ export default function ProspectDetail() {
             </div>
 
             <div className="pt-4 border-t border-slate-100">
-              <Label>Notes</Label>
-              <Textarea value={editNotes} onChange={(e) => setEditNotes(e.target.value)} rows={4} className="mt-1 rounded-xl" />
-              <Button onClick={handleSaveNotes} disabled={saving} size="sm" className="mt-2 gap-1.5 bg-gradient-to-r from-[#5A9BA3] to-[#6AABB4] hover:from-[#4A8B93] hover:to-[#5A9BA4] text-white rounded-xl shadow-sm">
-                <Save className="w-3.5 h-3.5" /> {saving ? 'Sauvegarde...' : 'Sauvegarder'}
+              <Label>Ajouter une note</Label>
+              <Textarea
+                value={newNoteText}
+                onChange={(e) => setNewNoteText(e.target.value)}
+                rows={3}
+                placeholder="Écrire une note sur ce dossier..."
+                className="mt-1 rounded-xl"
+              />
+              <Button onClick={handleAddNote} disabled={saving || !newNoteText.trim()} size="sm" className="mt-2 gap-1.5 bg-gradient-to-r from-[#5A9BA3] to-[#6AABB4] hover:from-[#4A8B93] hover:to-[#5A9BA4] text-white rounded-xl shadow-sm">
+                <Save className="w-3.5 h-3.5" /> {saving ? 'Enregistrement...' : 'Ajouter la note'}
               </Button>
+              <p className="text-[11px] text-slate-400 mt-1.5">Chaque note est datée et conservée dans l&apos;historique ci-dessous — elle ne peut pas être modifiée ni supprimée.</p>
+              {prospect.notes && (
+                <p className="text-xs text-slate-500 mt-2 italic">Note d&apos;origine (import) : {prospect.notes}</p>
+              )}
             </div>
 
             {/* Action History */}

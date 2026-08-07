@@ -23,15 +23,13 @@ const PIPELINE_STAGES = [
   { key: 'Visio', label: 'Visio', gradient: 'from-purple-500 to-purple-600', light: 'bg-purple-100 text-purple-700' },
   { key: 'Demande de documents', label: 'Demande docs', gradient: 'from-amber-400 to-amber-500', light: 'bg-amber-100 text-amber-700' },
   { key: 'Signature', label: 'Signature', gradient: 'from-emerald-500 to-emerald-600', light: 'bg-emerald-100 text-emerald-700' },
-  { key: 'Dossier complet', label: 'Dossier complet', gradient: 'from-teal-500 to-cyan-600', light: 'bg-teal-100 text-teal-700' },
   { key: 'Envoyé à Mathilde', label: 'Envoyé à Mathilde', gradient: 'from-cyan-500 to-sky-600', light: 'bg-sky-100 text-sky-700' },
   { key: 'Refus / Perdu', label: 'Refus / Perdu', gradient: 'from-red-400 to-red-500', light: 'bg-red-100 text-red-700' },
 ];
 
 // Une fois signé, le dossier reste "gagne" quel que soit son avancement
-// administratif (Dossier complet / Envoye a Mathilde) — seul un vrai refus
-// repasse en "perdu".
-const WON_STAGES = new Set(['Signature', 'Dossier complet', 'Envoyé à Mathilde']);
+// administratif (Envoye a Mathilde) — seul un vrai refus repasse en "perdu".
+const WON_STAGES = new Set(['Signature', 'Envoyé à Mathilde']);
 
 const priorityColors: Record<string, string> = {
   haute: 'border-l-red-500',

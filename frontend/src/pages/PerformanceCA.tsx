@@ -29,9 +29,9 @@ const MONTH_NAMES = [
 // Tous les dossiers "gagnés" (peu importe l'étape avant règlement) -> CA probable.
 // La distinction "confirmé" (transmis à Mathilde) a été retirée : elle n'apportait rien
 // de plus exploitable que probable/encaissé.
-const PROBABLE_STAGES = new Set(['Signature', 'Dossier complet', 'Envoyé à Mathilde']);
+const PROBABLE_STAGES = new Set(['Signature', 'Envoyé à Mathilde']);
 // Tous les dossiers "clients signés" (peu importe l'étape) pour l'onglet paiements.
-const WON_STAGES = new Set(['Signature', 'Dossier complet', 'Envoyé à Mathilde']);
+const WON_STAGES = new Set(['Signature', 'Envoyé à Mathilde']);
 // Classement par statut de règlement pour l'onglet "Suivi paiements clients"
 // (du plus urgent/à traiter au plus abouti) : CA non renseigné en premier
 // (impossible de savoir où on en est tant que ce n'est pas rempli), puis

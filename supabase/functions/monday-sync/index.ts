@@ -1,8 +1,9 @@
-// Edge Function Supabase : transmission automatique d'un dossier "complet"
-// vers le board Monday "TRANSMISSION CLIENTS" (id 1834077174, workspace
-// LYFTT). Appelée par le front (supabase.functions.invoke('monday-sync',
-// { body: { prospect_id } })) quand un commercial marque un dossier comme
-// complet, ou pour un "Réessayer" après une erreur.
+// Edge Function Supabase : transmission automatique d'un dossier vers le
+// board Monday "TRANSMISSION CLIENTS" (id 1834077174, workspace LYFTT).
+// Appelée par le front (supabase.functions.invoke('monday-sync',
+// { body: { prospect_id } })) dès qu'un commercial passe un dossier en
+// "Signature", ou manuellement (transmission tardive / "Réessayer" après
+// une erreur).
 //
 // Principes (voir prompt "PERFORMANCE CA + TRANSMISSION MONDAY", parties 3-13) :
 //  - Clé API Monday jamais exposée au frontend : elle vit uniquement ici,
@@ -12,7 +13,7 @@
 //    que soit le nombre de clics / retries / refresh).
 //  - Le statut CRM ne passe à "Envoyé à Mathilde" QUE si la création/mise à
 //    jour Monday ET la note de synthèse ont réussi. En cas d'échec à
-//    n'importe quelle étape, le prospect reste en "Dossier complet" avec
+//    n'importe quelle étape, le prospect reste en "Signature" avec
 //    monday_sync_status = 'error' et le détail de l'erreur est conservé.
 //  - "DATE ENVOIE MATHILDE" et "CA HT PROBABLE" (si inconnu) restent vides
 //    à la création — jamais de valeur inventée.
@@ -29,6 +30,7 @@ const MONDAY_API_URL = 'https://api.monday.com/v2';
 // --- Mapping centralisé CRM -> Monday (colonnes réelles du board) --------
 const MONDAY_COLUMN_MAPPING = {
   entreprise: 'text_mkp4sxvj',      // "Entreprise"
+  adresse: 'text_mkpvmkg3',         // "Adresse"
   contact: 'text_mkp4ehsx',         // "Contact"
   telephone: 'phone_mkp4hx6c',      // "Téléphone"
   email: 'email_mkp4hk2e',          // "E-mail"
@@ -86,6 +88,9 @@ function buildColumnValues(p: Record<string, unknown>, includeCaProbable: boolea
     [MONDAY_COLUMN_MAPPING.contact]: String(p.nom_dirigeant ?? ''),
     [MONDAY_COLUMN_MAPPING.statut]: { label: MONDAY_INITIAL_STATUS_LABEL },
   };
+  if (p.adresse) {
+    values[MONDAY_COLUMN_MAPPING.adresse] = String(p.adresse);
+  }
   if (p.telephone) {
     values[MONDAY_COLUMN_MAPPING.telephone] = { phone: String(p.telephone).replace(/\D/g, ''), countryShortName: 'FR' };
   }
@@ -109,6 +114,7 @@ function buildSyntheseNote(p: Record<string, unknown>): string {
   lines.push('<b>NOUVEAU CLIENT — TRANSMISSION CRM</b>');
   lines.push('');
   lines.push(`<b>Entreprise :</b> ${p.nom_societe ?? '-'}`);
+  lines.push(`<b>Adresse :</b> ${p.adresse ?? '-'}`);
   lines.push(`<b>Contact :</b> ${p.nom_dirigeant ?? '-'}`);
   lines.push(`<b>Téléphone :</b> ${p.telephone ?? '-'}`);
   lines.push(`<b>Email :</b> ${p.email ?? '-'}`);
@@ -158,8 +164,8 @@ Deno.serve(async (req) => {
       return jsonResponse({ success: false, message: 'Prospect introuvable' }, 404);
     }
 
-    if (!['Dossier complet', 'Envoyé à Mathilde'].includes(prospect.statut_avancement)) {
-      return jsonResponse({ success: false, message: `Le dossier n'est pas au statut "Dossier complet" (statut actuel : "${prospect.statut_avancement}").` }, 400);
+    if (!['Signature', 'Envoyé à Mathilde'].includes(prospect.statut_avancement)) {
+      return jsonResponse({ success: false, message: `Le dossier n'est pas au statut "Signature" (statut actuel : "${prospect.statut_avancement}").` }, 400);
     }
 
     const log = async (event: string, detail: string | null, success: boolean) => {
@@ -225,7 +231,7 @@ Deno.serve(async (req) => {
 
       await supabase.from('commercial_actions').insert({
         prospect_id, action_type: 'status_change', appel_repondu: false,
-        from_status: 'Dossier complet', to_status: 'Envoyé à Mathilde',
+        from_status: 'Signature', to_status: 'Envoyé à Mathilde',
         notes: 'Transmission Monday réussie', action_date: nowIso,
       });
       await log('Statut : Envoyé à Mathilde', null, true);

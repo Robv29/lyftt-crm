@@ -10,6 +10,7 @@ export interface Prospect {
   telephone: string;
   email: string;
   zone_geographique: string;
+  adresse: string | null;
   categorie_metier: string;
   commercial_assigne: string;
   statut_avancement: string;

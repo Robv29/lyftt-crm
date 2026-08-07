@@ -29,8 +29,8 @@ function computeVisioReminder(dateVisioIso: string): { date_relance_planifiee: s
 
 // Le speed dial ne sert qu'à décrocher un premier appel ("non appelé") ou à
 // relancer un NRP : une fois qu'un dossier a avancé (Visio calée, documents
-// demandés, Signature, Dossier complet, Envoyé à Mathilde), il sort du pool —
-// ce n'est plus un appel à froid, ça se gère depuis la fiche prospect.
+// demandés, Signature, Envoyé à Mathilde), il sort du pool — ce n'est plus
+// un appel à froid, ça se gère depuis la fiche prospect.
 const SPEED_RUN_STATUSES = new Set(['Appel telephonique', 'Relance 1', 'Relance 2', 'Relance 3', 'Relance 4']);
 
 const norm = (s?: string) => (s || '').toLowerCase().replace(/\s+/g, ' ').trim();

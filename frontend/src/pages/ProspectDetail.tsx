@@ -24,7 +24,7 @@ import { toast } from 'sonner';
 import {
   ArrowLeft, Phone, Mail, MapPin, Building2, Save, ChevronRight,
   PhoneCall, PhoneOff, User, Video, CalendarClock, XCircle, Pencil, Trash2,
-  FileCheck2, ExternalLink, RefreshCw, AlertTriangle, CheckCircle2, Send, Clock3,
+  FileCheck2, ExternalLink, RefreshCw, AlertTriangle, CheckCircle2, Send, Clock3, Home,
 } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { queryKeys } from '../hooks/use-prospects';
@@ -47,13 +47,12 @@ function computeVisioReminder(dateVisioIso: string): { date_relance_planifiee: s
 
 const PIPELINE_STAGES = [
   'Appel telephonique', 'Relance 1', 'Relance 2', 'Relance 3', 'Relance 4',
-  'Visio', 'Demande de documents', 'Signature', 'Dossier complet', 'Envoyé à Mathilde', 'Refus / Perdu',
+  'Visio', 'Demande de documents', 'Signature', 'Envoyé à Mathilde', 'Refus / Perdu',
 ];
 
 // Une fois signe, le dossier reste "gagne" quel que soit son avancement
-// administratif (Dossier complet / Envoye a Mathilde) — seul un vrai refus
-// repasse en "perdu".
-const WON_STAGES = new Set(['Signature', 'Dossier complet', 'Envoyé à Mathilde']);
+// administratif (Envoye a Mathilde) — seul un vrai refus repasse en "perdu".
+const WON_STAGES = new Set(['Signature', 'Envoyé à Mathilde']);
 
 const stageGradients: Record<string, string> = {
   'Appel telephonique': 'from-slate-500 to-slate-600',
@@ -64,7 +63,6 @@ const stageGradients: Record<string, string> = {
   Visio: 'from-purple-500 to-purple-600',
   'Demande de documents': 'from-amber-400 to-amber-500',
   Signature: 'from-emerald-500 to-emerald-600',
-  'Dossier complet': 'from-teal-500 to-cyan-600',
   'Envoyé à Mathilde': 'from-cyan-500 to-sky-600',
   'Refus / Perdu': 'from-red-400 to-red-500',
 };
@@ -81,14 +79,14 @@ type ProspectFormFields = {
   nom_societe: string; nom_dirigeant: string; telephone: string; email: string;
   zone_geographique: string; categorie_metier: string; source_lead: string;
   montant_potentiel: number; priorite: string;
-  forme_juridique: string; nombre_salaries: string;
+  forme_juridique: string; nombre_salaries: string; adresse: string;
 };
 
 const emptyProspectForm: ProspectFormFields = {
   nom_societe: '', nom_dirigeant: '', telephone: '', email: '',
   zone_geographique: '', categorie_metier: '', source_lead: '',
   montant_potentiel: 0, priorite: 'moyenne',
-  forme_juridique: '', nombre_salaries: '',
+  forme_juridique: '', nombre_salaries: '', adresse: '',
 };
 
 export default function ProspectDetail() {
@@ -145,6 +143,11 @@ export default function ProspectDetail() {
     if (!prospect || !newNoteText.trim()) return;
     setSaving(true);
     try {
+      // L'auteur est toujours indiqué en clair dans la note (pas de colonne
+      // dédiée sur commercial_actions) : `user_id` est déjà horodaté par
+      // auth.uid() côté base, mais on veut le nom visible directement dans
+      // le flux, pour tout le monde, sans jointure supplémentaire.
+      const authorName = [userRole?.first_name, userRole?.last_name].filter(Boolean).join(' ').trim() || 'Utilisateur';
       await client.entities.commercial_actions.create({
         data: {
           prospect_id: prospect.id,
@@ -152,7 +155,7 @@ export default function ProspectDetail() {
           appel_repondu: false,
           from_status: prospect.statut_avancement,
           to_status: prospect.statut_avancement,
-          notes: newNoteText.trim(),
+          notes: `Note de ${authorName} — ${newNoteText.trim()}`,
           action_date: new Date().toISOString(),
         },
       });
@@ -161,7 +164,7 @@ export default function ProspectDetail() {
       toast.success('Note ajoutée');
     } catch { toast.error("Erreur lors de l'ajout de la note"); }
     finally { setSaving(false); }
-  }, [prospect, newNoteText, invalidateActions]);
+  }, [prospect, newNoteText, userRole, invalidateActions]);
 
   // Ouvre la fiche en édition : pré-remplit le formulaire avec les valeurs
   // actuelles (permet d'ajouter, modifier ou vider — donc "supprimer" — un
@@ -180,6 +183,7 @@ export default function ProspectDetail() {
       priorite: prospect.priorite || 'moyenne',
       forme_juridique: prospect.forme_juridique || '',
       nombre_salaries: prospect.nombre_salaries || '',
+      adresse: prospect.adresse || '',
     });
     setShowEditDialog(true);
   }, [prospect]);
@@ -213,6 +217,65 @@ export default function ProspectDetail() {
       setDeleting(false);
     }
   }, [prospect, deleting, invalidateProspects, navigate]);
+
+  // --- Documents & transmission Monday (déclenchée automatiquement au
+  // passage en "Signature", voir handleStatusChange plus bas) -------------
+  const [savingDoc, setSavingDoc] = useState<string | null>(null);
+  const [syncingMonday, setSyncingMonday] = useState(false);
+  const [showSyncError, setShowSyncError] = useState(false);
+
+  const handleToggleDoc = useCallback(async (field: 'doc_cfp_recu' | 'doc_kbis_recu' | 'doc_cni_recu', checked: boolean) => {
+    if (!prospect) return;
+    setSavingDoc(field);
+    updateProspectOptimistic({ [field]: checked } as Partial<Prospect>);
+    try {
+      await client.entities.prospects.update({ id: String(prospect.id), data: { [field]: checked } });
+    } catch {
+      invalidateProspects();
+      toast.error('Erreur lors de la mise à jour du document');
+    } finally {
+      setSavingDoc(null);
+    }
+  }, [prospect, updateProspectOptimistic, invalidateProspects]);
+
+  // Appelle l'Edge Function Supabase "monday-sync" (creation/mise a jour
+  // idempotente de l'item sur le board Monday TRANSMISSION CLIENTS). Le
+  // statut CRM ne passe a "Envoyé à Mathilde" QUE si l'API confirme le
+  // succes — sinon on reste sur "Signature" avec un statut de synchro
+  // "error", jamais de doublon possible (l'Edge Function verifie
+  // monday_item_id avant de creer). Déclenchée automatiquement dès qu'un
+  // dossier passe en "Signature" (plus besoin de cocher les documents
+  // d'abord), et rejouable manuellement en cas d'échec ou d'oubli.
+  const runMondaySync = useCallback(async (prospectId: number) => {
+    setSyncingMonday(true);
+    updateProspectOptimistic({ monday_sync_status: 'pending' } as Partial<Prospect>);
+    try {
+      // Nom réel de la fonction côté Supabase : "smart-responder" (nom
+      // auto-généré au déploiement, le code source reste monday-sync/index.ts).
+      const { data, error } = await supabase.functions.invoke('smart-responder', {
+        body: { prospect_id: prospectId },
+      });
+      if (error) throw error;
+      if (data?.success) {
+        toast.success('✅ Transmis à Mathilde sur Monday');
+      } else {
+        toast.error(data?.message || 'Transmission Monday échouée');
+      }
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'Erreur inconnue';
+      invalidateProspects();
+      toast.error(`Transmission Monday échouée : ${msg}`);
+    } finally {
+      invalidateProspects();
+      invalidateSyncLog(prospectId);
+      setSyncingMonday(false);
+    }
+  }, [updateProspectOptimistic, invalidateProspects, invalidateSyncLog]);
+
+  const handleRetryMondaySync = useCallback(() => {
+    if (!prospect || syncingMonday) return;
+    runMondaySync(prospect.id);
+  }, [prospect, syncingMonday, runMondaySync]);
 
   const handleStatusChange = useCallback(async (newStatus: string, noteOverride?: string) => {
     if (!prospect || prospect.statut_avancement === newStatus) return;
@@ -257,87 +320,16 @@ export default function ProspectDetail() {
       });
       invalidateActions(prospect.id);
       setActionNote('');
-      if (newStatus === 'Signature') toast.success('🚀 Signature obtenue !');
-      else if (newStatus === 'Visio') toast.success('🎉 Visio planifiée !');
+      if (newStatus === 'Signature') {
+        toast.success('🚀 Signature obtenue ! Transmission Monday en cours...');
+        // Ligne "TRANSMISSION CLIENTS" créée automatiquement dès la signature :
+        // Tâche = société, Statut = "À ENVOYER MATHILDE", puis entreprise,
+        // adresse, e-mail, contact, téléphone (voir Edge Function monday-sync).
+        await runMondaySync(prospect.id);
+      } else if (newStatus === 'Visio') toast.success('🎉 Visio planifiée !');
       else toast.success(`Statut: ${newStatus}`);
     } catch { invalidateProspects(); toast.error('Erreur lors du changement de statut'); }
-  }, [prospect, actionNote, userRole, updateProspectOptimistic, invalidateProspects, invalidateActions]);
-
-  // --- Documents & transmission Monday (Dossier complet) -----------------
-  const [savingDoc, setSavingDoc] = useState<string | null>(null);
-  const [markingComplete, setMarkingComplete] = useState(false);
-  const [syncingMonday, setSyncingMonday] = useState(false);
-  const [showSyncError, setShowSyncError] = useState(false);
-
-  const handleToggleDoc = useCallback(async (field: 'doc_cfp_recu' | 'doc_kbis_recu' | 'doc_cni_recu', checked: boolean) => {
-    if (!prospect) return;
-    setSavingDoc(field);
-    updateProspectOptimistic({ [field]: checked } as Partial<Prospect>);
-    try {
-      await client.entities.prospects.update({ id: String(prospect.id), data: { [field]: checked } });
-    } catch {
-      invalidateProspects();
-      toast.error('Erreur lors de la mise à jour du document');
-    } finally {
-      setSavingDoc(null);
-    }
-  }, [prospect, updateProspectOptimistic, invalidateProspects]);
-
-  // Appelle l'Edge Function Supabase "monday-sync" (creation/mise a jour
-  // idempotente de l'item sur le board Monday TRANSMISSION CLIENTS). Le
-  // statut CRM ne passe a "Envoyé à Mathilde" QUE si l'API confirme le
-  // succes (partie 10/11) — sinon on reste sur "Dossier complet" avec un
-  // statut de synchro "error", jamais de doublon possible (l'Edge Function
-  // verifie monday_item_id avant de creer).
-  const runMondaySync = useCallback(async (prospectId: number) => {
-    setSyncingMonday(true);
-    updateProspectOptimistic({ monday_sync_status: 'pending' } as Partial<Prospect>);
-    try {
-      // Nom réel de la fonction côté Supabase : "smart-responder" (nom
-      // auto-généré au déploiement, le code source reste monday-sync/index.ts).
-      const { data, error } = await supabase.functions.invoke('smart-responder', {
-        body: { prospect_id: prospectId },
-      });
-      if (error) throw error;
-      if (data?.success) {
-        toast.success('✅ Transmis à Mathilde sur Monday');
-      } else {
-        toast.error(data?.message || 'Transmission Monday échouée');
-      }
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : 'Erreur inconnue';
-      invalidateProspects();
-      toast.error(`Transmission Monday échouée : ${msg}`);
-    } finally {
-      invalidateProspects();
-      invalidateSyncLog(prospectId);
-      setSyncingMonday(false);
-    }
-  }, [updateProspectOptimistic, invalidateProspects, invalidateSyncLog]);
-
-  const handleMarkDossierComplet = useCallback(async () => {
-    if (!prospect || markingComplete) return;
-    setMarkingComplete(true);
-    try {
-      await client.entities.prospects.update({ id: String(prospect.id), data: { statut_avancement: 'Dossier complet', statut_gagne_perdu: 'gagne' } });
-      await client.entities.commercial_actions.create({
-        data: { prospect_id: prospect.id, action_type: 'status_change', appel_repondu: false, from_status: prospect.statut_avancement, to_status: 'Dossier complet', notes: 'Dossier complet — documents reçus', action_date: new Date().toISOString() },
-      });
-      invalidateActions(prospect.id);
-      invalidateProspects();
-      toast.success('📁 Dossier marqué complet — transmission Monday en cours...');
-      await runMondaySync(prospect.id);
-    } catch {
-      toast.error('Erreur lors du passage en "Dossier complet"');
-    } finally {
-      setMarkingComplete(false);
-    }
-  }, [prospect, markingComplete, invalidateActions, invalidateProspects, runMondaySync]);
-
-  const handleRetryMondaySync = useCallback(() => {
-    if (!prospect || syncingMonday) return;
-    runMondaySync(prospect.id);
-  }, [prospect, syncingMonday, runMondaySync]);
+  }, [prospect, actionNote, userRole, updateProspectOptimistic, invalidateProspects, invalidateActions, runMondaySync]);
 
   // Appel RÉPONDU : on incrémente, on journalise, puis on passe à l'étape "suite"
   // (Visio / Relance date / Refus). On NE programme PAS de relance NRP.
@@ -553,7 +545,10 @@ export default function ProspectDetail() {
       </Card>
 
       {/* Documents & transmission Monday — visible uniquement une fois le
-          dossier signé (Signature / Dossier complet / Envoyé à Mathilde). */}
+          dossier signé (Signature / Envoyé à Mathilde). La transmission part
+          automatiquement dès le passage en "Signature" (voir
+          handleStatusChange) ; ce bloc sert à suivre le statut et,
+          si besoin, relancer manuellement. */}
       {currentStageIndex >= PIPELINE_STAGES.indexOf('Signature') && prospect.statut_avancement !== 'Refus / Perdu' && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <Card className="border-0 shadow-sm rounded-2xl">
@@ -576,93 +571,82 @@ export default function ProspectDetail() {
                   {savingDoc === field && <span className="text-xs text-slate-400 ml-auto">...</span>}
                 </label>
               ))}
-
-              {prospect.statut_avancement === 'Signature' && (
-                <Button
-                  onClick={handleMarkDossierComplet}
-                  disabled={markingComplete}
-                  className="w-full gap-2 rounded-xl bg-gradient-to-r from-teal-500 to-cyan-600 hover:from-teal-600 hover:to-cyan-700 text-white mt-2"
-                >
-                  <Send className="w-4 h-4" /> {markingComplete ? 'Traitement...' : 'Marquer dossier complet'}
-                </Button>
-              )}
-              {!(prospect.doc_cfp_recu && prospect.doc_kbis_recu && prospect.doc_cni_recu) && prospect.statut_avancement === 'Signature' && (
-                <p className="text-xs text-slate-400 text-center">Coche les documents déjà reçus — les autres pourront être complétés plus tard, ça ne bloque pas la transmission.</p>
-              )}
+              <p className="text-xs text-slate-400 text-center">Coche les documents au fur et à mesure qu'ils arrivent — ça ne bloque pas la transmission, déjà partie à la signature.</p>
             </CardContent>
           </Card>
 
           <Card className="border-0 shadow-sm rounded-2xl">
             <CardHeader><CardTitle className="text-lg flex items-center gap-2"><Send className="w-5 h-5 text-sky-600" /> Transmission Monday</CardTitle></CardHeader>
             <CardContent className="space-y-3">
-              {prospect.statut_avancement === 'Signature' ? (
-                <p className="text-sm text-slate-400">En attente des documents pour transmettre le dossier.</p>
-              ) : (
-                <>
-                  <div className="flex items-center gap-2">
-                    {prospect.monday_sync_status === 'synced' ? (
-                      <Badge className="bg-emerald-50 text-emerald-700 border-emerald-200 rounded-lg gap-1"><CheckCircle2 className="w-3.5 h-3.5" /> Synchronisé</Badge>
-                    ) : prospect.monday_sync_status === 'error' ? (
-                      <Badge className="bg-red-50 text-red-700 border-red-200 rounded-lg gap-1"><AlertTriangle className="w-3.5 h-3.5" /> Transmission échouée</Badge>
-                    ) : (
-                      <Badge className="bg-amber-50 text-amber-700 border-amber-200 rounded-lg gap-1"><Clock3 className="w-3.5 h-3.5" /> En attente</Badge>
-                    )}
-                    {syncingMonday && <span className="text-xs text-slate-400">Synchronisation...</span>}
+              <div className="flex items-center gap-2">
+                {prospect.monday_sync_status === 'synced' ? (
+                  <Badge className="bg-emerald-50 text-emerald-700 border-emerald-200 rounded-lg gap-1"><CheckCircle2 className="w-3.5 h-3.5" /> Synchronisé</Badge>
+                ) : prospect.monday_sync_status === 'error' ? (
+                  <Badge className="bg-red-50 text-red-700 border-red-200 rounded-lg gap-1"><AlertTriangle className="w-3.5 h-3.5" /> Transmission échouée</Badge>
+                ) : prospect.monday_sync_status === 'pending' ? (
+                  <Badge className="bg-amber-50 text-amber-700 border-amber-200 rounded-lg gap-1"><Clock3 className="w-3.5 h-3.5" /> En cours</Badge>
+                ) : (
+                  <Badge className="bg-slate-100 text-slate-500 border-slate-200 rounded-lg gap-1"><Clock3 className="w-3.5 h-3.5" /> Non transmis</Badge>
+                )}
+                {syncingMonday && <span className="text-xs text-slate-400">Synchronisation...</span>}
+              </div>
+
+              {prospect.monday_synced_at && (
+                <p className="text-xs text-slate-500">Synchronisé le {formatDate(prospect.monday_synced_at || '')}</p>
+              )}
+
+              {prospect.statut_avancement === 'Envoyé à Mathilde' && (
+                <div className="pt-2 border-t border-slate-100">
+                  <div className="flex items-center justify-between text-sm mb-1">
+                    <span className="text-slate-500">Réglé</span>
+                    <span className="font-semibold text-slate-700">
+                      {totalPaye.toLocaleString('fr-FR')} € / {Number(prospect.montant_potentiel || 0).toLocaleString('fr-FR')} €
+                    </span>
                   </div>
-
-                  {prospect.monday_synced_at && (
-                    <p className="text-xs text-slate-500">Synchronisé le {formatDate(prospect.monday_synced_at || '')}</p>
-                  )}
-
-                  {prospect.statut_avancement === 'Envoyé à Mathilde' && (
-                    <div className="pt-2 border-t border-slate-100">
-                      <div className="flex items-center justify-between text-sm mb-1">
-                        <span className="text-slate-500">Réglé</span>
-                        <span className="font-semibold text-slate-700">
-                          {totalPaye.toLocaleString('fr-FR')} € / {Number(prospect.montant_potentiel || 0).toLocaleString('fr-FR')} €
-                        </span>
-                      </div>
-                      <div className="h-2 rounded-full bg-slate-100 overflow-hidden">
-                        <div
-                          className="h-full rounded-full bg-gradient-to-r from-emerald-500 to-emerald-600"
-                          style={{ width: `${prospect.montant_potentiel ? Math.min(100, (totalPaye / Number(prospect.montant_potentiel)) * 100) : 0}%` }}
-                        />
-                      </div>
-                      <Link to="/performance-ca" className="text-xs text-[#5A9BA3] hover:text-[#4A8B93] font-medium mt-1.5 inline-block">
-                        Gérer les règlements → Performance CA
-                      </Link>
-                    </div>
-                  )}
-
-                  <div className="flex flex-wrap gap-2 pt-1">
-                    {prospect.monday_item_url && (
-                      <Button asChild variant="outline" size="sm" className="gap-1.5 rounded-xl">
-                        <a href={prospect.monday_item_url} target="_blank" rel="noopener noreferrer"><ExternalLink className="w-3.5 h-3.5" /> Ouvrir dans Monday</a>
-                      </Button>
-                    )}
-                    {prospect.monday_sync_status === 'error' && (
-                      <>
-                        <Button variant="outline" size="sm" onClick={handleRetryMondaySync} disabled={syncingMonday} className="gap-1.5 rounded-xl border-amber-200 text-amber-700 hover:bg-amber-50">
-                          <RefreshCw className={`w-3.5 h-3.5 ${syncingMonday ? 'animate-spin' : ''}`} /> Réessayer
-                        </Button>
-                        <Button variant="outline" size="sm" onClick={() => setShowSyncError(true)} className="gap-1.5 rounded-xl border-red-200 text-red-600 hover:bg-red-50">
-                          <AlertTriangle className="w-3.5 h-3.5" /> Voir l'erreur
-                        </Button>
-                      </>
-                    )}
+                  <div className="h-2 rounded-full bg-slate-100 overflow-hidden">
+                    <div
+                      className="h-full rounded-full bg-gradient-to-r from-emerald-500 to-emerald-600"
+                      style={{ width: `${prospect.montant_potentiel ? Math.min(100, (totalPaye / Number(prospect.montant_potentiel)) * 100) : 0}%` }}
+                    />
                   </div>
+                  <Link to="/performance-ca" className="text-xs text-[#5A9BA3] hover:text-[#4A8B93] font-medium mt-1.5 inline-block">
+                    Gérer les règlements → Performance CA
+                  </Link>
+                </div>
+              )}
 
-                  {syncLog.length > 0 && (
-                    <div className="pt-3 border-t border-slate-100 space-y-1.5 max-h-40 overflow-y-auto">
-                      {syncLog.map((l) => (
-                        <div key={l.id} className="text-xs flex items-start gap-2">
-                          <span className="text-slate-400 shrink-0">{formatDate(l.created_at)}</span>
-                          <span className={l.success ? 'text-slate-600' : 'text-red-600'}>{l.event}</span>
-                        </div>
-                      ))}
+              <div className="flex flex-wrap gap-2 pt-1">
+                {prospect.monday_item_url && (
+                  <Button asChild variant="outline" size="sm" className="gap-1.5 rounded-xl">
+                    <a href={prospect.monday_item_url} target="_blank" rel="noopener noreferrer"><ExternalLink className="w-3.5 h-3.5" /> Ouvrir dans Monday</a>
+                  </Button>
+                )}
+                {prospect.monday_sync_status === 'error' && (
+                  <>
+                    <Button variant="outline" size="sm" onClick={handleRetryMondaySync} disabled={syncingMonday} className="gap-1.5 rounded-xl border-amber-200 text-amber-700 hover:bg-amber-50">
+                      <RefreshCw className={`w-3.5 h-3.5 ${syncingMonday ? 'animate-spin' : ''}`} /> Réessayer
+                    </Button>
+                    <Button variant="outline" size="sm" onClick={() => setShowSyncError(true)} className="gap-1.5 rounded-xl border-red-200 text-red-600 hover:bg-red-50">
+                      <AlertTriangle className="w-3.5 h-3.5" /> Voir l'erreur
+                    </Button>
+                  </>
+                )}
+                {!prospect.monday_sync_status && (
+                  <Button variant="outline" size="sm" onClick={handleRetryMondaySync} disabled={syncingMonday} className="gap-1.5 rounded-xl border-sky-200 text-sky-700 hover:bg-sky-50">
+                    <Send className={`w-3.5 h-3.5 ${syncingMonday ? 'animate-pulse' : ''}`} /> Transmettre à Mathilde
+                  </Button>
+                )}
+              </div>
+
+              {syncLog.length > 0 && (
+                <div className="pt-3 border-t border-slate-100 space-y-1.5 max-h-40 overflow-y-auto">
+                  {syncLog.map((l) => (
+                    <div key={l.id} className="text-xs flex items-start gap-2">
+                      <span className="text-slate-400 shrink-0">{formatDate(l.created_at)}</span>
+                      <span className={l.success ? 'text-slate-600' : 'text-red-600'}>{l.event}</span>
                     </div>
-                  )}
-                </>
+                  ))}
+                </div>
               )}
             </CardContent>
           </Card>
@@ -688,6 +672,7 @@ export default function ProspectDetail() {
               { icon: Phone, value: prospect.telephone || '-', color: 'text-[#5A9BA3]' },
               { icon: Mail, value: prospect.email || '-', color: 'text-[#5A9BA3]' },
               { icon: MapPin, value: prospect.zone_geographique || '-', color: 'text-[#5A9BA3]' },
+              { icon: Home, value: prospect.adresse || '-', color: 'text-[#5A9BA3]' },
               { icon: Building2, value: prospect.categorie_metier || '-', color: 'text-[#5A9BA3]' },
             ].map((item, idx) => (
               <div key={idx} className="flex items-center gap-3 p-2.5 rounded-xl bg-slate-50 hover:bg-slate-100 transition-colors">
@@ -902,6 +887,7 @@ export default function ProspectDetail() {
               <div><Label>Zone géographique</Label><Input value={editForm.zone_geographique} onChange={(e) => setEditForm({ ...editForm, zone_geographique: e.target.value })} placeholder="Paris, Lyon..." className="rounded-xl" /></div>
               <div><Label>Catégorie métier</Label><Input value={editForm.categorie_metier} onChange={(e) => setEditForm({ ...editForm, categorie_metier: e.target.value })} placeholder="BTP, Restaurant..." className="rounded-xl" /></div>
             </div>
+            <div><Label>Adresse</Label><Input value={editForm.adresse} onChange={(e) => setEditForm({ ...editForm, adresse: e.target.value })} placeholder="12 rue de la République, 75001 Paris" className="rounded-xl" /></div>
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <Label>Statut juridique</Label>

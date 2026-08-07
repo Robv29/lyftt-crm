@@ -5,7 +5,7 @@ import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import {
   useProspects, useProspectActions, useInvalidateProspects, useInvalidateActions,
-  useMondaySyncLog, useInvalidateMondaySyncLog, usePaiements,
+  useMondaySyncLog, useInvalidateMondaySyncLog, usePaiements, useRegisteredUsers,
   type Prospect, type CommercialAction,
 } from '../hooks/use-prospects';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -73,6 +73,7 @@ const actionTypeLabels: Record<string, string> = {
   demande_documents: 'Demande de documents', signature: 'Signature',
   refus: 'Refus', status_change: 'Changement de statut',
   visio_reprogrammee: 'Visio reprogrammée', note: 'Note',
+  reassignation: 'Réattribution',
 };
 
 type ProspectFormFields = {
@@ -99,6 +100,7 @@ export default function ProspectDetail() {
   const { data: actions = [], isLoading: loadingA } = useProspectActions(prospectId);
   const { data: syncLog = [] } = useMondaySyncLog(prospectId);
   const { data: allPaiements = [] } = usePaiements();
+  const { data: registeredUsers = [] } = useRegisteredUsers();
   const invalidateProspects = useInvalidateProspects();
   const invalidateActions = useInvalidateActions();
   const invalidateSyncLog = useInvalidateMondaySyncLog();
@@ -110,6 +112,15 @@ export default function ProspectDetail() {
   // juste le total déjà réglé, en lecture seule, pour contexte pendant l'appel.
   const paiementsProspect = prospectId ? allPaiements.filter((pmt) => pmt.prospect_id === prospectId) : [];
   const totalPaye = paiementsProspect.reduce((s, pmt) => s + Number(pmt.montant), 0);
+
+  // Commerciaux actifs pour la réattribution manuelle d'une fiche — mêmes
+  // noms ("Prénom NOM") que ceux stockés dans commercial_assigne, pour que
+  // le reste de l'app (Dashboard, filtres) les reconnaisse sans ambiguïté.
+  const commercialUsers = registeredUsers
+    .filter((u) => u.is_active && (u.role === 'commercial' || u.role === 'admin'))
+    .map((u) => ({ id: u.id, name: `${u.first_name || ''} ${u.last_name || ''}`.trim() }))
+    .filter((u) => u.name)
+    .sort((a, b) => a.name.localeCompare(b, 'fr'));
 
   const [newNoteText, setNewNoteText] = useState('');
   const [actionNote, setActionNote] = useState('');
@@ -330,6 +341,28 @@ export default function ProspectDetail() {
       else toast.success(`Statut: ${newStatus}`);
     } catch { invalidateProspects(); toast.error('Erreur lors du changement de statut'); }
   }, [prospect, actionNote, userRole, updateProspectOptimistic, invalidateProspects, invalidateActions, runMondaySync]);
+
+  // Réattribution manuelle d'une fiche à un commercial — indépendant du
+  // statut, utile quand l'attribution par ville (page Attributions) ne
+  // couvre pas ce dossier précis ou doit être corrigée ponctuellement.
+  const handleReassign = useCallback(async (newName: string) => {
+    if (!prospect || newName === (prospect.commercial_assigne || '')) return;
+    const oldName = prospect.commercial_assigne || 'Non attribué';
+    updateProspectOptimistic({ commercial_assigne: newName });
+    try {
+      await client.entities.prospects.update({ id: String(prospect.id), data: { commercial_assigne: newName } });
+      await client.entities.commercial_actions.create({
+        data: {
+          prospect_id: prospect.id, action_type: 'reassignation', appel_repondu: false,
+          from_status: prospect.statut_avancement, to_status: prospect.statut_avancement,
+          notes: `Fiche réattribuée : ${oldName} → ${newName || 'Non attribué'}`,
+          action_date: new Date().toISOString(),
+        },
+      });
+      invalidateActions(prospect.id);
+      toast.success(`Fiche attribuée à ${newName || 'personne'}`);
+    } catch { invalidateProspects(); toast.error("Erreur lors de l'attribution"); }
+  }, [prospect, updateProspectOptimistic, invalidateProspects, invalidateActions]);
 
   // Appel RÉPONDU : on incrémente, on journalise, puis on passe à l'étape "suite"
   // (Visio / Relance date / Refus). On NE programme PAS de relance NRP.
@@ -759,6 +792,20 @@ export default function ProspectDetail() {
               <Select value={prospect.statut_avancement} onValueChange={handleStatusChange}>
                 <SelectTrigger className="mt-1 rounded-xl"><SelectValue /></SelectTrigger>
                 <SelectContent>{PIPELINE_STAGES.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
+              </Select>
+            </div>
+
+            <div className="pt-4 border-t border-slate-100">
+              <Label>Commercial attribué</Label>
+              <Select
+                value={prospect.commercial_assigne ? prospect.commercial_assigne : '__none__'}
+                onValueChange={(v) => handleReassign(v === '__none__' ? '' : v)}
+              >
+                <SelectTrigger className="mt-1 rounded-xl"><SelectValue placeholder="Non attribué" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">Non attribué</SelectItem>
+                  {commercialUsers.map((u) => <SelectItem key={u.id} value={u.name}>{u.name}</SelectItem>)}
+                </SelectContent>
               </Select>
             </div>
 

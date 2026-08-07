@@ -365,8 +365,12 @@ export default function Dashboard() {
   // avec la date du dernier appel à ce sujet à côté pour voir d'un coup
   // d'œil qui n'a pas été relancé depuis longtemps. Tri du plus urgent
   // (appel le plus ancien, ou jamais appelé) au plus récent.
+  // Toujours calculé sur allProspects (non filtré par le sélecteur de
+  // commercial) : les fiches "Non attribué" doivent rester visibles même
+  // quand un commercial précis est sélectionné, sinon elles disparaissent
+  // du radar de tout le monde.
   const demandesDocsGrouped = useMemo(() => {
-    const enAttente = prospects.filter((p) => p.statut_avancement === 'Demande de documents' && p.statut_gagne_perdu === 'actif');
+    const enAttente = allProspects.filter((p) => p.statut_avancement === 'Demande de documents' && p.statut_gagne_perdu === 'actif');
     const map = new Map<string, Prospect[]>();
     for (const p of enAttente) {
       const name = resolveCommercialFor(p);
@@ -381,12 +385,18 @@ export default function Dashboard() {
         return da - db;
       });
     }
-    return Array.from(map.entries()).sort(([a], [b]) => {
+    let entries = Array.from(map.entries());
+    // Quand un commercial précis est sélectionné, on ne garde que son
+    // groupe + "Non attribué" (toujours visible, peu importe le filtre).
+    if (selectedCommercial !== 'global') {
+      entries = entries.filter(([name]) => name === selectedCommercial || name === 'Non attribué');
+    }
+    return entries.sort(([a], [b]) => {
       if (a === 'Non attribué') return 1;
       if (b === 'Non attribué') return -1;
       return a.localeCompare(b, 'fr');
     });
-  }, [prospects, resolveCommercialFor]);
+  }, [allProspects, resolveCommercialFor, selectedCommercial]);
   const demandesDocsTotal = useMemo(() => demandesDocsGrouped.reduce((s, [, arr]) => s + arr.length, 0), [demandesDocsGrouped]);
 
   // Conseil du jour : nombre d'appels/jour recommandé pour rattraper l'objectif

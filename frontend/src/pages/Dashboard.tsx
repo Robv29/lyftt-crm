@@ -15,6 +15,7 @@ import { client } from '../lib/api';
 import { toast } from 'sonner';
 import ErrorState from '../components/ErrorState';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -48,6 +49,7 @@ import {
   AlertTriangle,
   CheckCircle2,
   Target,
+  LayoutDashboard,
 } from 'lucide-react';
 
 type PeriodKey = 'today' | 'week' | 'month' | 'prev_month' | 'year';
@@ -155,6 +157,7 @@ export default function Dashboard() {
 
   const [selectedPeriod, setSelectedPeriod] = usePersistentState<PeriodKey>('lyftt.dash.periode', 'today');
   const [selectedCommercial, setSelectedCommercial] = usePersistentState<string>('lyftt.dash.commercial', 'global');
+  const [activeTab, setActiveTab] = usePersistentState<string>('lyftt.dash.tab', 'apercu');
   // Session Speed Run gérée au niveau global (App.tsx) pour survivre à un
   // changement de page — cette page ne fait plus que déclencher l'ouverture.
   const { open: openSpeedRun } = useSpeedRun();
@@ -402,6 +405,12 @@ export default function Dashboard() {
   }, [allProspects, resolveCommercialFor, selectedCommercial]);
   const demandesDocsTotal = useMemo(() => demandesDocsGrouped.reduce((s, [, arr]) => s + arr.length, 0), [demandesDocsGrouped]);
 
+  // Total pour le badge de l'onglet Relances : confirmations visio + NRP + relance datée du jour.
+  const relancesTabCount = useMemo(
+    () => confirmationsVisio.length + prospectsToCallbackAll.length + relancesDate.length,
+    [confirmationsVisio, prospectsToCallbackAll, relancesDate]
+  );
+
   // Conseil du jour : nombre d'appels/jour recommandé pour rattraper l'objectif
   // CA du mois, basé sur le taux de transformation ANNUEL réel du commercial
   // sélectionné (signatures/appels sur les 12 derniers mois) et son panier
@@ -609,7 +618,26 @@ export default function Dashboard() {
           </CardContent>
         </Card>
       )}
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+        <TabsList className="rounded-xl bg-slate-100 p-1 h-auto flex-wrap">
+          <TabsTrigger value="apercu" className="rounded-lg gap-1.5 data-[state=active]:shadow-sm">
+            <LayoutDashboard className="w-4 h-4" /> Aperçu
+          </TabsTrigger>
+          <TabsTrigger value="relances" className="rounded-lg gap-1.5 data-[state=active]:shadow-sm">
+            <PhoneCall className="w-4 h-4" /> Relances
+            {relancesTabCount > 0 && (
+              <Badge className="bg-red-50 text-red-600 border-red-200 rounded-md text-[10px] font-bold px-1.5 py-0 ml-0.5">{relancesTabCount}</Badge>
+            )}
+          </TabsTrigger>
+          <TabsTrigger value="documents" className="rounded-lg gap-1.5 data-[state=active]:shadow-sm">
+            <FileText className="w-4 h-4" /> Documents
+            {demandesDocsTotal > 0 && (
+              <Badge className="bg-amber-50 text-amber-600 border-amber-200 rounded-md text-[10px] font-bold px-1.5 py-0 ml-0.5">{demandesDocsTotal}</Badge>
+            )}
+          </TabsTrigger>
+        </TabsList>
 
+        <TabsContent value="apercu" className="space-y-6 mt-4">
       {/* Conseil du jour : appels/jour recommandés pour rattraper l'objectif,
           basé sur le taux de transformation annuel réel du commercial. */}
       {selectedCommercial !== 'global' && conseilAppels && (
@@ -753,7 +781,9 @@ export default function Dashboard() {
           </div>
         </CardContent>
       </Card>
+        </TabsContent>
 
+        <TabsContent value="relances" className="space-y-6 mt-4">
       {/* Confirmations RDV Visio : rappels J-1 auto, à part de la relance générique */}
       {confirmationsVisio.length > 0 && (
         <Card className="border-0 shadow-sm rounded-2xl">
@@ -766,35 +796,6 @@ export default function Dashboard() {
           <CardContent className="pt-0">
             <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-1.5 max-h-[180px] overflow-y-auto pr-1">
               {confirmationsVisio.map(({ p, overdue }) => <VisioConfirmRow key={p.id} prospect={p} overdue={overdue} />)}
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Demandes de documents en attente, par commercial */}
-      {demandesDocsGrouped.length > 0 && (
-        <Card className="border-0 shadow-sm rounded-2xl">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-semibold text-slate-900 flex items-center gap-1.5">
-              <FileText className="w-4 h-4 text-amber-500" /> Demandes de documents en attente
-              <Badge className="bg-amber-50 text-amber-600 border-amber-200 rounded-md text-[10px] font-bold px-1.5 py-0">{demandesDocsTotal}</Badge>
-            </CardTitle>
-            <p className="text-xs text-slate-400 mt-1">Par commercial, avec la date du dernier appel à ce sujet</p>
-          </CardHeader>
-          <CardContent className="pt-0">
-            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4 max-h-[420px] overflow-y-auto pr-1">
-              {demandesDocsGrouped.map(([commercialName, items]) => (
-                <div key={commercialName}>
-                  <div className="flex items-center gap-1.5 mb-1.5 px-0.5">
-                    <UserCircle className="w-3.5 h-3.5 text-slate-400" />
-                    <span className="text-xs font-bold text-slate-500 uppercase tracking-wide">{commercialName}</span>
-                    <Badge className="bg-slate-100 text-slate-500 border-0 rounded-lg text-[10px] font-bold">{items.length}</Badge>
-                  </div>
-                  <div className="space-y-1.5">
-                    {items.map((p) => <DocRequestRow key={p.id} prospect={p} />)}
-                  </div>
-                </div>
-              ))}
             </div>
           </CardContent>
         </Card>
@@ -872,6 +873,39 @@ export default function Dashboard() {
           </CardContent>
         </Card>
       </div>
+        </TabsContent>
+
+        <TabsContent value="documents" className="space-y-6 mt-4">
+      {/* Demandes de documents en attente, par commercial */}
+      {demandesDocsGrouped.length > 0 && (
+        <Card className="border-0 shadow-sm rounded-2xl">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-semibold text-slate-900 flex items-center gap-1.5">
+              <FileText className="w-4 h-4 text-amber-500" /> Demandes de documents en attente
+              <Badge className="bg-amber-50 text-amber-600 border-amber-200 rounded-md text-[10px] font-bold px-1.5 py-0">{demandesDocsTotal}</Badge>
+            </CardTitle>
+            <p className="text-xs text-slate-400 mt-1">Par commercial, avec la date du dernier appel à ce sujet</p>
+          </CardHeader>
+          <CardContent className="pt-0">
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4 max-h-[420px] overflow-y-auto pr-1">
+              {demandesDocsGrouped.map(([commercialName, items]) => (
+                <div key={commercialName}>
+                  <div className="flex items-center gap-1.5 mb-1.5 px-0.5">
+                    <UserCircle className="w-3.5 h-3.5 text-slate-400" />
+                    <span className="text-xs font-bold text-slate-500 uppercase tracking-wide">{commercialName}</span>
+                    <Badge className="bg-slate-100 text-slate-500 border-0 rounded-lg text-[10px] font-bold">{items.length}</Badge>
+                  </div>
+                  <div className="space-y-1.5">
+                    {items.map((p) => <DocRequestRow key={p.id} prospect={p} />)}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+        </TabsContent>
+      </Tabs>
 
       <div className="pt-1">
         <Link to="/prospects" className="text-sm text-[#5A9BA3] hover:text-[#4A8B93] font-semibold flex items-center gap-1 group">

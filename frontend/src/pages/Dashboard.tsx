@@ -370,7 +370,10 @@ export default function Dashboard() {
   // quand un commercial précis est sélectionné, sinon elles disparaissent
   // du radar de tout le monde.
   const demandesDocsGrouped = useMemo(() => {
-    const enAttente = allProspects.filter((p) => p.statut_avancement === 'Demande de documents' && p.statut_gagne_perdu === 'actif');
+    // Pas de filtre sur statut_gagne_perdu : un dossier "Demande de documents"
+    // peut être marqué "gagné" (client déjà signé, en attente de pièces) —
+    // il doit quand même apparaître ici tant que les docs ne sont pas reçus.
+    const enAttente = allProspects.filter((p) => p.statut_avancement === 'Demande de documents');
     const map = new Map<string, Prospect[]>();
     for (const p of enAttente) {
       const name = resolveCommercialFor(p);

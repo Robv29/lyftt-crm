@@ -363,6 +363,18 @@ export default function Dashboard() {
       .map((p) => ({ p, overdue: new Date(p.date_relance_planifiee) < now }));
   }, [prospects]);
 
+  // Relances "lapin" : prospects qui n'ont pas honoré leur visio (bouton
+  // Lapin sur Mes visios). À part de la relance générique pour les repérer
+  // d'un coup d'œil et relancer vite pendant que c'est chaud. Toutes les
+  // échéances actives sont listées, triées par date croissante, en retard en tête.
+  const relancesLapin = useMemo(() => {
+    const now = new Date();
+    return prospects
+      .filter((p) => p.statut_gagne_perdu === 'actif' && p.type_relance_planifiee === 'lapin' && !!p.date_relance_planifiee)
+      .sort((a, b) => new Date(a.date_relance_planifiee).getTime() - new Date(b.date_relance_planifiee).getTime())
+      .map((p) => ({ p, overdue: new Date(p.date_relance_planifiee) < now }));
+  }, [prospects]);
+
   // Demandes de documents en attente, groupées par commercial : tous les
   // dossiers encore au statut "Demande de documents" (pas encore signés),
   // avec la date du dernier appel à ce sujet à côté pour voir d'un coup
@@ -407,8 +419,8 @@ export default function Dashboard() {
 
   // Total pour le badge de l'onglet Relances : confirmations visio + NRP + relance datée du jour.
   const relancesTabCount = useMemo(
-    () => confirmationsVisio.length + prospectsToCallbackAll.length + relancesDate.length,
-    [confirmationsVisio, prospectsToCallbackAll, relancesDate]
+    () => confirmationsVisio.length + relancesLapin.length + prospectsToCallbackAll.length + relancesDate.length,
+    [confirmationsVisio, relancesLapin, prospectsToCallbackAll, relancesDate]
   );
 
   // Conseil du jour : nombre d'appels/jour recommandé pour rattraper l'objectif
@@ -801,6 +813,24 @@ export default function Dashboard() {
         </Card>
       )}
 
+      {/* Relances lapin : prospects qui n'ont pas honoré leur visio, à relancer vite */}
+      {relancesLapin.length > 0 && (
+        <Card className="border-0 shadow-sm rounded-2xl">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-semibold text-slate-900 flex items-center gap-1.5">
+              🐇 Relances lapin
+              <Badge className="bg-amber-50 text-amber-600 border-amber-200 rounded-md text-[10px] font-bold px-1.5 py-0">{relancesLapin.length}</Badge>
+            </CardTitle>
+            <p className="text-xs text-slate-400 mt-1">Prospects qui n'ont pas honoré leur visio — à relancer pendant que c'est chaud</p>
+          </CardHeader>
+          <CardContent className="pt-0">
+            <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-1.5 max-h-[180px] overflow-y-auto pr-1">
+              {relancesLapin.map(({ p, overdue }) => <LapinRow key={p.id} prospect={p} overdue={overdue} />)}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Deux colonnes de relance : NRP (appels non répondus) + Relances datées du jour */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Relance NRP */}
@@ -987,6 +1017,22 @@ function VisioConfirmRow({ prospect: p, overdue = false }: { prospect: Prospect;
     >
       <p className="text-xs font-semibold text-slate-900 truncate group-hover:text-purple-600 transition-colors">{p.nom_societe}</p>
       <p className={`text-[10px] font-semibold mt-0.5 ${overdue ? 'text-red-600' : 'text-purple-600'}`}>{overdue ? 'En retard · ' : ''}RDV {fmt(visioDt)}</p>
+    </Link>
+  );
+}
+
+function LapinRow({ prospect: p, overdue = false }: { prospect: Prospect; overdue?: boolean }) {
+  const visioDt = p.date_visio ? new Date(p.date_visio) : null;
+  const relanceDt = p.date_relance_planifiee ? new Date(p.date_relance_planifiee) : null;
+  const fmt = (d: Date | null) => d ? d.toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '--';
+  return (
+    <Link
+      to={`/prospects/${p.id}`}
+      title={`Visio manquée du ${fmt(visioDt)} — relance prévue le ${fmt(relanceDt)}`}
+      className={`block px-2 py-1.5 rounded-lg border transition-colors group ${overdue ? 'border-red-200 bg-red-50/70 hover:bg-red-50' : 'border-amber-200 bg-amber-50/60 hover:bg-amber-50'}`}
+    >
+      <p className="text-xs font-semibold text-slate-900 truncate group-hover:text-amber-700 transition-colors">{p.nom_societe}</p>
+      <p className={`text-[10px] font-semibold mt-0.5 ${overdue ? 'text-red-600' : 'text-amber-700'}`}>{overdue ? 'En retard · ' : ''}Relancer {fmt(relanceDt)}</p>
     </Link>
   );
 }

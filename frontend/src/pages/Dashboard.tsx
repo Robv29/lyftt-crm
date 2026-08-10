@@ -281,6 +281,12 @@ export default function Dashboard() {
     // heure) crée 3 lignes commercial_actions pour un seul RDV réel — sans
     // dédoublonnage, le KPI comptait ce genre de cas comme 3 visios.
     const visios = new Set(fa.filter((a) => a.action_type === 'visio').map((a) => a.prospect_id)).size;
+    // Lapins DISTINCTS (par prospect) posés sur la période : détectés via la
+    // note auto écrite par le bouton Lapin ("Lapin posé — ..."), même logique
+    // de dédoublonnage que pour les visios.
+    const lapins = new Set(
+      fa.filter((a) => a.action_type === 'relance_planifiee' && (a.notes || '').startsWith('Lapin posé')).map((a) => a.prospect_id)
+    ).size;
     const currentRate = computeConversionRate(actions, start, end);
     const { start: ps, end: pe } = getPreviousDateRange(selectedPeriod);
     const previousRate = computeConversionRate(actions, ps, pe);
@@ -291,7 +297,10 @@ export default function Dashboard() {
     // de visios distinctes se sont transformees en signature (independant du
     // taux appels -> signature deja affiche par "Transformation" ci-dessus).
     const visioSignatureRate = visios > 0 ? (signatures / visios) * 100 : 0;
-    return { totalAppels, appelsRepondus, refus, signatures, visios, currentRate, previousRate, trend, visioSignatureRate };
+    // Taux de lapin : sur les visios programmées (visios + lapins, puisqu'un
+    // lapin posé annule la visio "tenue"), quelle proportion ne s'est pas présentée.
+    const lapinRate = (visios + lapins) > 0 ? (lapins / (visios + lapins)) * 100 : 0;
+    return { totalAppels, appelsRepondus, refus, signatures, visios, lapins, lapinRate, currentRate, previousRate, trend, visioSignatureRate };
   }, [actions, selectedPeriod]);
 
   const prospectsToCallbackAll = useMemo(() => {
@@ -365,15 +374,37 @@ export default function Dashboard() {
 
   // Relances "lapin" : prospects qui n'ont pas honoré leur visio (bouton
   // Lapin sur Mes visios). À part de la relance générique pour les repérer
-  // d'un coup d'œil et relancer vite pendant que c'est chaud. Toutes les
-  // échéances actives sont listées, triées par date croissante, en retard en tête.
-  const relancesLapin = useMemo(() => {
+  // d'un coup d'œil et relancer vite pendant que c'est chaud. Groupées par
+  // commercial (comme les demandes de docs), avec la date du dernier appel
+  // à côté. Toujours calculé sur allProspects pour garder "Non attribué"
+  // visible même filtré sur un commercial précis. Toutes les échéances
+  // actives sont listées, triées par date croissante, en retard en tête.
+  const relancesLapinGrouped = useMemo(() => {
     const now = new Date();
-    return prospects
-      .filter((p) => p.statut_gagne_perdu === 'actif' && p.type_relance_planifiee === 'lapin' && !!p.date_relance_planifiee)
-      .sort((a, b) => new Date(a.date_relance_planifiee).getTime() - new Date(b.date_relance_planifiee).getTime())
-      .map((p) => ({ p, overdue: new Date(p.date_relance_planifiee) < now }));
-  }, [prospects]);
+    const lapins = allProspects.filter(
+      (p) => p.statut_gagne_perdu === 'actif' && p.type_relance_planifiee === 'lapin' && !!p.date_relance_planifiee
+    );
+    const map = new Map<string, { p: Prospect; overdue: boolean }[]>();
+    for (const p of lapins) {
+      const name = resolveCommercialFor(p);
+      const arr = map.get(name) || [];
+      arr.push({ p, overdue: new Date(p.date_relance_planifiee) < now });
+      map.set(name, arr);
+    }
+    for (const arr of map.values()) {
+      arr.sort((a, b) => new Date(a.p.date_relance_planifiee).getTime() - new Date(b.p.date_relance_planifiee).getTime());
+    }
+    let entries = Array.from(map.entries());
+    if (selectedCommercial !== 'global') {
+      entries = entries.filter(([name]) => name === selectedCommercial || name === 'Non attribué');
+    }
+    return entries.sort(([a], [b]) => {
+      if (a === 'Non attribué') return 1;
+      if (b === 'Non attribué') return -1;
+      return a.localeCompare(b, 'fr');
+    });
+  }, [allProspects, resolveCommercialFor, selectedCommercial]);
+  const relancesLapinTotal = useMemo(() => relancesLapinGrouped.reduce((s, [, arr]) => s + arr.length, 0), [relancesLapinGrouped]);
 
   // Demandes de documents en attente, groupées par commercial : tous les
   // dossiers encore au statut "Demande de documents" (pas encore signés),
@@ -419,8 +450,8 @@ export default function Dashboard() {
 
   // Total pour le badge de l'onglet Relances : confirmations visio + NRP + relance datée du jour.
   const relancesTabCount = useMemo(
-    () => confirmationsVisio.length + relancesLapin.length + prospectsToCallbackAll.length + relancesDate.length,
-    [confirmationsVisio, relancesLapin, prospectsToCallbackAll, relancesDate]
+    () => confirmationsVisio.length + relancesLapinTotal + prospectsToCallbackAll.length + relancesDate.length,
+    [confirmationsVisio, relancesLapinTotal, prospectsToCallbackAll, relancesDate]
   );
 
   // Conseil du jour : nombre d'appels/jour recommandé pour rattraper l'objectif
@@ -744,7 +775,7 @@ export default function Dashboard() {
             ))}
           </div>
 
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-8 gap-3">
             <StatBox icon={Phone} value={periodStats.totalAppels} label="Appels" gradient="from-teal-50 to-teal-100/50" iconBg="bg-teal-100" iconColor="text-[#5A9BA3]" />
             <StatBox icon={PhoneCall} value={periodStats.appelsRepondus} label="Répondus" gradient="from-emerald-50 to-emerald-100/50" iconBg="bg-emerald-100" iconColor="text-emerald-600" valueColor="text-emerald-600" />
             <StatBox icon={XCircle} value={periodStats.refus} label="Refus" gradient="from-red-50 to-red-100/50" iconBg="bg-red-100" iconColor="text-red-600" valueColor="text-red-600" />
@@ -758,6 +789,15 @@ export default function Dashboard() {
               iconBg="bg-indigo-100"
               iconColor="text-indigo-600"
               valueColor="text-indigo-600"
+            />
+            <StatBox
+              icon={AlertTriangle}
+              value={`${periodStats.lapinRate.toFixed(0)}%`}
+              label={`Taux de lapin${periodStats.lapins > 0 ? ` (${periodStats.lapins})` : ''}`}
+              gradient="from-amber-50 to-amber-100/50"
+              iconBg="bg-amber-100"
+              iconColor="text-amber-600"
+              valueColor="text-amber-600"
             />
 
             {/* Conversion rate */}
@@ -814,18 +854,29 @@ export default function Dashboard() {
       )}
 
       {/* Relances lapin : prospects qui n'ont pas honoré leur visio, à relancer vite */}
-      {relancesLapin.length > 0 && (
+      {relancesLapinGrouped.length > 0 && (
         <Card className="border-0 shadow-sm rounded-2xl">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-semibold text-slate-900 flex items-center gap-1.5">
               🐇 Relances lapin
-              <Badge className="bg-amber-50 text-amber-600 border-amber-200 rounded-md text-[10px] font-bold px-1.5 py-0">{relancesLapin.length}</Badge>
+              <Badge className="bg-amber-50 text-amber-600 border-amber-200 rounded-md text-[10px] font-bold px-1.5 py-0">{relancesLapinTotal}</Badge>
             </CardTitle>
-            <p className="text-xs text-slate-400 mt-1">Prospects qui n'ont pas honoré leur visio — à relancer pendant que c'est chaud</p>
+            <p className="text-xs text-slate-400 mt-1">Par commercial, avec la date du dernier appel — à relancer pendant que c'est chaud</p>
           </CardHeader>
           <CardContent className="pt-0">
-            <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-1.5 max-h-[180px] overflow-y-auto pr-1">
-              {relancesLapin.map(({ p, overdue }) => <LapinRow key={p.id} prospect={p} overdue={overdue} />)}
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4 max-h-[420px] overflow-y-auto pr-1">
+              {relancesLapinGrouped.map(([commercialName, items]) => (
+                <div key={commercialName}>
+                  <div className="flex items-center gap-1.5 mb-1.5 px-0.5">
+                    <UserCircle className="w-3.5 h-3.5 text-slate-400" />
+                    <span className="text-xs font-bold text-slate-500 uppercase tracking-wide">{commercialName}</span>
+                    <Badge className="bg-slate-100 text-slate-500 border-0 rounded-lg text-[10px] font-bold">{items.length}</Badge>
+                  </div>
+                  <div className="space-y-1.5">
+                    {items.map(({ p, overdue }) => <LapinRow key={p.id} prospect={p} overdue={overdue} />)}
+                  </div>
+                </div>
+              ))}
             </div>
           </CardContent>
         </Card>
@@ -1025,14 +1076,21 @@ function LapinRow({ prospect: p, overdue = false }: { prospect: Prospect; overdu
   const visioDt = p.date_visio ? new Date(p.date_visio) : null;
   const relanceDt = p.date_relance_planifiee ? new Date(p.date_relance_planifiee) : null;
   const fmt = (d: Date | null) => d ? d.toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '--';
+  const lastCallDate = p.date_dernier_appel ? new Date(p.date_dernier_appel) : null;
+  const daysAgo = lastCallDate ? Math.floor((Date.now() - lastCallDate.getTime()) / 86400000) : null;
   return (
     <Link
       to={`/prospects/${p.id}`}
       title={`Visio manquée du ${fmt(visioDt)} — relance prévue le ${fmt(relanceDt)}`}
-      className={`block px-2 py-1.5 rounded-lg border transition-colors group ${overdue ? 'border-red-200 bg-red-50/70 hover:bg-red-50' : 'border-amber-200 bg-amber-50/60 hover:bg-amber-50'}`}
+      className={`flex items-center justify-between gap-2 px-2.5 py-2 rounded-lg border transition-colors group ${overdue ? 'border-red-200 bg-red-50/70 hover:bg-red-50' : 'border-amber-200 bg-amber-50/60 hover:bg-amber-50'}`}
     >
-      <p className="text-xs font-semibold text-slate-900 truncate group-hover:text-amber-700 transition-colors">{p.nom_societe}</p>
-      <p className={`text-[10px] font-semibold mt-0.5 ${overdue ? 'text-red-600' : 'text-amber-700'}`}>{overdue ? 'En retard · ' : ''}Relancer {fmt(relanceDt)}</p>
+      <div className="min-w-0">
+        <p className="text-xs font-semibold text-slate-900 truncate group-hover:text-amber-700 transition-colors">{p.nom_societe}</p>
+        <p className={`text-[10px] font-semibold mt-0.5 ${overdue ? 'text-red-600' : 'text-amber-700'}`}>{overdue ? 'En retard · ' : ''}Relancer {fmt(relanceDt)}</p>
+      </div>
+      <span className="text-[10px] font-semibold text-slate-400 shrink-0 text-right">
+        {daysAgo === null ? 'Jamais appelé' : daysAgo === 0 ? "Appelé aujourd'hui" : `Appelé il y a ${daysAgo}j`}
+      </span>
     </Link>
   );
 }

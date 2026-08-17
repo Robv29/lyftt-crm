@@ -129,7 +129,12 @@ function computeConversionRate(actions: CommercialAction[], start: Date, end: Da
     return d >= start && d < end;
   });
   const totalAppels = filtered.filter((a) => a.action_type === 'appel' || a.action_type === 'relance').length;
-  const signatures = filtered.filter((a) => a.action_type === 'status_change' && a.to_status === 'Signature').length;
+  // Signatures DISTINCTES par prospect : un dossier qui repasse en "Signature"
+  // apres un aller-retour dans le pipeline generait plusieurs lignes pour une
+  // seule vraie signature.
+  const signatures = new Set(
+    filtered.filter((a) => a.action_type === 'status_change' && a.to_status === 'Signature').map((a) => a.prospect_id)
+  ).size;
   if (totalAppels === 0) return 0;
   return (signatures / totalAppels) * 100;
 }
@@ -269,18 +274,26 @@ export default function Dashboard() {
     const totalAppels = fa.filter((a) => a.action_type === 'appel' || a.action_type === 'relance').length;
     const appelsRepondus = fa.filter((a) => (a.action_type === 'appel' || a.action_type === 'relance') && a.appel_repondu).length;
     const refus = fa.filter((a) => a.action_type === 'status_change' && a.to_status === 'Refus / Perdu').length;
-    const signatures = fa.filter((a) => a.action_type === 'status_change' && a.to_status === 'Signature').length;
+    // Signatures DISTINCTES par prospect (meme raison que les visios ci-dessous).
+    const signatures = new Set(
+      fa.filter((a) => a.action_type === 'status_change' && a.to_status === 'Signature').map((a) => a.prospect_id)
+    ).size;
     // Compte des visios DISTINCTES (par prospect), pas des actions "visio"
     // brutes : reprogrammer 2 fois le même rendez-vous (changement de date/
     // heure) crée 3 lignes commercial_actions pour un seul RDV réel — sans
     // dédoublonnage, le KPI comptait ce genre de cas comme 3 visios.
-    const visios = new Set(fa.filter((a) => a.action_type === 'visio').map((a) => a.prospect_id)).size;
-    // Lapins DISTINCTS (par prospect) posés sur la période : détectés via la
-    // note auto écrite par le bouton Lapin ("Lapin posé — ..."), même logique
-    // de dédoublonnage que pour les visios.
-    const lapins = new Set(
-      fa.filter((a) => a.action_type === 'relance_planifiee' && (a.notes || '').startsWith('Lapin posé')).map((a) => a.prospect_id)
-    ).size;
+    const visiosSet = new Set(fa.filter((a) => a.action_type === 'visio').map((a) => a.prospect_id));
+    const visios = visiosSet.size;
+    // Lapins DISTINCTS. Detection tolerante : le libelle exact de la note auto
+    // peut evoluer, on accepte donc toute note contenant "lapin" sur une action
+    // de relance plutot qu'un prefixe figé qui casserait silencieusement.
+    const lapinsSet = new Set(
+      fa.filter((a) =>
+        (a.action_type === 'relance_planifiee' || a.action_type === 'relance') &&
+        (a.notes || '').toLowerCase().includes('lapin')
+      ).map((a) => a.prospect_id)
+    );
+    const lapins = lapinsSet.size;
     const currentRate = computeConversionRate(actions, start, end);
     const { start: ps, end: pe } = getPreviousDateRange(selectedPeriod);
     const previousRate = computeConversionRate(actions, ps, pe);
@@ -291,9 +304,12 @@ export default function Dashboard() {
     // de visios distinctes se sont transformees en signature (independant du
     // taux appels -> signature deja affiche par "Transformation" ci-dessus).
     const visioSignatureRate = visios > 0 ? (signatures / visios) * 100 : 0;
-    // Taux de lapin : sur les visios programmées (visios + lapins, puisqu'un
-    // lapin posé annule la visio "tenue"), quelle proportion ne s'est pas présentée.
-    const lapinRate = (visios + lapins) > 0 ? (lapins / (visios + lapins)) * 100 : 0;
+    // Taux de lapin : part des RDV programmes ou le prospect ne s'est pas
+    // presente. Denominateur = UNION des visios et des lapins : un lapin a
+    // souvent aussi sa propre action "visio" dans la periode, l'addition
+    // double-comptait donc ces dossiers et sous-estimait le taux.
+    const rdvProgrammes = new Set([...visiosSet, ...lapinsSet]).size;
+    const lapinRate = rdvProgrammes > 0 ? (lapins / rdvProgrammes) * 100 : 0;
     return { totalAppels, appelsRepondus, refus, signatures, visios, lapins, lapinRate, currentRate, previousRate, trend, visioSignatureRate };
   }, [actions, selectedPeriod]);
 
@@ -508,7 +524,14 @@ export default function Dashboard() {
   }, [matchedCommercialUser, allProspects, objectifsCA, actions]);
 
   const activeProspects = useMemo(() => prospects.filter((p) => p.statut_gagne_perdu === 'actif').length, [prospects]);
-  const wonDeals = useMemo(() => prospects.filter((p) => p.statut_gagne_perdu === 'gagne').length, [prospects]);
+  // "Deals gagnes" = meme definition que Performance CA : une vente signee et
+  // non perdue. On ne s'appuie plus sur statut_gagne_perdu, qui restait a
+  // "gagne" a vie meme quand un dossier redescendait dans le pipeline (d'ou
+  // 115 deals affiches ici contre 63 dans Performance CA).
+  const wonDeals = useMemo(
+    () => prospects.filter((p) => !!p.date_signature && p.statut_avancement !== 'Refus / Perdu').length,
+    [prospects]
+  );
 
   // Fiches créées automatiquement depuis le Monday "Transmission Clients"
   // (dossiers sans fiche CRM préexistante) — à compléter/vérifier par le

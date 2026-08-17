@@ -33,14 +33,14 @@ const toLocalInputValue = (d: Date) => {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 };
 
-// Rappel de confirmation automatique programmé 24h avant une visio (violet) —
+// Rappel de confirmation automatique programmé 48h avant (J-2) une visio (violet) —
 // null si le rendez-vous est déjà à moins de 24h (pas de sens à programmer un
 // rappel dans le passé). Même logique que ProspectDetail.tsx / SpeedRun.tsx :
 // dupliquée ici car ce fichier gère aussi le "rattrapage" de visios déjà
 // planifiées avant l'existence de ce marquage.
 function computeVisioReminder(dateVisioIso: string): { date_relance_planifiee: string; type_relance_planifiee: string } | null {
   const visio = new Date(dateVisioIso);
-  const reminder = new Date(visio.getTime() - 24 * 60 * 60 * 1000);
+  const reminder = new Date(visio.getTime() - 48 * 60 * 60 * 1000);
   if (reminder.getTime() <= Date.now()) return null;
   return { date_relance_planifiee: reminder.toISOString(), type_relance_planifiee: 'confirmation_visio' };
 }

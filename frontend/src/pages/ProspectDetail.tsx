@@ -120,7 +120,7 @@ export default function ProspectDetail() {
     .filter((u) => u.is_active && (u.role === 'commercial' || u.role === 'admin'))
     .map((u) => ({ id: u.id, name: `${u.first_name || ''} ${u.last_name || ''}`.trim() }))
     .filter((u) => u.name)
-    .sort((a, b) => a.name.localeCompare(b, 'fr'));
+    .sort((a, b) => a.name.localeCompare(b.name, 'fr'));
 
   const [newNoteText, setNewNoteText] = useState('');
   const [actionNote, setActionNote] = useState('');
@@ -294,6 +294,7 @@ export default function ProspectDetail() {
     const updates: Partial<Prospect> = { statut_avancement: newStatus };
     if (WON_STAGES.has(newStatus)) updates.statut_gagne_perdu = 'gagne';
     else if (newStatus === 'Refus / Perdu') updates.statut_gagne_perdu = 'perdu';
+    else updates.statut_gagne_perdu = 'actif';
     // Le commercial signataire est fige a la premiere Signature (partie 18) :
     // on ne le reecrit jamais ensuite, meme si le dossier change de main.
     if (newStatus === 'Signature' && !prospect.signed_by_user_id && userRole?.id) {
@@ -316,6 +317,7 @@ export default function ProspectDetail() {
       const updateData: Record<string, unknown> = { statut_avancement: newStatus };
       if (WON_STAGES.has(newStatus)) updateData.statut_gagne_perdu = 'gagne';
       else if (newStatus === 'Refus / Perdu') updateData.statut_gagne_perdu = 'perdu';
+      else updateData.statut_gagne_perdu = 'actif';
       if (newStatus === 'Signature' && !prospect.signed_by_user_id && userRole?.id) {
         updateData.signed_by_user_id = userRole.id;
       }

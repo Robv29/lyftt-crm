@@ -164,9 +164,14 @@ export default function VisiosPassees() {
     setBusyId(prospect.id);
     const nowIso = new Date().toISOString();
     const updates: Record<string, unknown> = { statut_avancement: newStatus };
-    if (extraDateField) updates[extraDateField] = nowIso;
+    // La date est FIGEE a la premiere fois : la reecrire deplacerait le CA du
+    // dossier d'un mois a l'autre dans Performance CA a chaque re-clic.
+    if (extraDateField && !prospect[extraDateField]) updates[extraDateField] = nowIso;
     if (newStatus === 'Signature') updates.statut_gagne_perdu = 'gagne';
     else if (newStatus === 'Refus / Perdu') updates.statut_gagne_perdu = 'perdu';
+    // Sinon on repasse en "actif" : un dossier qui redescend dans le pipeline
+    // ne doit pas rester marque "gagne" a vie.
+    else updates.statut_gagne_perdu = 'actif';
     // Commercial signataire (partie 18) : figé à la première Signature, même
     // règle que sur la fiche prospect — sans ça, le dossier reste invisible
     // dans tout le module Performance CA (CA, commissions, classement).

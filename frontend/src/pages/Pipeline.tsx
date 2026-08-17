@@ -10,6 +10,7 @@ import {
 } from '@/components/ui/select';
 import { ExternalLink } from 'lucide-react';
 import ErrorState from '../components/ErrorState';
+import { useAuth } from '../contexts/AuthContext';
 import { memo } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { queryKeys } from '../hooks/use-prospects';
@@ -38,6 +39,7 @@ const priorityColors: Record<string, string> = {
 };
 
 export default function Pipeline() {
+  const { userRole } = useAuth();
   const { data: prospects = [], isLoading: loading, error, refetch, isFetching } = useProspects();
   const invalidateProspects = useInvalidateProspects();
   const invalidateActions = useInvalidateActions();
@@ -51,7 +53,7 @@ export default function Pipeline() {
     queryClient.setQueryData(queryKeys.prospects, (old: Prospect[] | undefined) =>
       (old || []).map((p) =>
         p.id === prospectId
-          ? { ...p, statut_avancement: newStage, statut_gagne_perdu: WON_STAGES.has(newStage) ? 'gagne' : newStage === 'Refus / Perdu' ? 'perdu' : p.statut_gagne_perdu }
+          ? { ...p, statut_avancement: newStage, statut_gagne_perdu: WON_STAGES.has(newStage) ? 'gagne' : newStage === 'Refus / Perdu' ? 'perdu' : 'actif' }
           : p
       )
     );
@@ -60,6 +62,16 @@ export default function Pipeline() {
       const updateData: Record<string, unknown> = { statut_avancement: newStage };
       if (WON_STAGES.has(newStage)) updateData.statut_gagne_perdu = 'gagne';
       else if (newStage === 'Refus / Perdu') updateData.statut_gagne_perdu = 'perdu';
+      else updateData.statut_gagne_perdu = 'actif';
+      // Sans signataire NI date de signature, un dossier passe en Signature par
+      // glisser-deposer restait invisible dans tout Performance CA : ni CA, ni
+      // commission, ni classement. Les deux sont figes a la premiere fois.
+      if (newStage === 'Signature' && !prospect.signed_by_user_id && userRole?.id) {
+        updateData.signed_by_user_id = userRole.id;
+      }
+      if (newStage === 'Signature' && !prospect.date_signature) {
+        updateData.date_signature = new Date().toISOString();
+      }
 
       await client.entities.prospects.update({ id: String(prospectId), data: updateData });
       await client.entities.commercial_actions.create({

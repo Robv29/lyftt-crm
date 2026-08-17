@@ -179,7 +179,7 @@ export default function Dashboard() {
     const keys = Object.keys(headers);
     const rows = allProspects.map((p) => {
       const row: Record<string, unknown> = {};
-      for (const k of keys) row[headers[k]] = (p as Record<string, unknown>)[k] ?? '';
+      for (const k of keys) row[headers[k]] = (p as unknown as Record<string, unknown>)[k] ?? '';
       return row;
     });
     const ws = XLSX.utils.json_to_sheet(rows);
@@ -200,15 +200,6 @@ export default function Dashboard() {
   // Normalise pour comparer les noms sans souci de casse / espaces
   // (ex: "Yoan RUANS" importé == "Yoan Ruans" du compte).
   const normName = (s?: string) => (s || '').toLowerCase().replace(/\s+/g, ' ').trim();
-
-  const commercialCities = useMemo(() => {
-    if (selectedCommercial === 'global') return null;
-    const matched = registeredUsers.find(
-      (u) => normName(`${u.first_name || ''} ${u.last_name || ''}`) === normName(selectedCommercial)
-    );
-    if (!matched) return [];
-    return cityAttributions.filter((a) => a.user_role_id === matched.id).map((a) => a.city);
-  }, [selectedCommercial, cityAttributions, registeredUsers]);
 
   // Utilisateur correspondant au commercial sélectionné dans le filtre —
   // nécessaire pour aller chercher SES données financières (signed_by_user_id,
@@ -251,15 +242,16 @@ export default function Dashboard() {
     return 'Non attribué';
   }, [commercialNames, cityToCommercialAll]);
 
+  // Le filtre par commercial utilise EXACTEMENT la meme regle que les blocs de
+  // la page (resolveCommercialFor). Avant, il testait l'egalite stricte du nom
+  // puis retombait sur la ville — y compris pour des fiches explicitement
+  // assignees a quelqu'un d'autre : 245 fiches (163 de Yoan, 82 de Robin)
+  // remontaient ainsi dans les statistiques de Clement, et la somme des vues
+  // individuelles depassait le nombre reel de fiches.
   const prospects = useMemo(() => {
     if (selectedCommercial === 'global') return allProspects;
-    const target = normName(selectedCommercial);
-    return allProspects.filter((p) => {
-      if (normName(p.commercial_assigne) === target) return true;
-      if (commercialCities && commercialCities.length > 0) return commercialCities.includes(p.zone_geographique);
-      return false;
-    });
-  }, [allProspects, selectedCommercial, commercialCities]);
+    return allProspects.filter((p) => resolveCommercialFor(p) === selectedCommercial);
+  }, [allProspects, selectedCommercial, resolveCommercialFor]);
 
   const filteredProspectIds = useMemo(() => new Set(prospects.map((p) => p.id)), [prospects]);
 

@@ -205,6 +205,11 @@ export default function PerformanceCA() {
       const deals = prospects.filter((p) => {
         if (p.signed_by_user_id !== u.id) return false;
         if (!p.date_signature) return false;
+        // Une vente signée puis PERDUE ne doit pas compter dans le CA, même si
+        // elle garde sa date de signature en base (le dossier est retombé en
+        // "Refus / Perdu"). Seule exclusion : l'étape du pipeline n'intervient
+        // plus nulle part ailleurs dans le calcul.
+        if (p.statut_avancement === 'Refus / Perdu') return false;
         return p.date_signature.slice(0, 7) === moisStr;
       });
 
@@ -526,6 +531,7 @@ export default function PerformanceCA() {
     for (const p of prospects) {
       if (!p.date_signature || p.date_signature.slice(0, 7) !== mois) continue;
       if (p.signed_by_user_id == null || !chartUserIds.has(p.signed_by_user_id)) continue;
+      if (p.statut_avancement === 'Refus / Perdu') continue;
       const max = Number(p.montant_potentiel) || 0;
       if (max <= 0) continue;
       const evtDate = p.statut_avancement === 'Envoyé à Mathilde' && p.date_envoi_mathilde && p.date_envoi_mathilde.slice(0, 7) === mois

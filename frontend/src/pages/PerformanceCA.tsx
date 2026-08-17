@@ -29,7 +29,6 @@ const MONTH_NAMES = [
 // Tous les dossiers "gagnés" (peu importe l'étape avant règlement) -> CA probable.
 // La distinction "confirmé" (transmis à Mathilde) a été retirée : elle n'apportait rien
 // de plus exploitable que probable/encaissé.
-const PROBABLE_STAGES = new Set(['Signature', 'Envoyé à Mathilde']);
 // Tous les dossiers "clients signés" (peu importe l'étape) pour l'onglet paiements.
 const WON_STAGES = new Set(['Signature', 'Envoyé à Mathilde']);
 // Classement par statut de règlement pour l'onglet "Suivi paiements clients"
@@ -209,12 +208,20 @@ export default function PerformanceCA() {
         return p.date_signature.slice(0, 7) === moisStr;
       });
 
+      // CA SIGNÉ du mois : montant FIGÉ des dossiers signés ce mois-là.
+      // On ne déduit plus les règlements déjà reçus — sinon le CA d'un mois
+      // passé diminuait à chaque encaissement, et un dossier soldé à 100 %
+      // disparaissait complètement du mois où il avait été signé. Le
+      // commercial était donc pénalisé quand ses clients payaient bien.
+      // Le reste à encaisser reste calculé, mais comme indicateur de
+      // trésorerie distinct : il ne pilote plus l'objectif.
       let probable = 0;
+      let resteAEncaisser = 0;
       for (const p of deals) {
         const montantMax = Number(p.montant_potentiel) || 0;
+        probable += montantMax;
         const paye = Math.min(paiementsByProspect.get(p.id) || 0, montantMax);
-        const restant = montantMax - paye;
-        if (restant > 0 && PROBABLE_STAGES.has(p.statut_avancement)) probable += restant;
+        resteAEncaisser += Math.max(0, montantMax - paye);
       }
 
       // CA encaissé + commission se basent tous les deux sur les RÈGLEMENTS
@@ -248,7 +255,7 @@ export default function PerformanceCA() {
 
       return {
         user: u,
-        probable, encaisse, realise,
+        probable, encaisse, realise, resteAEncaisser,
         objectifCa, objectifId: objectifRow?.id,
         pct, dealsCount: deals.length,
         taux, commission, assietteCommission,
@@ -519,16 +526,13 @@ export default function PerformanceCA() {
     for (const p of prospects) {
       if (!p.date_signature || p.date_signature.slice(0, 7) !== mois) continue;
       if (p.signed_by_user_id == null || !chartUserIds.has(p.signed_by_user_id)) continue;
-      if (!PROBABLE_STAGES.has(p.statut_avancement)) continue;
       const max = Number(p.montant_potentiel) || 0;
-      const paye = Math.min(paiementsByProspect.get(p.id) || 0, max);
-      const restant = max - paye;
-      if (restant <= 0) continue;
+      if (max <= 0) continue;
       const evtDate = p.statut_avancement === 'Envoyé à Mathilde' && p.date_envoi_mathilde && p.date_envoi_mathilde.slice(0, 7) === mois
         ? p.date_envoi_mathilde
         : p.date_signature;
       const day = Number(evtDate.slice(8, 10));
-      if (day >= 1 && day <= lastDay) probableByDay[day] += restant;
+      if (day >= 1 && day <= lastDay) probableByDay[day] += max;
     }
 
     const tauxByUser = new Map(commerciaux.map((u) => [u.id, Number(u.taux_commission) || 0]));
@@ -967,7 +971,7 @@ export default function PerformanceCA() {
               <div className="flex min-w-0 flex-col justify-center">
                 <div className="flex items-center gap-2">
                   <span className={`font-display text-[10px] font-bold uppercase tracking-[0.18em] ${isDark ? 'text-[#d6b35b]' : 'text-[#8a6a2f]'}`}>
-                    {viewMode === 'global' ? 'CA PROBABLE ÉQUIPE' : 'CA PROBABLE'}
+                    {viewMode === 'global' ? 'CA SIGNÉ ÉQUIPE' : 'CA SIGNÉ'}
                   </span>
                   <Info className="h-4 w-4 text-[#5A9BA3]" />
                 </div>
@@ -1084,7 +1088,7 @@ export default function PerformanceCA() {
           {/* KPI — toujours ces 4-là */}
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
             <KpiCard
-              dark={isDark} title="CA PROBABLE" value={eur(performance.probable)} subtitle="Cumulé du mois"
+              dark={isDark} title="CA SIGNÉ" value={eur(performance.probable)} subtitle="Signé ce mois — montant figé"
               growth={performance.probableGrowth} accent="violet"
               series={dailySeries.probable}
               icon={<ArrowUpRight className="h-5 w-5" />}
@@ -1684,7 +1688,7 @@ function MonthlySummary({
   lastUpdatedLabel: string | null;
 }) {
   const rows = [
-    { label: 'CA probable', value: probable, percent: objectif > 0 ? (probable / objectif) * 100 : 0, color: 'bg-gradient-to-r from-[#5A9BA3] to-[#d6b35b]' },
+    { label: 'CA signé', value: probable, percent: objectif > 0 ? (probable / objectif) * 100 : 0, color: 'bg-gradient-to-r from-[#5A9BA3] to-[#d6b35b]' },
     { label: 'CA encaissé', value: encaisse, percent: objectif > 0 ? (encaisse / objectif) * 100 : 0, color: 'bg-blue-500' },
     { label: 'Objectif', value: objectif, percent: 100, color: 'bg-amber-400' },
     { label: 'Commission payée', value: commission, percent: null as number | null, color: 'bg-emerald-500' },

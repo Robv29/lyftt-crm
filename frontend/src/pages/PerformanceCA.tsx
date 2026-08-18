@@ -676,19 +676,19 @@ export default function PerformanceCA() {
       ) : tab === 'paiements' ? (
         <>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <Card className="border-0 shadow-sm rounded-2xl">
+            <Card className={`border rounded-2xl ${cardShell}`}>
               <CardContent className="p-4 flex items-center gap-3">
                 <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-orange-50 text-orange-600">
                   <PiggyBank className="w-5 h-5" />
                 </div>
                 <div className="flex min-h-10 min-w-0 flex-col justify-center">
-                  <p className="text-xs text-slate-500">Reste à encaisser (tous clients signés)</p>
-                  <p className="text-lg font-bold leading-tight text-slate-800">{eur(resteAEncaisserTotal)}</p>
+                  <p className={`text-xs ${textMuted}`}>Reste à encaisser (tous clients signés)</p>
+                  <p className={`text-lg font-bold leading-tight ${isDark ? "text-[#f4e6bc]" : "text-slate-800"}`}>{eur(resteAEncaisserTotal)}</p>
                 </div>
               </CardContent>
             </Card>
             {clientsSansCaMax > 0 && (
-              <Card className="border-0 shadow-sm rounded-2xl bg-amber-50">
+              <Card className={`border rounded-2xl ${isDark ? "border-amber-500/30 bg-amber-500/10" : "border-amber-200 bg-amber-50 shadow-sm"}`}>
                 <CardContent className="p-4 flex items-center gap-3">
                   <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-100 text-amber-600">
                     <AlertTriangle className="w-5 h-5" />
@@ -706,17 +706,17 @@ export default function PerformanceCA() {
 
           <div className="flex flex-col sm:flex-row gap-3">
             <div className="relative flex-1 max-w-sm">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 ${textMuted2}" />
               <Input
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="Rechercher un client..."
-                className="pl-9 rounded-xl"
+                className={`pl-9 rounded-xl ${isDark ? "border-[#b99046]/25 bg-[#07101d]/85 text-[#f4e6bc] placeholder:text-[#c6cedc]/40" : "border-slate-200 bg-white"}`}
               />
             </div>
             {isAdmin && (
               <Select value={commercialFilter} onValueChange={setCommercialFilter}>
-                <SelectTrigger className="w-full sm:w-56 rounded-xl">
+                <SelectTrigger className={`w-full sm:w-56 rounded-xl ${isDark ? "border-[#b99046]/25 bg-[#07101d]/85 text-[#f4e6bc] placeholder:text-[#c6cedc]/40" : "border-slate-200 bg-white"}`}>
                   <SelectValue placeholder="Tous les commerciaux" />
                 </SelectTrigger>
                 <SelectContent>
@@ -728,7 +728,7 @@ export default function PerformanceCA() {
               </Select>
             )}
             <Select value={statutFilter} onValueChange={setStatutFilter}>
-              <SelectTrigger className="w-full sm:w-56 rounded-xl">
+              <SelectTrigger className={`w-full sm:w-56 rounded-xl ${isDark ? "border-[#b99046]/25 bg-[#07101d]/85 text-[#f4e6bc] placeholder:text-[#c6cedc]/40" : "border-slate-200 bg-white"}`}>
                 <SelectValue placeholder="Tous les statuts" />
               </SelectTrigger>
               <SelectContent>
@@ -741,36 +741,36 @@ export default function PerformanceCA() {
             <Button
               variant="outline"
               onClick={handleExportClients}
-              className="rounded-xl gap-1.5 shrink-0"
+              className={`rounded-xl gap-1.5 shrink-0 ${isDark ? "border-[#b99046]/25 bg-[#07101d]/85 text-[#f4e6bc] placeholder:text-[#c6cedc]/40" : "border-slate-200 bg-white"}`}
             >
               <Download className="w-4 h-4" /> Exporter ({clientsSignes.length})
             </Button>
           </div>
 
           {clientsSignes.length === 0 ? (
-            <Card className="border-0 shadow-sm rounded-2xl">
-              <CardContent className="py-12 text-center text-sm text-slate-400">Aucun client signé pour le moment.</CardContent>
+            <Card className={`border rounded-2xl ${cardShell}`}>
+              <CardContent className={`py-12 text-center text-sm ${textMuted2}`}>Aucun client signé pour le moment.</CardContent>
             </Card>
           ) : (
             <div className="space-y-3">
               {clientsSignes.map(({ prospect: p, max, paye, pct, commercialName, pmts, statutRank, statutLabel }, idx) => (
                 <div key={p.id}>
                   {(idx === 0 || clientsSignes[idx - 1].statutRank !== statutRank) && (
-                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-400 pt-2 pb-1 first:pt-0">
+                    <p className={`text-xs font-semibold uppercase tracking-wide pt-2 pb-1 first:pt-0 ${textMuted2}`}>
                       {statutLabel} · {clientsSignes.filter((c) => c.statutRank === statutRank).length}
                     </p>
                   )}
-                  <Card className="border-0 shadow-sm rounded-2xl">
+                  <Card className={`border rounded-2xl ${cardShell}`}>
                   <CardContent className="p-5 space-y-3">
                     <div className="flex flex-wrap items-center justify-between gap-3">
                       <div>
                         <div className="flex items-center gap-1.5">
-                          <p className="font-semibold text-slate-800">{p.nom_societe}</p>
-                          <Link to={`/prospects/${p.id}`} className="text-slate-300 hover:text-[#5A9BA3]" title="Ouvrir la fiche client">
+                          <p className={`font-semibold ${isDark ? "text-[#f4e6bc]" : "text-slate-800"}`}>{p.nom_societe}</p>
+                          <Link to={`/prospects/${p.id}`} className={`${isDark ? "text-white/30" : "text-slate-300"} hover:text-[#5A9BA3]`} title="Ouvrir la fiche client">
                             <ExternalLink className="w-3.5 h-3.5" />
                           </Link>
                         </div>
-                        <p className="text-xs text-slate-400">{commercialName} · {p.statut_avancement}</p>
+                        <p className={`text-xs ${textMuted2}`}>{commercialName} · {p.statut_avancement}</p>
                         {max === 0 && (
                           <p className="text-xs text-amber-600 font-medium flex items-center gap-1 mt-0.5">
                             <AlertTriangle className="w-3 h-3" /> CA max non renseigné
@@ -778,7 +778,7 @@ export default function PerformanceCA() {
                         )}
                       </div>
                       <div className="text-right">
-                        <p className="text-xs text-slate-500 mb-0.5">CA max</p>
+                        <p className={`text-xs mb-0.5 ${textMuted}`}>CA max</p>
                         {editingCaMaxId === p.id ? (
                           <div className="flex items-center gap-1">
                             <Input
@@ -792,14 +792,14 @@ export default function PerformanceCA() {
                               <Check className="w-4 h-4 text-emerald-600" />
                             </Button>
                             <Button size="icon" variant="ghost" className="w-7 h-7" onClick={() => setEditingCaMaxId(null)}>
-                              <X className="w-4 h-4 text-slate-400" />
+                              <X className="w-4 h-4 ${textMuted2}" />
                             </Button>
                           </div>
                         ) : (
                           <div className="flex items-center gap-1.5 justify-end">
-                            <span className="font-semibold text-slate-700">{eur(max)}</span>
+                            <span className={`font-semibold ${isDark ? "text-[#e8edf5]" : "text-slate-700"}`}>{eur(max)}</span>
                             {isAdmin && (
-                              <button onClick={() => { setEditingCaMaxId(p.id); setEditCaMaxValue(max ? String(max) : ''); }} className="text-slate-300 hover:text-slate-600">
+                              <button onClick={() => { setEditingCaMaxId(p.id); setEditCaMaxValue(max ? String(max) : ''); }} className={`${isDark ? "text-white/30 hover:text-white/70" : "text-slate-300 hover:text-slate-600"}`}>
                                 <Pencil className="w-3.5 h-3.5" />
                               </button>
                             )}
@@ -811,10 +811,10 @@ export default function PerformanceCA() {
                     {/* Barre de progression — visible à tous */}
                     <div>
                       <div className="flex items-center justify-between text-xs mb-1">
-                        <span className="text-slate-500">Réglé : <strong className="text-emerald-600">{eur(paye)}</strong> / {eur(max)}</span>
-                        <span className="font-semibold text-slate-600">{pct}%</span>
+                        <span className={textMuted}>Réglé : <strong className="text-emerald-600">{eur(paye)}</strong> / {eur(max)}</span>
+                        <span className={`font-semibold ${textMuted}`}>{pct}%</span>
                       </div>
-                      <div className="h-2.5 rounded-full bg-slate-100 overflow-hidden">
+                      <div className={`h-2.5 rounded-full overflow-hidden ${isDark ? "bg-white/10" : "bg-slate-100"}`}>
                         <div
                           className={`h-full rounded-full ${pct >= 100 ? 'bg-emerald-500' : 'bg-gradient-to-r from-emerald-400 to-emerald-500'}`}
                           style={{ width: `${pct}%` }}
@@ -826,14 +826,14 @@ export default function PerformanceCA() {
                     {pmts.length > 0 && (
                       <div className="space-y-1 pt-1">
                         {pmts.map((pmt) => (
-                          <div key={pmt.id} className="flex items-center justify-between text-xs bg-slate-50 rounded-lg px-2.5 py-1.5">
-                            <span className="text-slate-500">
+                          <div key={pmt.id} className={`flex items-center justify-between text-xs rounded-lg px-2.5 py-1.5 ${isDark ? "bg-white/[0.04]" : "bg-slate-50"}`}>
+                            <span className={textMuted}>
                               {new Date(pmt.date_paiement).toLocaleDateString('fr-FR')}
-                              {pmt.note && <span className="text-slate-400 italic ml-1.5">· {pmt.note}</span>}
+                              {pmt.note && <span className={`italic ml-1.5 ${textMuted2}`}>· {pmt.note}</span>}
                             </span>
-                            <span className="font-semibold text-slate-700">{eur(Number(pmt.montant))}</span>
+                            <span className={`font-semibold ${isDark ? "text-[#e8edf5]" : "text-slate-700"}`}>{eur(Number(pmt.montant))}</span>
                             {isAdmin && (
-                              <button onClick={() => removePaiement(pmt.id)} className="text-slate-300 hover:text-red-500">
+                              <button onClick={() => removePaiement(pmt.id)} className={`${isDark ? "text-white/30" : "text-slate-300"} hover:text-red-500`}>
                                 <Trash2 className="w-3.5 h-3.5" />
                               </button>
                             )}
@@ -849,7 +849,7 @@ export default function PerformanceCA() {
                           <Input type="number" placeholder="Montant" value={newMontant} onChange={(e) => setNewMontant(e.target.value)} className="w-28 h-8 rounded-lg" />
                           <Input type="text" placeholder="Note (optionnel)" value={newNote} onChange={(e) => setNewNote(e.target.value)} className="w-36 h-8 rounded-lg" />
                           <Button size="sm" onClick={() => savePaiement(p.id)} className="h-8 rounded-lg bg-emerald-500 hover:bg-emerald-600 text-white px-2.5"><Check className="w-3.5 h-3.5" /></Button>
-                          <Button size="sm" variant="ghost" onClick={() => { setAddingPaiementFor(null); setNewNote(''); }} className="h-8 rounded-lg px-2.5 text-slate-400"><X className="w-3.5 h-3.5" /></Button>
+                          <Button size="sm" variant="ghost" onClick={() => { setAddingPaiementFor(null); setNewNote(''); }} className={`h-8 rounded-lg px-2.5 ${textMuted2}`}><X className="w-3.5 h-3.5" /></Button>
                         </div>
                       ) : (
                         <div className="flex items-center gap-3 pt-1">

@@ -675,25 +675,25 @@ export default function PerformanceCA() {
         <div className="text-sm text-slate-400 py-12 text-center">Chargement...</div>
       ) : tab === 'paiements' ? (
         <>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <Card className={`border rounded-2xl ${cardShell}`}>
-              <CardContent className="p-4 flex items-center gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-stretch">
+            <Card className={`border rounded-2xl h-full ${cardShell}`}>
+              <CardContent className="p-4 h-full flex items-center gap-3">
                 <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-orange-50 text-orange-600">
                   <PiggyBank className="w-5 h-5" />
                 </div>
-                <div className="flex min-h-10 min-w-0 flex-col justify-center">
+                <div className="flex min-w-0 flex-col justify-center">
                   <p className={`text-xs ${textMuted}`}>Reste à encaisser (tous clients signés)</p>
                   <p className={`text-lg font-bold leading-tight ${isDark ? "text-[#f4e6bc]" : "text-slate-800"}`}>{eur(resteAEncaisserTotal)}</p>
                 </div>
               </CardContent>
             </Card>
             {clientsSansCaMax > 0 && (
-              <Card className={`border rounded-2xl ${isDark ? "border-amber-500/30 bg-amber-500/10" : "border-amber-200 bg-amber-50 shadow-sm"}`}>
-                <CardContent className="p-4 flex items-center gap-3">
+              <Card className={`border rounded-2xl h-full ${isDark ? "border-amber-500/30 bg-amber-500/10" : "border-amber-200 bg-amber-50 shadow-sm"}`}>
+                <CardContent className="p-4 h-full flex items-center gap-3">
                   <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-100 text-amber-600">
                     <AlertTriangle className="w-5 h-5" />
                   </div>
-                  <div className="flex min-h-10 min-w-0 flex-col justify-center">
+                  <div className="flex min-w-0 flex-col justify-center">
                     <p className="text-xs text-amber-700 font-medium">
                       {clientsSansCaMax} client{clientsSansCaMax > 1 ? 's' : ''} signé{clientsSansCaMax > 1 ? 's' : ''} sans CA max renseigné
                     </p>

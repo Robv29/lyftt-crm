@@ -924,7 +924,7 @@ export default function Prospects() {
 
       {/* Filters */}
       <Card className="border-0 shadow-sm rounded-2xl">
-        <CardContent className="p-4">
+        <CardContent className="p-4 sm:p-4">
           <div className="flex flex-col gap-3">
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />

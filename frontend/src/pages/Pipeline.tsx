@@ -171,7 +171,7 @@ export default function Pipeline() {
 const PipelineCard = memo(function PipelineCard({ prospect: p, onMove }: { prospect: Prospect; onMove: (id: number, stage: string) => void }) {
   return (
     <Card className={`border-0 shadow-sm border-l-[3px] rounded-xl ${priorityColors[p.priorite] || 'border-l-slate-300'}`}>
-      <CardContent className="p-3">
+      <CardContent className="p-3 sm:p-3">
         <div className="flex items-start justify-between mb-2">
           <div className="min-w-0 flex-1">
             <p className="text-sm font-semibold text-slate-900 truncate">{p.nom_societe}</p>

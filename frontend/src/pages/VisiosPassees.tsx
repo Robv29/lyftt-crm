@@ -489,7 +489,7 @@ function VisioCard({
       onClick={onOpen}
       className={`border-0 shadow-sm rounded-2xl cursor-pointer transition-all hover:shadow-md hover:-translate-y-0.5 ${busy ? 'opacity-60 pointer-events-none' : ''}`}
     >
-      <CardContent className="p-5 space-y-3">
+      <CardContent className="p-5 sm:p-5 space-y-3">
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0">
             <p className="font-semibold text-slate-900 truncate">{p.nom_societe || 'Sans nom'}</p>
